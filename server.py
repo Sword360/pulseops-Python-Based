@@ -9,7 +9,9 @@ import random
 import mimetypes
 import urllib.parse
 from datetime import datetime
-from typing import Set, Dict, Any, Optional
+from typing import Set, Dict, Any, Optional, List
+import subprocess
+import re
 
 import telemetry
 import services
@@ -17,8 +19,30 @@ import processes
 import terminal
 import vnc
 
+HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", 3500))
 PUBLIC_DIR = os.path.join(os.path.dirname(__file__), 'public')
+
+def get_network_ips() -> List[str]:
+    ips = []
+    try:
+        out = subprocess.check_output(["ip", "-4", "addr", "show"], text=True)
+        for m in re.finditer(r'inet\s+([0-9.]+)/\d+', out):
+            ip = m.group(1)
+            if not ip.startswith('127.') and ip not in ips:
+                ips.append(ip)
+    except Exception:
+        pass
+    if not ips:
+        try:
+            import socket
+            hostname = socket.gethostname()
+            for ip in socket.gethostbyname_ex(hostname)[2]:
+                if not ip.startswith('127.') and ip not in ips:
+                    ips.append(ip)
+        except Exception:
+            pass
+    return ips
 
 # Set of active WebSocket connections
 connected_ws_clients: Set['WebSocketConnection'] = set()
@@ -409,8 +433,16 @@ async def log_stream_broadcast_loop():
 
 
 async def main():
-    server = await asyncio.start_server(handle_http_request, '0.0.0.0', PORT)
-    print(f"PulseOps Python Server listening on http://localhost:{PORT}")
+    server = await asyncio.start_server(handle_http_request, HOST, PORT)
+    print(f"\n⚡ PulseOps Python Server running:")
+    print(f"   ➜ Local:   http://localhost:{PORT}")
+    net_ips = get_network_ips()
+    if net_ips:
+        for ip in net_ips:
+            print(f"   ➜ Network: http://{ip}:{PORT}")
+    elif HOST != "127.0.0.1":
+        print(f"   ➜ Network: http://{HOST}:{PORT}")
+    print()
 
     asyncio.create_task(telemetry_broadcast_loop())
     asyncio.create_task(log_stream_broadcast_loop())

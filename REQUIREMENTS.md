@@ -39,13 +39,21 @@
 
 ### Standard Run (Zero Dependencies Required)
 ```bash
-cd /home/najmul/Desktop/Projects/pulseops-python
 python3 server.py
 ```
-The server will start listening at `http://localhost:3500`.
+The server binds to `0.0.0.0:3500` by default and will output both the local and network URLs (e.g. `http://<YOUR_IP>:3500`).
 
 ### FastAPI / Uvicorn Run (Optional)
 ```bash
 pip install -r requirements.txt
 uvicorn fastapi_app:app --host 0.0.0.0 --port 3500
 ```
+
+### Accessing from Other Devices on the Same Network
+1. Ensure port 3500 is open in your firewall:
+   ```bash
+   sudo firewall-cmd --add-port=3500/tcp --permanent
+   sudo firewall-cmd --reload
+   ```
+2. Open any web browser on a device connected to the same network and navigate to:
+   `http://<SERVER_IP>:3500`
