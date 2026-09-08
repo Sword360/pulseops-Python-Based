@@ -362,6 +362,21 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             except Exception:
                 json_body = {}
 
+        # Handle CORS preflight OPTIONS request
+        if method == 'OPTIONS':
+            cors_hdr = (
+                "HTTP/1.1 204 No Content\r\n"
+                "Access-Control-Allow-Origin: *\r\n"
+                "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
+                "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
+                "Access-Control-Max-Age: 86400\r\n"
+                "\r\n"
+            )
+            writer.write(cors_hdr.encode('utf-8'))
+            await writer.drain()
+            writer.close()
+            return
+
         # -------------------------------------------------------------
         # REST API Routes
         # -------------------------------------------------------------
@@ -647,6 +662,17 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 await audit.log_action('fleet.server.remove', user_id=user['id'], user_email=user['email'], resource_type='server', resource_id=server_id)
                 return await send_json_response(writer, result)
 
+            if path.startswith('/api/fleet/servers/') and method == 'PUT':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required to update servers'}, 403)
+                server_id = path.split('/')[-1]
+                result = await fleet_module.update_server(server_id, json_body)
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result.get('error')}, 400)
+                await audit.log_action('fleet.server.update', user_id=user['id'], user_email=user['email'], resource_type='server', resource_id=server_id)
+                return await send_json_response(writer, result)
+
             # ── Agent registration & heartbeat ────────────────────────────────
             if path == '/api/fleet/register' and method == 'POST':
                 token = json_body.get('invite_token')
@@ -687,6 +713,14 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 if not user or user.get('role') != 'admin':
                     return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
                 return await send_json_response(writer, await fleet_module.list_invite_tokens())
+
+            if path.startswith('/api/fleet/invite-tokens/') and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                token_val = path.split('/')[-1]
+                await database.execute("DELETE FROM invite_tokens WHERE token = ?", (token_val,))
+                return await send_json_response(writer, {'success': True})
 
             # ── Alert rules ───────────────────────────────────────────────────
             if path == '/api/alerts/rules' and method == 'GET':
@@ -899,15 +933,33 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             pass
 
 
+HTTP_STATUS_PHRASES = {
+    200: "OK",
+    201: "Created",
+    204: "No Content",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    422: "Unprocessable Entity",
+    423: "Locked",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+}
+
+
 async def send_json_response(writer: asyncio.StreamWriter, data: Dict[str, Any], status: int = 200):
     content = json.dumps(data).encode('utf-8')
-    status_text = "OK" if status == 200 else "Bad Request"
+    status_text = HTTP_STATUS_PHRASES.get(status, "OK" if status < 400 else "Error")
     header = (
         f"HTTP/1.1 {status} {status_text}\r\n"
         "Content-Type: application/json\r\n"
         f"Content-Length: {len(content)}\r\n"
         "Access-Control-Allow-Origin: *\r\n"
-        "Access-Control-Allow-Headers: Content-Type\r\n"
+        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
+        "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
         "\r\n"
     )
     writer.write(header.encode('utf-8') + content)
