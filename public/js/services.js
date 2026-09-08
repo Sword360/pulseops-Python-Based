@@ -2,6 +2,13 @@
    PulseOps - Systemd Services Management Module
    ========================================================================== */
 
+function _authFetch(url, options = {}) {
+    if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {
+        return PulseOpsAuth.apiFetch(url, options);
+    }
+    return fetch(url, options);
+}
+
 class SystemdServiceManager {
     constructor() {
         this.services = [];
@@ -62,16 +69,50 @@ class SystemdServiceManager {
                 }
             });
         }
+
+        // Initial load
+        this.loadServices();
     }
 
     async loadServices() {
+        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const hostname = window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'Master' : 'Remote Node');
+
         try {
-            const res = await fetch('/api/services');
+            const res = await _authFetch(`/api/services?server_id=${encodeURIComponent(sId)}`);
             const data = await res.json();
+
+            if (data.need_update) {
+                this.services = [];
+                this.updateCounters();
+                if (this.tableBody) {
+                    const upgradeCmd = `curl -sSL ${window.location.origin}/api/fleet/agent-update.sh | sudo bash`;
+                    this.tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 3rem 1.5rem;">
+                        <div style="max-width: 580px; margin: 0 auto; background: var(--bg-card); border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 1.5rem; text-align: left;">
+                            <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                                🚀 Upgrade Agent to Manage Remote Services
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.5; margin-bottom: 1rem;">
+                                The PulseOps agent on <strong>${hostname}</strong> is running in telemetry-only mode. Run this command on the remote machine to unlock systemd service controls and live journalctl logs:
+                            </p>
+                            <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-green); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                                <span style="word-break: break-all;">${upgradeCmd}</span>
+                                <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="navigator.clipboard.writeText('${upgradeCmd}'); window.showToast('Copied upgrade command to clipboard!', 'success');">Copy Command</button>
+                            </div>
+                        </div>
+                    </td></tr>`;
+                }
+                return;
+            }
+
             if (data.success) {
-                this.services = data.services;
+                this.services = data.services || [];
                 this.updateCounters();
                 this.render();
+            } else if (data.error) {
+                if (this.tableBody) {
+                    this.tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--accent-red); padding: 2rem;">Error: ${data.error}</td></tr>`;
+                }
             }
         } catch (e) {
             console.error('Failed to load systemd services:', e);
@@ -89,12 +130,17 @@ class SystemdServiceManager {
     }
 
     async executeAction(serviceName, action) {
+        if (action !== 'logs' && window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
+            window.showToast && window.showToast('Permission denied: Viewer accounts cannot modify systemd services', 'error');
+            return;
+        }
+        const sId = window.PulseOpsCurrentServer || 'local-master';
         try {
             window.showToast && window.showToast(`Executing ${action} on ${serviceName}...`, 'info');
-            const res = await fetch('/api/services/action', {
+            const res = await _authFetch('/api/services/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ serviceName, action })
+                body: JSON.stringify({ serviceName, action, server_id: sId })
             });
             const data = await res.json();
             if (data.success) {
@@ -110,17 +156,18 @@ class SystemdServiceManager {
 
     async openLogsModal(serviceName) {
         if (!this.modal) return;
+        const sId = window.PulseOpsCurrentServer || 'local-master';
         this.modalTitle.textContent = `Journalctl Logs: ${serviceName}`;
         this.modalLogsContainer.textContent = 'Loading logs...';
         this.modal.classList.add('active');
 
         try {
-            const res = await fetch(`/api/services/${serviceName}/logs`);
+            const res = await _authFetch(`/api/services/${encodeURIComponent(serviceName)}/logs?server_id=${encodeURIComponent(sId)}`);
             const data = await res.json();
             if (data.success) {
                 this.modalLogsContainer.textContent = data.logs || 'No log entries found.';
             } else {
-                this.modalLogsContainer.textContent = 'Error loading logs.';
+                this.modalLogsContainer.textContent = data.error || 'Error loading logs.';
             }
         } catch (e) {
             this.modalLogsContainer.textContent = 'Failed to fetch service logs.';
@@ -160,6 +207,20 @@ class SystemdServiceManager {
             const isRunning = s.active === 'active' && s.sub === 'running';
 
             const safeName = s.name.replace(/"/g, '&quot;');
+            const isOperator = window.PulseOpsAuth ? window.PulseOpsAuth.isOperator() : true;
+            let controlButtons = '';
+            if (isOperator) {
+                if (isRunning) {
+                    controlButtons = `
+                        <button class="btn-action danger" data-service="${safeName}" data-svc-action="stop">Stop</button>
+                        <button class="btn-action" data-service="${safeName}" data-svc-action="restart">Restart</button>
+                    `;
+                } else {
+                    controlButtons = `
+                        <button class="btn-action" data-service="${safeName}" data-svc-action="start">Start</button>
+                    `;
+                }
+            }
 
             tr.innerHTML = `
                 <td>
@@ -170,12 +231,7 @@ class SystemdServiceManager {
                 <td><span style="font-size: 0.85rem; color: var(--text-muted);">${s.load}</span></td>
                 <td>
                     <div class="btn-group">
-                        ${isRunning ? `
-                            <button class="btn-action danger" data-service="${safeName}" data-svc-action="stop">Stop</button>
-                            <button class="btn-action" data-service="${safeName}" data-svc-action="restart">Restart</button>
-                        ` : `
-                            <button class="btn-action" data-service="${safeName}" data-svc-action="start">Start</button>
-                        `}
+                        ${controlButtons}
                         <button class="btn-action" data-service="${safeName}" data-svc-action="logs">Logs</button>
                     </div>
                 </td>

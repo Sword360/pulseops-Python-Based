@@ -18,6 +18,10 @@ const PulseOpsAuth = (() => {
         localStorage.setItem(ACCESS_TOKEN_KEY,  accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
         localStorage.setItem(USER_KEY, JSON.stringify(user));
+        if (user && user.role) {
+            document.documentElement.setAttribute('data-role', user.role);
+            if (document.body) document.body.setAttribute('data-role', user.role);
+        }
     }
 
     function getAccessToken() {
@@ -38,14 +42,28 @@ const PulseOpsAuth = (() => {
         localStorage.removeItem(ACCESS_TOKEN_KEY);
         localStorage.removeItem(REFRESH_TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
+        document.documentElement.removeAttribute('data-role');
+        if (document.body) document.body.removeAttribute('data-role');
         if (_refreshTimer) clearTimeout(_refreshTimer);
     }
+
+    // Pre-apply data-role attribute from storage
+    try {
+        const _u = getUser();
+        if (_u && _u.role) document.documentElement.setAttribute('data-role', _u.role);
+    } catch (_) {}
 
     // ── JWT Decode (client-side, no verification) ─────────────────────────────
 
     function decodeJwt(token) {
         try {
-            const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+            if (!token || typeof token !== 'string') return null;
+            const parts = token.split('.');
+            if (parts.length < 2) return null;
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4 !== 0) {
+                base64 += '=';
+            }
             const json = atob(base64);
             return JSON.parse(json);
         } catch { return null; }
@@ -53,38 +71,62 @@ const PulseOpsAuth = (() => {
 
     function getTokenExpiry(token) {
         const payload = decodeJwt(token);
-        return payload ? payload.exp * 1000 : 0; // ms
+        return payload && payload.exp ? payload.exp * 1000 : 0; // ms
     }
 
     // ── Token Refresh ─────────────────────────────────────────────────────────
 
-    async function refreshAccessToken() {
-        const refreshToken = getRefreshToken();
-        if (!refreshToken) { redirectToLogin(); return null; }
+    let _refreshingPromise = null;
 
-        try {
-            const resp = await fetch('/api/auth/refresh', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh_token: refreshToken }),
-            });
-            if (!resp.ok) { redirectToLogin(); return null; }
-            const data = await resp.json();
-            localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
-            scheduleRefresh(data.access_token);
-            return data.access_token;
-        } catch {
-            redirectToLogin();
-            return null;
-        }
+    async function refreshAccessToken() {
+        if (_refreshingPromise) return _refreshingPromise;
+
+        _refreshingPromise = (async () => {
+            const refreshToken = getRefreshToken();
+            if (!refreshToken) {
+                clearTokens();
+                redirectToLogin();
+                return null;
+            }
+
+            try {
+                const resp = await fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken }),
+                });
+                if (!resp.ok) {
+                    clearTokens();
+                    redirectToLogin();
+                    return null;
+                }
+                const data = await resp.json();
+                if (data.access_token) {
+                    localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
+                    scheduleRefresh(data.access_token);
+                    return data.access_token;
+                }
+                return null;
+            } catch (err) {
+                console.warn('[Auth] Token refresh network error:', err);
+                return null;
+            } finally {
+                _refreshingPromise = null;
+            }
+        })();
+
+        return _refreshingPromise;
     }
 
     function scheduleRefresh(token) {
         if (_refreshTimer) clearTimeout(_refreshTimer);
         const expiry  = getTokenExpiry(token);
+        if (!expiry) return;
         const now     = Date.now();
         const delay   = Math.max(0, expiry - now - 5 * 60 * 1000); // 5 min before expiry
-        _refreshTimer = setTimeout(() => refreshAccessToken(), delay);
+        if (delay > 0 && delay < 0x7FFFFFFF) {
+            _refreshTimer = setTimeout(() => refreshAccessToken(), delay);
+        }
     }
 
     // ── Auth-guarded Fetch ────────────────────────────────────────────────────
@@ -92,29 +134,30 @@ const PulseOpsAuth = (() => {
     async function apiFetch(url, options = {}) {
         let token = getAccessToken();
 
-        // If token is nearly expired, refresh first
-        if (token) {
-            const expiry = getTokenExpiry(token);
-            if (Date.now() > expiry - 30_000) {
-                token = await refreshAccessToken();
-                if (!token) return null;
-            }
-        }
-
         const headers = {
             'Content-Type': 'application/json',
             ...(options.headers || {}),
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const resp = await fetch(url, { ...options, headers });
+        let resp;
+        try {
+            resp = await fetch(url, { ...options, headers });
+        } catch (err) {
+            console.warn('[Auth] Fetch failed for', url, err);
+            return null;
+        }
 
-        if (resp.status === 401) {
+        if (resp && resp.status === 401) {
             // Try refresh once
-            token = await refreshAccessToken();
-            if (!token) return null;
-            headers['Authorization'] = `Bearer ${token}`;
-            return fetch(url, { ...options, headers });
+            const newToken = await refreshAccessToken();
+            if (!newToken) return resp;
+            headers['Authorization'] = `Bearer ${newToken}`;
+            try {
+                return await fetch(url, { ...options, headers });
+            } catch {
+                return null;
+            }
         }
 
         return resp;
@@ -140,30 +183,47 @@ const PulseOpsAuth = (() => {
 
     // ── Auth Guard ────────────────────────────────────────────────────────────
 
+    let _authPromise = null;
+
     async function requireAuth() {
-        const token = getAccessToken();
-        if (!token) { redirectToLogin(); return null; }
+        if (_authPromise) return _authPromise;
 
-        const expiry = getTokenExpiry(token);
-        if (Date.now() > expiry) {
-            const newToken = await refreshAccessToken();
-            if (!newToken) return null;
-        }
+        _authPromise = (async () => {
+            const token = getAccessToken();
+            if (!token) {
+                redirectToLogin();
+                return null;
+            }
 
-        scheduleRefresh(token);
+            // Validate token directly with server
+            try {
+                const resp = await apiFetch('/api/auth/me');
+                if (!resp || !resp.ok) {
+                    clearTokens();
+                    redirectToLogin();
+                    return null;
+                }
+                const user = await resp.json();
+                localStorage.setItem(USER_KEY, JSON.stringify(user));
+                if (user && user.role) {
+                    document.documentElement.setAttribute('data-role', user.role);
+                    if (document.body) document.body.setAttribute('data-role', user.role);
+                }
+                scheduleRefresh(token);
+                return user;
+            } catch (err) {
+                console.error('[Auth] Verification error:', err);
+                const cached = getUser();
+                if (cached) return cached;
+                clearTokens();
+                redirectToLogin();
+                return null;
+            } finally {
+                _authPromise = null;
+            }
+        })();
 
-        // Validate token with server
-        try {
-            const resp = await apiFetch('/api/auth/me');
-            if (!resp || !resp.ok) { redirectToLogin(); return null; }
-            const user = await resp.json();
-            // Update stored user data
-            localStorage.setItem(USER_KEY, JSON.stringify(user));
-            return user;
-        } catch {
-            redirectToLogin();
-            return null;
-        }
+        return _authPromise;
     }
 
     // ── Role Checks ───────────────────────────────────────────────────────────
@@ -215,6 +275,7 @@ const PulseOpsAuth = (() => {
         redirectToLogin,
     };
 })();
+window.PulseOpsAuth = PulseOpsAuth;
 
 // ── Auto-init on every page ───────────────────────────────────────────────────
 // On non-login pages: verify authentication immediately

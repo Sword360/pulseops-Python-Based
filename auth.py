@@ -15,9 +15,32 @@ from typing import Any, Dict, Optional, Callable
 
 logger = logging.getLogger("pulseops.auth")
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "pulseops-dev-secret-change-in-production-" + str(uuid.uuid4()))
-REFRESH_SECRET_KEY = os.environ.get("REFRESH_SECRET_KEY", "pulseops-refresh-" + str(uuid.uuid4()))
-ACCESS_TOKEN_EXPIRE_HOURS = int(os.environ.get("SESSION_TIMEOUT_HOURS", "8"))
+def _get_persistent_secret(env_var: str, filename: str, prefix: str) -> str:
+    val = os.environ.get(env_var)
+    if val:
+        return val
+    filepath = os.path.join(os.path.dirname(__file__), filename)
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except Exception:
+            pass
+    import secrets
+    generated = f"{prefix}-{secrets.token_hex(32)}"
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(generated)
+        os.chmod(filepath, 0o600)
+    except Exception:
+        pass
+    return generated
+
+SECRET_KEY = _get_persistent_secret("SECRET_KEY", ".secret_key", "pulseops-secret")
+REFRESH_SECRET_KEY = _get_persistent_secret("REFRESH_SECRET_KEY", ".refresh_secret_key", "pulseops-refresh")
+ACCESS_TOKEN_EXPIRE_HOURS = int(os.environ.get("SESSION_TIMEOUT_HOURS", "24"))
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 # In-memory rate limiting: {ip: [timestamp, ...]}

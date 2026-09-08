@@ -22,25 +22,85 @@ class SmoothLineChart {
 
     initCanvasResize() {
         const resize = () => {
+            if (!this.canvas || !this.canvas.parentElement) return;
             const rect = this.canvas.parentElement.getBoundingClientRect();
+            if (rect.width > 10 && rect.height > 10) {
+                if (Math.abs(this.canvas.width - rect.width) > 2 || Math.abs(this.canvas.height - rect.height) > 2) {
+                    this.canvas.width = rect.width;
+                    this.canvas.height = rect.height;
+                    this.render();
+                }
+            }
+        };
+
+        window.addEventListener('resize', resize);
+
+        if (window.ResizeObserver && this.canvas.parentElement) {
+            const ro = new ResizeObserver((entries) => {
+                for (let entry of entries) {
+                    const cr = entry.contentRect;
+                    if (cr.width > 10 && cr.height > 10) {
+                        if (Math.abs(this.canvas.width - cr.width) > 2 || Math.abs(this.canvas.height - cr.height) > 2) {
+                            this.canvas.width = cr.width;
+                            this.canvas.height = cr.height;
+                            this.render();
+                        }
+                    }
+                }
+            });
+            ro.observe(this.canvas.parentElement);
+        }
+
+        setTimeout(resize, 60);
+    }
+
+    resize() {
+        if (!this.canvas || !this.canvas.parentElement) return;
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        if (rect.width > 10 && rect.height > 10) {
             this.canvas.width = rect.width;
             this.canvas.height = rect.height;
             this.render();
-        };
-        window.addEventListener('resize', resize);
-        setTimeout(resize, 100);
+        }
     }
 
     pushData(val, label = '') {
         this.data.shift();
-        this.data.push(val);
+        this.data.push(Number(val) || 0);
         this.labels.shift();
         this.labels.push(label);
         this.render();
     }
 
+    setSeries(dataArray) {
+        if (!Array.isArray(dataArray) || dataArray.length === 0) return;
+        const pts = dataArray.slice(-this.maxDataPoints);
+        const result = [...pts];
+        while (result.length < this.maxDataPoints) {
+            result.unshift(result[0] !== undefined ? result[0] : 0);
+        }
+        this.data = result.map(v => Math.max(0, Number(v) || 0));
+        this.render();
+    }
+
     render() {
-        if (!this.ctx) return;
+        if (!this.ctx || !this.canvas) return;
+
+        // Auto-recover dimensions if rendered while hidden
+        if (this.canvas.width <= 10 || this.canvas.height <= 10) {
+            if (this.canvas.parentElement) {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                if (rect.width > 10 && rect.height > 10) {
+                    this.canvas.width = rect.width;
+                    this.canvas.height = rect.height;
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+
         const w = this.canvas.width;
         const h = this.canvas.height;
         const ctx = this.ctx;
@@ -48,8 +108,8 @@ class SmoothLineChart {
         ctx.clearRect(0, 0, w, h);
 
         const padding = { top: 20, right: 15, bottom: 25, left: 35 };
-        const chartW = w - padding.left - padding.right;
-        const chartH = h - padding.top - padding.bottom;
+        const chartW = Math.max(10, w - padding.left - padding.right);
+        const chartH = Math.max(10, h - padding.top - padding.bottom);
 
         // Draw grid lines
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
@@ -148,25 +208,88 @@ class DualLineChart {
 
     initResize() {
         const resize = () => {
+            if (!this.canvas || !this.canvas.parentElement) return;
             const rect = this.canvas.parentElement.getBoundingClientRect();
+            if (rect.width > 10 && rect.height > 10) {
+                if (Math.abs(this.canvas.width - rect.width) > 2 || Math.abs(this.canvas.height - rect.height) > 2) {
+                    this.canvas.width = rect.width;
+                    this.canvas.height = rect.height;
+                    this.render();
+                }
+            }
+        };
+
+        window.addEventListener('resize', resize);
+
+        if (window.ResizeObserver && this.canvas.parentElement) {
+            const ro = new ResizeObserver((entries) => {
+                for (let entry of entries) {
+                    const cr = entry.contentRect;
+                    if (cr.width > 10 && cr.height > 10) {
+                        if (Math.abs(this.canvas.width - cr.width) > 2 || Math.abs(this.canvas.height - cr.height) > 2) {
+                            this.canvas.width = cr.width;
+                            this.canvas.height = cr.height;
+                            this.render();
+                        }
+                    }
+                }
+            });
+            ro.observe(this.canvas.parentElement);
+        }
+
+        setTimeout(resize, 60);
+    }
+
+    resize() {
+        if (!this.canvas || !this.canvas.parentElement) return;
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        if (rect.width > 10 && rect.height > 10) {
             this.canvas.width = rect.width;
             this.canvas.height = rect.height;
             this.render();
-        };
-        window.addEventListener('resize', resize);
-        setTimeout(resize, 100);
+        }
     }
 
     pushData(rxVal, txVal) {
         this.rxData.shift();
-        this.rxData.push(rxVal);
+        this.rxData.push(Math.max(0, Number(rxVal) || 0));
         this.txData.shift();
-        this.txData.push(txVal);
+        this.txData.push(Math.max(0, Number(txVal) || 0));
+        this.render();
+    }
+
+    setSeries(rxArray, txArray) {
+        const pad = (arr) => {
+            const pts = (arr || []).slice(-this.maxDataPoints);
+            const res = [...pts];
+            while (res.length < this.maxDataPoints) {
+                res.unshift(res[0] !== undefined ? res[0] : 0);
+            }
+            return res.map(v => Math.max(0, Number(v) || 0));
+        };
+        this.rxData = pad(rxArray);
+        this.txData = pad(txArray);
         this.render();
     }
 
     render() {
-        if (!this.ctx) return;
+        if (!this.ctx || !this.canvas) return;
+
+        // Auto-recover dimensions if rendered while hidden
+        if (this.canvas.width <= 10 || this.canvas.height <= 10) {
+            if (this.canvas.parentElement) {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                if (rect.width > 10 && rect.height > 10) {
+                    this.canvas.width = rect.width;
+                    this.canvas.height = rect.height;
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+
         const w = this.canvas.width;
         const h = this.canvas.height;
         const ctx = this.ctx;
@@ -174,10 +297,10 @@ class DualLineChart {
         ctx.clearRect(0, 0, w, h);
 
         const padding = { top: 20, right: 15, bottom: 25, left: 45 };
-        const chartW = w - padding.left - padding.right;
-        const chartH = h - padding.top - padding.bottom;
+        const chartW = Math.max(10, w - padding.left - padding.right);
+        const chartH = Math.max(10, h - padding.top - padding.bottom);
 
-        // Dynamic max scale calculation
+        // Dynamic max scale calculation (values in KB/s)
         const maxVal = Math.max(10, ...this.rxData, ...this.txData) * 1.2;
 
         // Grid
@@ -191,11 +314,9 @@ class DualLineChart {
             ctx.stroke();
 
             const rawVal = maxVal - (maxVal / 4) * i;
-            let valStr = `${rawVal.toFixed(0)} B/s`;
-            if (maxVal >= 1024 * 1024) {
-                valStr = `${(rawVal / (1024 * 1024)).toFixed(1)} MB/s`;
-            } else if (maxVal >= 1024) {
-                valStr = `${(rawVal / 1024).toFixed(1)} KB/s`;
+            let valStr = `${rawVal.toFixed(0)} KB/s`;
+            if (rawVal >= 1024) {
+                valStr = `${(rawVal / 1024).toFixed(1)} MB/s`;
             }
 
             ctx.fillStyle = '#64748b';
@@ -207,7 +328,7 @@ class DualLineChart {
         const drawSeries = (data, color) => {
             const points = data.map((val, idx) => {
                 const x = padding.left + (chartW / (this.maxDataPoints - 1)) * idx;
-                const y = padding.top + chartH - (val / maxVal) * chartH;
+                const y = padding.top + chartH - (Math.min(maxVal, Math.max(0, val)) / maxVal) * chartH;
                 return { x, y };
             });
 
@@ -232,3 +353,59 @@ class DualLineChart {
         drawSeries(this.txData, '#8b5cf6'); // Upload - Purple
     }
 }
+
+class PulseChartManager {
+    constructor(canvasId, options = {}) {
+        this.options = options;
+        this.canvasId = canvasId;
+        if (options.dual) {
+            this.chart = new DualLineChart(canvasId);
+        } else {
+            this.chart = new SmoothLineChart(canvasId, {
+                strokeColor: options.color || '#38bdf8',
+                fillColor: options.color ? (options.color.startsWith('#') ? options.color + '22' : options.color) : 'rgba(56,189,248,0.15)',
+                unit: options.label && options.label.includes('%') ? '%' : ''
+            });
+        }
+    }
+
+    addPoint(val, val2) {
+        if (!this.chart) return;
+        if (this.chart instanceof DualLineChart) {
+            this.chart.pushData(Number(val) || 0, Number(val2) || 0);
+        } else if (this.chart instanceof SmoothLineChart) {
+            this.chart.pushData(Number(val) || 0);
+        }
+    }
+
+    setSeries(data1, data2) {
+        if (!this.chart) return;
+        if (this.chart instanceof DualLineChart) {
+            this.chart.setSeries(data1, data2);
+        } else if (this.chart instanceof SmoothLineChart) {
+            this.chart.setSeries(data1);
+        }
+    }
+
+    resize() {
+        if (this.chart && typeof this.chart.resize === 'function') {
+            this.chart.resize();
+        }
+    }
+
+    reset() {
+        if (!this.chart) return;
+        if (this.chart.data) {
+            this.chart.data = new Array(this.chart.maxDataPoints || 30).fill(0);
+        }
+        if (this.chart.rxData) {
+            this.chart.rxData = new Array(this.chart.maxDataPoints || 30).fill(0);
+        }
+        if (this.chart.txData) {
+            this.chart.txData = new Array(this.chart.maxDataPoints || 30).fill(0);
+        }
+        this.chart.render();
+    }
+}
+
+window.PulseChartManager = PulseChartManager;

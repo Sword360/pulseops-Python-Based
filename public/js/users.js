@@ -148,6 +148,7 @@ const UsersManager = (() => {
         document.getElementById('new-user-password').value     = '';
         document.getElementById('new-user-role').value         = 'viewer';
         updatePasswordStrength('');
+        modal.classList.add('active');
         modal.style.display = 'flex';
     }
 
@@ -172,7 +173,8 @@ const UsersManager = (() => {
             const data = await resp.json();
             if (resp.ok && data.success) {
                 showToast(`User "${display_name}" created`, 'success');
-                document.getElementById('create-user-modal').style.display = 'none';
+                const m = document.getElementById('create-user-modal');
+                if (m) { m.classList.remove('active'); m.style.display = 'none'; }
                 loadUsers();
             } else {
                 showToast(data.detail || data.error || 'Failed to create user', 'error');
@@ -195,6 +197,7 @@ const UsersManager = (() => {
         document.getElementById('edit-user-role').value        = user.role;
         document.getElementById('edit-user-active').checked    = !!user.is_active;
         document.getElementById('edit-user-password').value    = '';
+        modal.classList.add('active');
         modal.style.display = 'flex';
     }
 
@@ -210,7 +213,8 @@ const UsersManager = (() => {
         if (password) payload.password = password;
 
         await updateUser(userId, payload);
-        document.getElementById('edit-user-modal').style.display = 'none';
+        const m = document.getElementById('edit-user-modal');
+        if (m) { m.classList.remove('active'); m.style.display = 'none'; }
     }
 
     async function updateUser(userId, updates) {
@@ -283,7 +287,10 @@ const UsersManager = (() => {
         document.querySelectorAll('[data-close-modal]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const modal = document.getElementById(btn.dataset.closeModal);
-                if (modal) modal.style.display = 'none';
+                if (modal) {
+                    modal.classList.remove('active');
+                    modal.style.display = 'none';
+                }
             });
         });
 
@@ -313,9 +320,14 @@ const UsersManager = (() => {
         });
     }
 
-    return {
+    const api = {
         init,
         loadUsers,
         renderUsersTable,
+        openCreateUserModal,
+        openEditUserModal,
     };
+    window.UsersManager = api;
+    window.openCreateUserModal = openCreateUserModal;
+    return api;
 })();

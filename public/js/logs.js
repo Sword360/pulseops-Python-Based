@@ -91,6 +91,9 @@ class WebTerminal {
         this.historyIndex = -1;
         this.sudoPassword = '';
         this.pendingSudoCmd = null;
+        this.serverId = 'local-master';
+        this.hostname = 'mail.sword.local';
+        this.hostIp = '127.0.0.1';
 
         this.initDOM();
     }
@@ -135,7 +138,7 @@ class WebTerminal {
 
         // Preset command buttons
         document.querySelectorAll('.btn-preset').forEach(btn => {
-            if (btn.id === 'btn-sudo-auth') return;
+            if (btn.id === 'btn-sudo-auth' || btn.id === 'btn-term-clear' || btn.id === 'btn-term-copy' || btn.id === 'btn-preset-reboot') return;
             btn.addEventListener('click', () => {
                 const cmd = btn.dataset.cmd;
                 if (cmd && this.input && !this.pendingSudoCmd) {
@@ -145,6 +148,43 @@ class WebTerminal {
                 }
             });
         });
+
+        // Reboot Preset Button
+        const rebootBtn = document.getElementById('btn-preset-reboot');
+        if (rebootBtn) {
+            rebootBtn.addEventListener('click', () => {
+                const hName = this.hostname || 'this server';
+                if (confirm(`⚠️ CRITICAL: Are you sure you want to REBOOT ${hName}?\n\nThis will send the 'reboot' command directly to the host.`)) {
+                    this.executeCommand('reboot');
+                }
+            });
+        }
+
+        // Clear button
+        const clearBtn = document.getElementById('btn-term-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (this.body) {
+                    this.body.innerHTML = `<div class="term-output" style="color:var(--accent-cyan); font-weight:600;">⚡ PulseOps Enterprise Full-System Terminal Console v2.1</div>` +
+                        `<div class="term-output" style="color:var(--accent-green);">Connected host: ${this.hostname} (${this.hostIp || '127.0.0.1'}) [User: root]</div>`;
+                }
+            });
+        }
+
+        // Copy button
+        const copyBtn = document.getElementById('btn-term-copy');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                if (this.body) {
+                    const text = this.body.innerText || this.body.textContent;
+                    navigator.clipboard.writeText(text).then(() => {
+                        window.showToast && window.showToast('Terminal output copied to clipboard!', 'success');
+                    }).catch(() => {
+                        window.showToast && window.showToast('Failed to copy to clipboard', 'error');
+                    });
+                }
+            });
+        }
 
         // Sudo Auth Button
         const sudoBtn = document.getElementById('btn-sudo-auth');
@@ -157,6 +197,40 @@ class WebTerminal {
                     this.appendTerminalMessage(`[sudo] Sudo credentials updated for web terminal session.`, '#eab308');
                 }
             });
+        }
+
+        // Initialize server context
+        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const hName = window.PulseOpsCurrentServerHostname || 'mail.sword.local';
+        this.setServer(sId, hName);
+    }
+
+    setServer(serverId, hostname, hostIp) {
+        this.serverId = serverId || 'local-master';
+        const isMaster = this.serverId === 'local-master';
+        this.hostname = hostname || (isMaster ? 'mail.sword.local' : 'node');
+        if (hostIp) this.hostIp = hostIp;
+
+        const targetBadge = document.getElementById('term-target-badge');
+        if (targetBadge) {
+            targetBadge.textContent = isMaster ? 'Target: Master Node' : `Target: ${this.hostname}`;
+        }
+        const hostDisplay = document.getElementById('term-host-display');
+        if (hostDisplay) {
+            hostDisplay.textContent = `${this.hostname} (${this.hostIp || (isMaster ? '127.0.0.1:3500' : '3501')})`;
+        }
+        const statusPill = document.getElementById('term-status-pill');
+        if (statusPill) {
+            statusPill.innerHTML = `<span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%;"></span> READY`;
+        }
+
+        this.resetInputMode();
+    }
+
+    onTabActivated() {
+        this.resetInputMode();
+        if (this.input) {
+            setTimeout(() => this.input.focus(), 60);
         }
     }
 
@@ -174,15 +248,37 @@ class WebTerminal {
         }
     }
 
+    getTerminalPrompt() {
+        const sId = this.serverId || window.PulseOpsCurrentServer || 'local-master';
+        const hostname = this.hostname || window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'mail.sword.local' : 'node');
+        return `root@${hostname}:~$`;
+    }
+
     resetInputMode() {
+        const isOperator = window.PulseOpsAuth ? window.PulseOpsAuth.isOperator() : true;
+        if (!isOperator) {
+            if (this.prompt) {
+                this.prompt.style.color = 'var(--text-dim)';
+                this.prompt.textContent = `[viewer@${this.hostname}:ro]$`;
+            }
+            if (this.input) {
+                this.input.type = 'text';
+                this.input.value = '';
+                this.input.disabled = true;
+                this.input.placeholder = 'Read-only mode: Viewers cannot execute commands in terminal';
+            }
+            return;
+        }
+
         if (this.prompt) {
             this.prompt.style.color = '';
-            this.prompt.textContent = 'pulseops@linux:~$';
+            this.prompt.textContent = this.getTerminalPrompt();
         }
         if (this.input) {
             this.input.type = 'text';
+            this.input.disabled = false;
             this.input.value = '';
-            this.input.placeholder = 'Type a command (e.g. sudo apt update, uptime) and press Enter...';
+            this.input.placeholder = `Type a command on ${this.hostname} and press Enter...`;
         }
     }
 
@@ -199,10 +295,21 @@ class WebTerminal {
     async executeCommand(cmd) {
         if (!this.body) return;
 
+        const isOperator = window.PulseOpsAuth ? window.PulseOpsAuth.isOperator() : true;
+        if (!isOperator) {
+            window.showToast && window.showToast('Permission denied: Viewer accounts cannot execute terminal commands', 'error');
+            this.appendTerminalMessage('[PulseOps RBAC] Permission denied: Viewer accounts cannot execute terminal commands.', 'var(--accent-red)');
+            return;
+        }
+
+        const sId = this.serverId || window.PulseOpsCurrentServer || 'local-master';
+        const hostname = this.hostname || window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'mail.sword.local' : 'node');
+        const promptText = this.getTerminalPrompt();
+
         // Print command line
         const cmdLine = document.createElement('div');
         cmdLine.className = 'term-output';
-        cmdLine.innerHTML = `<span style="color: var(--accent-green)">pulseops@linux:~$</span> ${cmd}`;
+        cmdLine.innerHTML = `<span style="color: var(--accent-green); font-weight:600;">${promptText}</span> ${cmd}`;
         this.body.appendChild(cmdLine);
 
         if (cmd === 'clear') {
@@ -213,22 +320,32 @@ class WebTerminal {
         const outputDiv = document.createElement('div');
         outputDiv.className = 'term-output';
         outputDiv.style.color = 'var(--text-dim)';
-        outputDiv.textContent = 'Executing command...';
+        outputDiv.textContent = `[${hostname}] Executing...`;
         this.body.appendChild(outputDiv);
         this.body.scrollTop = this.body.scrollHeight;
 
         try {
-            const payload = { command: cmd };
+            const payload = { command: cmd, server_id: sId };
             if (this.sudoPassword) {
                 payload.sudoPassword = this.sudoPassword;
             }
 
-            const res = await fetch('/api/terminal/exec', {
+            const authFetch = (window.PulseOpsAuth && PulseOpsAuth.apiFetch) ? PulseOpsAuth.apiFetch : fetch;
+            const res = await authFetch('/api/terminal/exec', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
+
+            if (data.need_update) {
+                const upgradeCmd = `curl -sSL ${window.location.origin}/api/fleet/agent-update.sh | sudo bash`;
+                outputDiv.style.color = '#eab308';
+                outputDiv.innerHTML = `[PulseOps] Remote Agent v1 detected on ${hostname}. Upgrade required to execute commands remotely.<br>` +
+                    `<span style="color:#10b981;">Run on ${hostname}:</span> <code>${upgradeCmd}</code>`;
+                this.body.scrollTop = this.body.scrollHeight;
+                return;
+            }
 
             if (data.requirePassword) {
                 if (data.isInvalidPassword) {

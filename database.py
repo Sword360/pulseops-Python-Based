@@ -296,7 +296,9 @@ async def get_setting(key: str, default: str = "") -> str:
         Setting value as string.
     """
     row = await fetchone("SELECT value FROM settings WHERE key = ?", (key,))
-    return row["value"] if row else default
+    if row and row["value"]:
+        return row["value"]
+    return default
 
 
 async def set_setting(key: str, value: str, user_id: Optional[int] = None) -> None:

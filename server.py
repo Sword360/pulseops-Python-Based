@@ -215,6 +215,80 @@ async def handle_vnc_proxy(ws: WebSocketConnection):
         await ws.close()
 
 
+async def proxy_to_agent(
+    server_id: str,
+    endpoint: str,
+    method: str = 'GET',
+    json_body: Optional[Dict[str, Any]] = None,
+    query_params: Optional[Dict[str, str]] = None
+) -> tuple:
+    """Proxy an API request to a remote fleet agent.
+    
+    Returns (response_dict, http_status_code).
+    """
+    if not ENTERPRISE_AVAILABLE:
+        return {"success": False, "error": "Enterprise fleet not available"}, 400
+
+    srv = await fleet_module.get_server(server_id)
+    if not srv:
+        return {"success": False, "error": f"Server '{server_id}' not found"}, 404
+
+    host_ip = srv.get("host_ip")
+    port = srv.get("agent_port", 3501)
+    token = srv.get("agent_token", "")
+    hostname = srv.get("hostname") or srv.get("display_name") or host_ip
+
+    try:
+        import aiohttp
+    except ImportError:
+        return {"success": False, "error": "aiohttp not available on master"}, 500
+
+    url = f"http://{host_ip}:{port}{endpoint}"
+    req_headers = {"X-Agent-Token": token}
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession() as session:
+            if method.upper() == 'GET':
+                async with session.get(url, params=query_params, headers=req_headers, timeout=timeout) as resp:
+                    if resp.status == 404:
+                        return {
+                            "success": False,
+                            "need_update": True,
+                            "error": f"Agent on {hostname} needs to be upgraded to v2 to enable remote operations.",
+                            "hostname": hostname,
+                            "server_id": server_id
+                        }, 200
+                    try:
+                        data = await resp.json()
+                        return data, resp.status
+                    except Exception:
+                        txt = await resp.text()
+                        return {"success": False, "error": txt}, resp.status
+            elif method.upper() == 'POST':
+                async with session.post(url, json=json_body or {}, headers=req_headers, timeout=timeout) as resp:
+                    if resp.status == 404:
+                        return {
+                            "success": False,
+                            "need_update": True,
+                            "error": f"Agent on {hostname} needs to be upgraded to v2 to enable remote operations.",
+                            "hostname": hostname,
+                            "server_id": server_id
+                        }, 200
+                    try:
+                        data = await resp.json()
+                        return data, resp.status
+                    except Exception:
+                        txt = await resp.text()
+                        return {"success": False, "error": txt}, resp.status
+            else:
+                return {"success": False, "error": f"Unsupported method {method}"}, 405
+    except asyncio.TimeoutError:
+        return {"success": False, "error": f"Connection timed out reaching agent on {hostname} ({host_ip}:{port})"}, 504
+    except Exception as e:
+        return {"success": False, "error": f"Cannot connect to agent on {hostname} ({host_ip}:{port}): {str(e)}"}, 502
+
+
 async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     try:
         request_line = await reader.readline()
@@ -292,10 +366,21 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
         # REST API Routes
         # -------------------------------------------------------------
         if path == '/api/services' and method == 'GET':
+            target_server = query_params.get('server_id')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/services', 'GET')
+                return await send_json_response(writer, res_data, status=code)
             res_data = await services.get_services()
             return await send_json_response(writer, res_data)
 
         if path == '/api/services/action' and method == 'POST':
+            user = await auth.get_current_user(headers.get('authorization', ''))
+            if not user or user.get('role') not in ('admin', 'operator'):
+                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot perform service actions.'}, 403)
+            target_server = json_body.get('server_id') or query_params.get('server_id')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/services/action', 'POST', json_body=json_body)
+                return await send_json_response(writer, res_data, status=code)
             srv_name = json_body.get('serviceName')
             action = json_body.get('action')
             res_data = await services.action_service(srv_name, action)
@@ -305,24 +390,54 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             parts_path = path.split('/')
             if len(parts_path) >= 4:
                 srv_name = parts_path[3]
+                target_server = query_params.get('server_id')
+                if target_server and target_server != 'local-master':
+                    res_data, code = await proxy_to_agent(target_server, '/api/services/logs', 'GET', query_params={'service': srv_name, 'lines': '100'})
+                    return await send_json_response(writer, res_data, status=code)
                 res_data = await services.get_service_logs(srv_name)
                 return await send_json_response(writer, res_data)
 
         if path == '/api/processes' and method == 'GET':
+            target_server = query_params.get('server_id')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/processes', 'GET')
+                return await send_json_response(writer, res_data, status=code)
             res_data = await processes.get_processes()
             return await send_json_response(writer, res_data)
 
         if path == '/api/processes/kill' and method == 'POST':
+            user = await auth.get_current_user(headers.get('authorization', ''))
+            if not user or user.get('role') not in ('admin', 'operator'):
+                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot terminate processes.'}, 403)
+            target_server = json_body.get('server_id') or query_params.get('server_id')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/processes/kill', 'POST', json_body=json_body)
+                return await send_json_response(writer, res_data, status=code)
             pid = json_body.get('pid')
             signal_val = json_body.get('signal', '15')
             res_data = await processes.kill_process(pid, signal_val)
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
 
         if path == '/api/terminal/exec' and method == 'POST':
+            user = await auth.get_current_user(headers.get('authorization', ''))
+            if not user or user.get('role') not in ('admin', 'operator'):
+                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot execute terminal commands.'}, 403)
+            target_server = json_body.get('server_id') or query_params.get('server_id')
             command = json_body.get('command')
             sudo_pass = json_body.get('sudoPassword')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/terminal/exec', 'POST', json_body={'command': command})
+                return await send_json_response(writer, res_data, status=code)
             res_data = await terminal.exec_terminal_command(command, sudo_pass)
             return await send_json_response(writer, res_data)
+
+        if path == '/api/logs' and method == 'GET':
+            target_server = query_params.get('server_id')
+            lines_val = query_params.get('lines', '50')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/logs', 'GET', query_params={'lines': lines_val})
+                return await send_json_response(writer, res_data, status=code)
+            return await send_json_response(writer, {'success': True, 'logs': []})
 
         if path == '/api/vnc/status' and method == 'GET':
             target_host = query_params.get('host', '127.0.0.1')
@@ -330,6 +445,9 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             return await send_json_response(writer, res_data)
 
         if path == '/api/vnc/launch' and method == 'POST':
+            user = await auth.get_current_user(headers.get('authorization', ''))
+            if not user or user.get('role') not in ('admin', 'operator'):
+                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot launch VNC sessions.'}, 403)
             display = json_body.get('display', ':0')
             vnc_port = int(json_body.get('port', 5900))
             use_native = bool(json_body.get('useNative', False))
@@ -497,10 +615,31 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'Server not found'}, 404)
                 return await send_json_response(writer, srv)
 
+            if path.startswith('/api/fleet/servers/') and '/metrics' in path and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                parts = path.split('/')
+                server_id = parts[4]
+                metric = query_params.get('metric', 'cpu_percent')
+                range_hours = int(query_params.get('range', 24))
+                metrics = await fleet_module.get_server_metrics_history(server_id, metric, range_hours)
+                return await send_json_response(writer, {'success': True, 'metrics': metrics})
+
+            if path.startswith('/api/fleet/servers/') and '/snapshots' in path and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                parts = path.split('/')
+                server_id = parts[4]
+                limit = int(query_params.get('limit', 30))
+                snapshots = await fleet_module.get_recent_snapshots(server_id, limit)
+                return await send_json_response(writer, {'success': True, 'snapshots': snapshots})
+
             if path.startswith('/api/fleet/servers/') and method == 'DELETE':
                 user = await auth.get_current_user(headers.get('authorization', ''))
                 if not user or user.get('role') != 'admin':
-                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                    return await send_json_response(writer, {'detail': 'Admin access required to remove servers'}, 403)
                 server_id = path.split('/')[-1]
                 result = await fleet_module.delete_server(server_id)
                 if not result['success']:
@@ -570,6 +709,17 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 )
                 if not result['success']:
                     return await send_json_response(writer, {'detail': result['error']}, 400)
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/alerts/rules/') and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                try:
+                    rule_id = int(path.split('/')[4])
+                except (IndexError, ValueError):
+                    return await send_json_response(writer, {'detail': 'Invalid rule ID'}, 400)
+                result = await alerts_module.delete_alert_rule(rule_id)
                 return await send_json_response(writer, result)
 
             if path == '/api/alerts/active' and method == 'GET':
@@ -648,8 +798,32 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             # Agent install script
             if path == '/api/fleet/agent-install.sh' and method == 'GET':
                 token = query_params.get('token', '')
-                master_url = await database.get_setting('master_url', f'http://localhost:{PORT}')
+                host_hdr = headers.get('host', f'localhost:{PORT}')
+                proto = 'https' if headers.get('x-forwarded-proto') == 'https' else 'http'
+                default_url = f"{proto}://{host_hdr}"
+                master_url = await database.get_setting('master_url', default_url)
+                if not master_url:
+                    master_url = default_url
                 script = fleet_module.get_agent_install_script(master_url, token)
+                res_hdr = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/x-shellscript\r\n"
+                    f"Content-Length: {len(script.encode())}\r\n\r\n"
+                )
+                writer.write(res_hdr.encode() + script.encode())
+                await writer.drain()
+                writer.close()
+                return
+
+            # Agent update script
+            if path == '/api/fleet/agent-update.sh' and method == 'GET':
+                host_hdr = headers.get('host', f'localhost:{PORT}')
+                proto = 'https' if headers.get('x-forwarded-proto') == 'https' else 'http'
+                default_url = f"{proto}://{host_hdr}"
+                master_url = await database.get_setting('master_url', default_url)
+                if not master_url:
+                    master_url = default_url
+                script = fleet_module.get_agent_update_script(master_url)
                 res_hdr = (
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/x-shellscript\r\n"
@@ -663,7 +837,7 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
         # -------------------------------------------------------------
         # /login route — serve login.html
         # -------------------------------------------------------------
-        if path == '/login' and method == 'GET':
+        if path in ('/login', '/login.html') and method in ('GET', 'HEAD'):
             login_path = os.path.join(PUBLIC_DIR, 'login.html')
             if os.path.exists(login_path):
                 with open(login_path, 'rb') as f:
@@ -673,7 +847,8 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     "Content-Type: text/html; charset=utf-8\r\n"
                     f"Content-Length: {len(content)}\r\n\r\n"
                 )
-                writer.write(res_hdr.encode() + content)
+                body = b'' if method == 'HEAD' else content
+                writer.write(res_hdr.encode() + body)
                 await writer.drain()
                 writer.close()
                 return
@@ -744,15 +919,20 @@ async def send_json_response(writer: asyncio.StreamWriter, data: Dict[str, Any],
 async def telemetry_broadcast_loop():
     while True:
         await asyncio.sleep(2.0)
-        if connected_ws_clients:
-            try:
-                data = await telemetry.get_full_telemetry()
+        try:
+            data = await telemetry.get_full_telemetry()
+            if ENTERPRISE_AVAILABLE:
+                try:
+                    fleet_module.update_local_snapshot("local-master", data)
+                except Exception:
+                    pass
+            if connected_ws_clients:
                 payload = json.dumps({"type": "telemetry", "data": data})
                 for ws in list(connected_ws_clients):
                     if ws.open and not ws.is_vnc:
                         asyncio.create_task(ws.send_text(payload))
-            except Exception as e:
-                print(f"Error in telemetry loop: {e}")
+        except Exception as e:
+            print(f"Error in telemetry loop: {e}")
 
 
 # Background task: System log stream broadcast every 3 seconds
@@ -794,6 +974,7 @@ async def main():
         try:
             await database.init_db()
             await auth.bootstrap_admin()
+            await fleet_module.ensure_local_server(PORT)
             fleet_module.set_broadcast_callback(_fleet_broadcast)
             asyncio.create_task(fleet_module.fleet_health_poll_loop())
             print("✅ Enterprise features initialized (DB, Auth, Fleet)")

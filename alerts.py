@@ -36,7 +36,7 @@ async def list_alert_rules(server_id: Optional[str] = None) -> List[Dict[str, An
             "SELECT * FROM alert_rules WHERE (server_id = ? OR server_id IS NULL) AND is_active = 1 ORDER BY created_at DESC",
             (server_id,)
         )
-    return await fetchall("SELECT * FROM alert_rules ORDER BY created_at DESC")
+    return await fetchall("SELECT * FROM alert_rules WHERE is_active = 1 ORDER BY created_at DESC")
 
 
 async def create_alert_rule(

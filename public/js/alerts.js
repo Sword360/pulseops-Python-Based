@@ -190,7 +190,7 @@ const AlertsManager = (() => {
             const data = await resp.json();
             if (resp.ok && data.success) {
                 showToast(`Alert rule "${name}" created`, 'success');
-                document.getElementById('create-rule-modal').style.display = 'none';
+                closeCreateRuleModal();
                 loadAlertRules();
             } else {
                 showToast(data.detail || data.error || 'Failed to create rule', 'error');
@@ -243,6 +243,24 @@ const AlertsManager = (() => {
         return `${Math.floor(seconds / 86400)}d ago`;
     }
 
+    function openCreateRuleModal() {
+        const modal = document.getElementById('create-rule-modal');
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+            const nameInput = document.getElementById('rule-name');
+            if (nameInput) nameInput.focus();
+        }
+    }
+
+    function closeCreateRuleModal() {
+        const modal = document.getElementById('create-rule-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
     function init() {
@@ -261,9 +279,11 @@ const AlertsManager = (() => {
 
         // Create rule button
         const createBtn = document.getElementById('create-rule-btn');
-        if (createBtn) createBtn.addEventListener('click', () => {
-            const modal = document.getElementById('create-rule-modal');
-            if (modal) modal.style.display = 'flex';
+        if (createBtn) createBtn.addEventListener('click', openCreateRuleModal);
+
+        // Modal close buttons
+        document.querySelectorAll('[data-close-modal="create-rule-modal"]').forEach(btn => {
+            btn.addEventListener('click', closeCreateRuleModal);
         });
 
         // Create rule submit
@@ -287,11 +307,15 @@ const AlertsManager = (() => {
         setInterval(loadActiveAlerts, 60000);
     }
 
-    return {
+    const api = {
         init,
         loadActiveAlerts,
         loadAlertRules,
         handleAlertEvent,
         updateBell,
+        openCreateRuleModal,
     };
+    window.AlertsManager = api;
+    window.openCreateRuleModal = openCreateRuleModal;
+    return api;
 })();

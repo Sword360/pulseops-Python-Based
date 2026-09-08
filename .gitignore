@@ -10,10 +10,24 @@ __pycache__/
 
 # Environments & virtualenvs
 .env
+.env.*
 .venv
 env/
 venv/
 ENV/
 
+# Secrets & Keys
+.secret_key
+.refresh_secret_key
+*.secret*
+*.key
+*.pem
+
 # Logs
 *.log
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

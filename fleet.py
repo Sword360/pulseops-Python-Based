@@ -50,7 +50,7 @@ async def list_servers(search: Optional[str] = None, group_id: Optional[str] = N
     Returns:
         List of server dicts enriched with latest snapshot data.
     """
-    from database import fetchall
+    from database import fetchall, fetchone
     where_clauses = []
     params: list = []
 
@@ -70,9 +70,21 @@ async def list_servers(search: Optional[str] = None, group_id: Optional[str] = N
         tuple(params)
     )
 
-    # Enrich with latest in-memory snapshot
+    # Enrich with latest in-memory snapshot or fallback to DB
     for srv in servers:
-        snap = _latest_snapshots.get(srv["id"], {})
+        snap = _latest_snapshots.get(srv["id"])
+        if not snap:
+            last_snap = await fetchone(
+                "SELECT cpu_percent, mem_percent, disk_percent, net_rx_sec, net_tx_sec, load_avg_1, uptime "
+                "FROM server_snapshots WHERE server_id = ? ORDER BY id DESC LIMIT 1",
+                (srv["id"],)
+            )
+            if last_snap:
+                snap = dict(last_snap)
+                _latest_snapshots[srv["id"]] = snap
+            else:
+                snap = {}
+
         srv["latest_cpu"] = snap.get("cpu_percent")
         srv["latest_mem"] = snap.get("mem_percent")
         srv["latest_disk"] = snap.get("disk_percent")
@@ -103,7 +115,18 @@ async def get_server(server_id: str) -> Optional[Dict[str, Any]]:
     if not srv:
         return None
     srv["tags"] = json.loads(srv.get("tags") or "[]") if isinstance(srv.get("tags"), str) else []
-    snap = _latest_snapshots.get(server_id, {})
+    snap = _latest_snapshots.get(server_id)
+    if not snap:
+        last_snap = await fetchone(
+            "SELECT cpu_percent, mem_percent, disk_percent, net_rx_sec, net_tx_sec, load_avg_1, uptime "
+            "FROM server_snapshots WHERE server_id = ? ORDER BY id DESC LIMIT 1",
+            (server_id,)
+        )
+        if last_snap:
+            snap = dict(last_snap)
+            _latest_snapshots[server_id] = snap
+        else:
+            snap = {}
     srv["latest_snapshot"] = snap
     return srv
 
@@ -207,13 +230,29 @@ async def delete_server(server_id: str) -> Dict[str, Any]:
         Dict with 'success' bool.
     """
     from database import execute, fetchone
-    srv = await fetchone("SELECT id FROM servers WHERE id = ?", (server_id,))
+    if server_id == "local-master":
+        return {"success": False, "error": "Cannot remove the local Master node from the fleet."}
+
+    srv = await fetchone("SELECT id, hostname FROM servers WHERE id = ?", (server_id,))
     if not srv:
         return {"success": False, "error": "Server not found"}
-    await execute("DELETE FROM servers WHERE id = ?", (server_id,))
+
+    try:
+        # Clean up referencing records that don't have CASCADE or might block FK constraint
+        await execute("UPDATE invite_tokens SET used_by_server = NULL WHERE used_by_server = ?", (server_id,))
+        await execute("DELETE FROM active_alerts WHERE server_id = ?", (server_id,))
+        await execute("DELETE FROM server_snapshots WHERE server_id = ?", (server_id,))
+        await execute("DELETE FROM maintenance_windows WHERE server_id = ?", (server_id,))
+        await execute("DELETE FROM alert_rules WHERE server_id = ?", (server_id,))
+        # Now delete server
+        await execute("DELETE FROM servers WHERE id = ?", (server_id,))
+    except Exception as e:
+        logger.error("[Fleet] Failed to delete server %s: %s", server_id, e)
+        return {"success": False, "error": f"Failed to delete server: {str(e)}"}
+
     _latest_snapshots.pop(server_id, None)
     _failure_counts.pop(server_id, None)
-    logger.info("[Fleet] Deleted server %s", server_id)
+    logger.info("[Fleet] Deleted server %s (%s)", server_id, srv["hostname"])
     return {"success": True}
 
 
@@ -342,6 +381,8 @@ async def process_heartbeat(agent_token: str, payload: Dict[str, Any]) -> Dict[s
         "net_tx_sec": int(payload.get("tx_sec", 0)),
         "load_avg_1": float(payload.get("load1", 0)),
         "uptime": int(payload.get("uptime", 0)),
+        "os_info": payload.get("os_info") or server.get("os_info"),
+        "arch": payload.get("arch") or server.get("arch"),
     }
     _latest_snapshots[server_id] = snapshot
     await execute(
@@ -375,6 +416,11 @@ async def process_heartbeat(agent_token: str, payload: Dict[str, Any]) -> Dict[s
             await _broadcast_callback({
                 "type": "fleetUpdate",
                 "server_id": server_id,
+                "hostname": server.get("hostname"),
+                "display_name": server.get("display_name"),
+                "host_ip": server.get("host_ip"),
+                "agent_port": server.get("agent_port", 3501),
+                "os_info": snapshot.get("os_info") or server.get("os_info"),
                 "status": new_status,
                 "snapshot": snapshot,
             })
@@ -507,6 +553,7 @@ async def _handle_poll_failure(server_id: str, hostname: str) -> None:
                 await _broadcast_callback({
                     "type": "fleetUpdate",
                     "server_id": server_id,
+                    "hostname": hostname,
                     "status": "offline",
                     "snapshot": {},
                 })
@@ -545,7 +592,18 @@ echo "======================================="
 echo "Master: $MASTER_URL"
 echo ""
 
-# Detect OS
+# Detect root / sudo
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+    if command -v sudo &>/dev/null; then
+        SUDO="sudo"
+    else
+        echo "❌ This installer requires root privileges. Please run as root or install sudo."
+        exit 1
+    fi
+fi
+
+# Detect OS & package manager
 if command -v apt-get &>/dev/null; then
     PKG_MANAGER="apt-get"
     INSTALL_CMD="apt-get install -y"
@@ -559,49 +617,75 @@ elif command -v pacman &>/dev/null; then
     PKG_MANAGER="pacman"
     INSTALL_CMD="pacman -S --noconfirm"
 else
-    echo "❌ Unsupported OS. Please install Python 3.10+ manually."
-    exit 1
+    PKG_MANAGER="unknown"
+    echo "⚠️ Unknown package manager. Checking for python3..."
 fi
 
 echo "📦 Detected package manager: $PKG_MANAGER"
 
-# Ensure Python 3
-if ! command -v python3 &>/dev/null; then
-    echo "📦 Installing Python 3..."
-    sudo $INSTALL_CMD python3 python3-pip
+# Install dependencies via system package manager (avoids PEP 668 externally-managed-environment)
+echo "📦 Installing system dependencies..."
+if [ "$PKG_MANAGER" = "apt-get" ]; then
+    $SUDO apt-get update -qq || true
+    $SUDO $INSTALL_CMD python3 python3-psutil python3-pip curl || true
+elif [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+    $SUDO $INSTALL_CMD python3 python3-psutil python3-pip curl || true
+elif [ "$PKG_MANAGER" = "pacman" ]; then
+    $SUDO $INSTALL_CMD python python-psutil python-pip curl || true
 fi
 
-PYTHON_VER=$(python3 -c "import sys; print(sys.version_info.minor)")
-if [ "$PYTHON_VER" -lt 10 ]; then
-    echo "❌ Python 3.10+ required. Current: 3.$PYTHON_VER"
+# Verify Python 3 is installed
+if ! command -v python3 &>/dev/null; then
+    echo "❌ Python 3 could not be found or installed. Please install Python 3.10+ manually."
     exit 1
 fi
 
-echo "✅ Python 3.$PYTHON_VER found"
+PYTHON_BIN=$(command -v python3 || echo "/usr/bin/python3")
+PYTHON_VER=$($PYTHON_BIN -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+echo "✅ Python 3.$PYTHON_VER found ($PYTHON_BIN)"
 
-# Install pip if needed
-if ! command -v pip3 &>/dev/null; then
-    sudo $INSTALL_CMD python3-pip
+# Ensure psutil is available (support modern Python PEP 668 --break-system-packages)
+if ! $PYTHON_BIN -c "import psutil" &>/dev/null; then
+    echo "📦 Setting up psutil..."
+    if command -v pip3 &>/dev/null; then
+        $SUDO pip3 install psutil --break-system-packages --quiet 2>/dev/null || \
+        pip3 install psutil --break-system-packages --quiet 2>/dev/null || \
+        $SUDO pip3 install psutil --quiet 2>/dev/null || \
+        pip3 install psutil --quiet 2>/dev/null || true
+    fi
 fi
 
-# Install psutil
-pip3 install psutil --quiet
+if $PYTHON_BIN -c "import psutil" &>/dev/null; then
+    echo "✅ psutil loaded successfully"
+else
+    echo "ℹ️  psutil not installed; agent will use native /proc kernel telemetry."
+fi
 
 # Create installation directory
-sudo mkdir -p "$INSTALL_DIR"
+$SUDO mkdir -p "$INSTALL_DIR"
 
 echo "⬇️  Downloading PulseOps agent..."
-sudo curl -sSL "$MASTER_URL/api/fleet/agent-download" -o "$INSTALL_DIR/pulseops_agent.py"
-sudo chmod +x "$INSTALL_DIR/pulseops_agent.py"
+$SUDO curl -sSL "$MASTER_URL/api/fleet/agent-download" -o "$INSTALL_DIR/pulseops_agent.py"
+$SUDO chmod +x "$INSTALL_DIR/pulseops_agent.py"
 
 # Create config directory
-sudo mkdir -p /etc/pulseops
+$SUDO mkdir -p /etc/pulseops
 
-# Get hostname and IP
-HOSTNAME=$(hostname -f)
-HOST_IP=$(hostname -I | awk '{{print $1}}')
+# Get hostname and IP with safe fallbacks
+HOSTNAME=$(hostname -f 2>/dev/null || hostname 2>/dev/null || uname -n)
+HOST_IP=$(hostname -I 2>/dev/null | awk '{{print $1}}')
+if [ -z "$HOST_IP" ]; then
+    HOST_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{{print $7}}' || echo "127.0.0.1")
+fi
 
-echo "📡 Registering with master server..."
+OS_NAME=""
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_NAME="$PRETTY_NAME"
+fi
+[ -z "$OS_NAME" ] && OS_NAME="$(uname -s) $(uname -r)"
+
+echo "📡 Registering with master server ($HOSTNAME @ $HOST_IP)..."
 RESPONSE=$(curl -sSL -X POST "$MASTER_URL/api/fleet/register" \\
     -H "Content-Type: application/json" \\
     -d "{{
@@ -609,30 +693,30 @@ RESPONSE=$(curl -sSL -X POST "$MASTER_URL/api/fleet/register" \\
         \\"hostname\\": \\"$HOSTNAME\\",
         \\"host_ip\\": \\"$HOST_IP\\",
         \\"agent_port\\": $AGENT_PORT,
-        \\"os_info\\": \\"$(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d \\'"\\')\\",
+        \\"os_info\\": \\"$OS_NAME\\",
         \\"arch\\": \\"$(uname -m)\\"
     }}")
 
-AGENT_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('agent_token',''))" 2>/dev/null)
+AGENT_TOKEN=$(echo "$RESPONSE" | $PYTHON_BIN -c "import sys, json; d=json.load(sys.stdin); print(d.get('agent_token',''))" 2>/dev/null)
 
 if [ -z "$AGENT_TOKEN" ]; then
-    echo "❌ Registration failed. Response: $RESPONSE"
+    echo "❌ Registration failed. Server response: $RESPONSE"
     exit 1
 fi
 
 echo "✅ Registered! Agent token received."
 
 # Write config
-sudo tee /etc/pulseops/agent.conf > /dev/null <<EOF
+$SUDO tee /etc/pulseops/agent.conf > /dev/null <<EOF
 MASTER_URL=$MASTER_URL
 AGENT_TOKEN=$AGENT_TOKEN
 AGENT_PORT=$AGENT_PORT
 EOF
 
-sudo chmod 600 /etc/pulseops/agent.conf
+$SUDO chmod 600 /etc/pulseops/agent.conf
 
 # Create systemd service
-sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null <<EOF
+$SUDO tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null <<EOF
 [Unit]
 Description=PulseOps Enterprise Agent
 After=network.target
@@ -640,7 +724,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/python3 $INSTALL_DIR/pulseops_agent.py --config /etc/pulseops/agent.conf
+ExecStart=$PYTHON_BIN $INSTALL_DIR/pulseops_agent.py --config /etc/pulseops/agent.conf
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -650,8 +734,8 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable --now $SERVICE_NAME
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable --now $SERVICE_NAME
 
 echo ""
 echo "✅ PulseOps Agent installed and running!"
@@ -660,3 +744,115 @@ echo "   Logs:    journalctl -u $SERVICE_NAME -f"
 echo ""
 echo "🔗 The server should appear in your fleet dashboard within 30 seconds."
 """
+
+
+def get_agent_update_script(master_url: str) -> str:
+    """Generate bash script to update the agent in-place."""
+    return f"""#!/bin/bash
+set -e
+echo "⚡ Updating PulseOps Enterprise Agent..."
+MASTER_URL="{master_url.rstrip('/')}"
+SERVICE_NAME="pulseops-agent"
+
+SUDO=""
+[ "$(id -u)" -ne 0 ] && SUDO="sudo"
+
+# Download the latest agent into a temporary file first
+TMP_FILE=$(mktemp /tmp/pulseops_agent_XXXXXX.py)
+echo "📦 Downloading latest agent from $MASTER_URL..."
+curl -sSL -k "$MASTER_URL/api/fleet/agent-download" -o "$TMP_FILE"
+
+# Verify downloaded file is valid Python
+if ! python3 -m py_compile "$TMP_FILE" 2>/dev/null; then
+    echo "❌ Downloaded file failed syntax verification."
+    rm -f "$TMP_FILE"
+    exit 1
+fi
+
+# Detect all possible install locations and update them
+UPDATED=0
+for DIR in "/opt/pulseops-agent" "/usr/local/bin" "/usr/bin"; do
+    if [ -f "$DIR/pulseops_agent.py" ] || [ -d "$DIR" ]; then
+        $SUDO mkdir -p "$DIR"
+        $SUDO cp -f "$TMP_FILE" "$DIR/pulseops_agent.py"
+        $SUDO chmod 755 "$DIR/pulseops_agent.py"
+        echo "   Updated $DIR/pulseops_agent.py"
+        UPDATED=1
+    fi
+done
+
+if [ "$UPDATED" -eq 0 ]; then
+    $SUDO mkdir -p /opt/pulseops-agent
+    $SUDO cp -f "$TMP_FILE" /opt/pulseops-agent/pulseops_agent.py
+    $SUDO chmod 755 /opt/pulseops-agent/pulseops_agent.py
+fi
+
+rm -f "$TMP_FILE"
+
+echo "🔄 Restarting $SERVICE_NAME..."
+$SUDO systemctl daemon-reload 2>/dev/null || true
+$SUDO systemctl restart $SERVICE_NAME
+sleep 1
+
+if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+    echo "✅ PulseOps Enterprise Agent updated and running successfully!"
+else
+    echo "⚠️ Agent restarted, check status: sudo systemctl status $SERVICE_NAME"
+fi
+"""
+
+
+async def get_recent_snapshots(server_id: str, limit: int = 30) -> List[Dict[str, Any]]:
+    """Retrieve the most recent telemetry snapshots for a server in chronological order."""
+    from database import fetchall
+    rows = await fetchall(
+        "SELECT timestamp, cpu_percent, mem_percent, disk_percent, net_rx_sec, net_tx_sec, load_avg_1, uptime "
+        "FROM server_snapshots WHERE server_id = ? ORDER BY id DESC LIMIT ?",
+        (server_id, limit)
+    )
+    return [dict(r) for r in reversed(rows)]
+
+
+async def ensure_local_server(port: int = 3500) -> str:
+    """Ensure the local host is registered in the servers table as master."""
+    from database import fetchone, execute
+    local = await fetchone("SELECT id FROM servers WHERE host_ip = '127.0.0.1' OR tags LIKE '%master%' LIMIT 1")
+    if local:
+        return local["id"]
+
+    import socket
+    import uuid
+    import platform
+
+    server_id = "local-master"
+    token = str(uuid.uuid4())
+    hostname = socket.gethostname() or "localhost"
+    os_info = platform.platform()
+    arch = platform.machine()
+
+    await execute(
+        "INSERT OR IGNORE INTO servers (id, hostname, display_name, host_ip, agent_port, agent_token, os_info, arch, tags, status, last_seen) "
+        "VALUES (?, ?, ?, '127.0.0.1', ?, ?, ?, ?, '[\"master\", \"local\"]', 'online', datetime('now'))",
+        (server_id, hostname, f"{hostname} (Master)", port, token, os_info, arch)
+    )
+    return server_id
+
+
+def update_local_snapshot(server_id: str, telemetry_data: Dict[str, Any]) -> None:
+    """Update in-memory latest snapshot for the local server from telemetry loop."""
+    mem = telemetry_data.get("memory", {})
+    disks = telemetry_data.get("disks", [])
+    net = telemetry_data.get("network", {})
+    sys_info = telemetry_data.get("sysInfo", {})
+
+    snapshot = {
+        "cpu_percent": float(telemetry_data.get("cpu", 0)),
+        "mem_percent": float(mem.get("usagePercent", 0)),
+        "disk_percent": float(disks[0]["usagePercent"]) if disks else 0.0,
+        "net_rx_sec": int(net.get("rxSec", 0)),
+        "net_tx_sec": int(net.get("txSec", 0)),
+        "load_avg_1": float((sys_info.get("loadAvg") or [0])[0]),
+        "uptime": int(sys_info.get("uptime", 0)),
+    }
+    _latest_snapshots[server_id] = snapshot
+

@@ -161,7 +161,8 @@ const SettingsManager = (() => {
             const panel = document.getElementById('2fa-setup-panel');
             if (panel) {
                 document.getElementById('2fa-secret-display').textContent = data.secret || '';
-                document.getElementById('2fa-otpauth-uri').textContent     = data.otpauth_uri || '';
+                const uriEl = document.getElementById('2fa-otpauth-uri');
+                if (uriEl) uriEl.textContent = data.otpauth_uri || '';
                 if (data.qr_data_url) {
                     const img = document.getElementById('2fa-qr-img');
                     if (img) { img.src = data.qr_data_url; img.style.display = 'block'; }
@@ -218,20 +219,11 @@ const SettingsManager = (() => {
     // ── Theme Toggle ──────────────────────────────────────────────────────────
 
     function initThemeToggle() {
-        const toggle  = document.getElementById('theme-toggle-btn');
         const current = localStorage.getItem('pulseops-theme') || 'dark';
         applyTheme(current);
-
-        if (toggle) {
-            toggle.textContent = current === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-            toggle.addEventListener('click', () => {
-                const next = localStorage.getItem('pulseops-theme') === 'dark' ? 'light' : 'dark';
-                localStorage.setItem('pulseops-theme', next);
-                applyTheme(next);
-                toggle.textContent = next === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-                showToast(`${next === 'dark' ? 'Dark' : 'Light'} theme applied`, 'info');
-            });
-        }
+        document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
+            btn.textContent = current === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+        });
     }
 
     function applyTheme(theme) {
@@ -268,10 +260,12 @@ const SettingsManager = (() => {
         loadSettings();
     }
 
-    return {
+    const api = {
         init,
         loadSettings,
         saveSection,
         applyTheme,
     };
+    window.SettingsManager = api;
+    return api;
 })();

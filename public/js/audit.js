@@ -225,10 +225,12 @@ const AuditViewer = (() => {
         setInterval(() => loadAuditLog(_currentPage), 60000);
     }
 
-    return {
+    const api = {
         init,
         loadAuditLog,
         goToPage,
         exportCSV,
     };
+    window.AuditViewer = api;
+    return api;
 })();

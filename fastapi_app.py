@@ -573,8 +573,8 @@ async def api_agent_download():
 
 @app.get("/api/fleet/agent-install.sh")
 async def api_agent_install_script(
+    request: Request,
     token: str = Query(...),
-    current_user: Dict = Depends(get_auth_user),
 ):
     """Generate and serve the agent installation shell script.
 
@@ -586,7 +586,12 @@ async def api_agent_install_script(
     """
     if not ENTERPRISE_AVAILABLE:
         raise HTTPException(status_code=503)
-    master_url = MASTER_URL or f"http://localhost:{os.environ.get('PORT', 3500)}"
+    host = request.headers.get("host", f"localhost:{os.environ.get('PORT', 3500)}")
+    proto = request.headers.get("x-forwarded-proto", "http")
+    default_url = f"{proto}://{host}"
+    master_url = MASTER_URL or (await database.get_setting("master_url", default_url))
+    if not master_url:
+        master_url = default_url
     script = fleet_module.get_agent_install_script(master_url, token)
     return PlainTextResponse(script, media_type="text/x-shellscript")
 
@@ -1052,6 +1057,7 @@ async def startup_event():
     if ENTERPRISE_AVAILABLE:
         await database.init_db()
         await auth.bootstrap_admin()
+        await fleet_module.ensure_local_server(int(os.environ.get("PORT", 3500)))
         fleet_module.set_broadcast_callback(_fleet_broadcast)
         asyncio.create_task(fleet_module.fleet_health_poll_loop())
 
@@ -1073,14 +1079,22 @@ async def _telemetry_loop():
     """Background task: push local telemetry to WebSocket clients every 2s."""
     while True:
         await asyncio.sleep(2.0)
-        if connected_clients:
+        try:
             data = await telemetry.get_full_telemetry()
-            payload = json.dumps({"type": "telemetry", "data": data})
-            for client in list(connected_clients):
+            if ENTERPRISE_AVAILABLE:
                 try:
-                    await client.send_text(payload)
+                    fleet_module.update_local_snapshot("local-master", data)
                 except Exception:
-                    connected_clients.discard(client)
+                    pass
+            if connected_clients:
+                payload = json.dumps({"type": "telemetry", "data": data})
+                for client in list(connected_clients):
+                    try:
+                        await client.send_text(payload)
+                    except Exception:
+                        connected_clients.discard(client)
+        except Exception as e:
+            pass
 
 
 async def _log_stream_loop():

@@ -60,6 +60,9 @@ const FleetManager = (() => {
             _isLoaded = true;
             renderFleet();
             updateSummaryStats();
+            if (window.PulseOpsApp && typeof window.PulseOpsApp.updateSidebarServers === 'function') {
+                window.PulseOpsApp.updateSidebarServers(_servers);
+            }
         } catch (e) {
             console.error('[Fleet] Load error:', e);
         }
@@ -91,9 +94,12 @@ const FleetManager = (() => {
                 <div class="fleet-empty">
                     <div style="font-size:3rem; margin-bottom:1rem;">🖥️</div>
                     <h3 style="color:var(--text-muted); margin-bottom:0.5rem;">No servers found</h3>
-                    <p style="color:var(--text-dim); font-size:0.9rem;">
-                        ${_searchQuery ? 'Try a different search query.' : 'Add your first server to get started.'}
+                    <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:1.25rem;">
+                        ${_searchQuery ? 'Try a different search query.' : 'Add your first server to get started with fleet monitoring.'}
                     </p>
+                    ${(!_searchQuery && window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
+                    <button class="btn-primary admin-only" onclick="window.openAddServerModal && window.openAddServerModal()">+ Add Server</button>
+                    ` : ''}
                 </div>`;
             return;
         }
@@ -126,10 +132,10 @@ const FleetManager = (() => {
                     ${inMaintenance ? '<span class="maintenance-badge" title="In Maintenance">🔧 Maintenance</span>' : ''}
                     ${isMain ? '<span class="main-badge">MASTER</span>' : ''}
                 </div>
-                ${PulseOpsAuth.isAdmin() ? `
-                <div class="server-card-actions">
+                ${(window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
+                <div class="server-card-actions admin-only">
                     <button class="server-action-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">✏️</button>
-                    <button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${srv.hostname}" title="Remove server">🗑️</button>
+                    ${!isMain ? `<button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${srv.display_name || srv.hostname}" title="Remove server">🗑️</button>` : ''}
                 </div>` : ''}
             </div>
 
@@ -176,15 +182,17 @@ const FleetManager = (() => {
         document.querySelectorAll('.server-card').forEach(card => {
             // Card click → open server dashboard
             card.addEventListener('click', (e) => {
-                if (e.target.closest('.server-action-btn')) return;
+                if (e.target.closest('.server-action-btn') || e.target.closest('.server-card-actions')) return;
                 const serverId = card.dataset.serverId;
                 openServerDashboard(serverId, card.dataset.hostname);
             });
 
             // Action buttons
-            card.querySelectorAll('[data-action]').forEach(btn => {
+            card.querySelectorAll('.server-action-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
                     const action = btn.dataset.action;
                     const serverId = btn.dataset.serverId;
                     if (action === 'delete') {
@@ -245,6 +253,9 @@ const FleetManager = (() => {
                 });
             }
             updateSummaryStats();
+            if (window.PulseOpsApp && typeof window.PulseOpsApp.updateSidebarServers === 'function') {
+                window.PulseOpsApp.updateSidebarServers(_servers);
+            }
         }
     }
 
@@ -271,6 +282,7 @@ const FleetManager = (() => {
     function openAddServerModal() {
         const modal = document.getElementById('add-server-modal');
         if (modal) {
+            modal.classList.add('active');
             modal.style.display = 'flex';
             document.getElementById('new-server-hostname').value = '';
             document.getElementById('new-server-ip').value = '';
@@ -278,7 +290,8 @@ const FleetManager = (() => {
             document.getElementById('new-server-port').value = '3500';
             document.getElementById('new-server-tags').value = '';
             document.getElementById('new-server-notes').value = '';
-            document.getElementById('add-server-tab-manual').click();
+            const manualTab = document.getElementById('add-server-tab-manual');
+            if (manualTab) manualTab.click();
         }
     }
 
@@ -293,20 +306,38 @@ const FleetManager = (() => {
         document.getElementById('edit-server-tags').value     = (srv.tags || []).join(', ');
         document.getElementById('edit-server-notes').value    = srv.notes || '';
         document.getElementById('edit-server-port').value     = srv.agent_port || 3500;
+        modal.classList.add('active');
         modal.style.display = 'flex';
     }
 
     async function confirmDeleteServer(serverId, hostname) {
-        if (!confirm(`Remove server "${hostname}" from the fleet?\n\nThis will delete all stored snapshots and alert history for this server.`)) return;
+        if (window.PulseOpsAuth && !window.PulseOpsAuth.isAdmin()) {
+            showToast('Permission denied: Only Administrators can remove servers', 'error');
+            return;
+        }
+        if (!confirm(`Remove server "${hostname}" from the fleet?\n\nThis will remove the server and its history from the dashboard.`)) return;
         try {
-            const resp = await PulseOpsAuth.apiFetch(`/api/fleet/servers/${serverId}`, { method: 'DELETE' });
+            const resp = await PulseOpsAuth.apiFetch(`/api/fleet/servers/${encodeURIComponent(serverId)}`, { method: 'DELETE' });
             if (resp && resp.ok) {
                 _servers = _servers.filter(s => s.id !== serverId);
                 renderFleet();
                 updateSummaryStats();
-                showToast(`Server "${hostname}" removed from fleet`, 'success');
+
+                if (window.PulseOpsApp) {
+                    if (window.PulseOpsApp.currentServerId === serverId) {
+                        window.PulseOpsApp.currentServerId = 'local-master';
+                        window.PulseOpsCurrentServer = 'local-master';
+                        showSection('fleet');
+                    }
+                    if (typeof window.PulseOpsApp.updateSidebarServers === 'function') {
+                        window.PulseOpsApp.updateSidebarServers(_servers);
+                    }
+                }
+
+                showToast(`Server "${hostname}" removed successfully`, 'success');
             } else {
-                showToast('Failed to remove server', 'error');
+                const data = resp ? await resp.json().catch(() => ({})) : {};
+                showToast(data.detail || data.error || 'Failed to remove server', 'error');
             }
         } catch (e) {
             showToast('Error removing server', 'error');
@@ -338,7 +369,8 @@ const FleetManager = (() => {
             const data = await resp.json();
             if (resp.ok && data.success) {
                 showToast(`Server "${hostname}" added! Token: ${data.agent_token.substring(0,8)}...`, 'success');
-                document.getElementById('add-server-modal').style.display = 'none';
+                const m = document.getElementById('add-server-modal');
+                if (m) { m.classList.remove('active'); m.style.display = 'none'; }
                 loadServers();
             } else {
                 showToast(data.detail || data.error || 'Failed to add server', 'error');
@@ -457,7 +489,10 @@ const FleetManager = (() => {
             btn.addEventListener('click', () => {
                 const modalId = btn.dataset.closeModal;
                 const modal = document.getElementById(modalId);
-                if (modal) modal.style.display = 'none';
+                if (modal) {
+                    modal.classList.remove('active');
+                    modal.style.display = 'none';
+                }
             });
         });
 
@@ -528,7 +563,8 @@ const FleetManager = (() => {
             });
             if (resp && resp.ok) {
                 showToast('Server updated', 'success');
-                document.getElementById('edit-server-modal').style.display = 'none';
+                const m = document.getElementById('edit-server-modal');
+                if (m) { m.classList.remove('active'); m.style.display = 'none'; }
                 loadServers();
             } else {
                 showToast('Failed to update server', 'error');
@@ -537,10 +573,19 @@ const FleetManager = (() => {
     }
 
     // Public API
-    return {
+    const api = {
         init,
         loadServers,
         handleFleetUpdate,
         renderFleet,
+        openAddServerModal,
+        openServerDashboard,
+        confirmDeleteServer,
+        getServers: () => _servers,
     };
+    window.PulseOpsFleet = api;
+    window.openAddServerModal = openAddServerModal;
+    window.openServerDashboard = openServerDashboard;
+    window.confirmDeleteFleetServer = confirmDeleteServer;
+    return api;
 })();

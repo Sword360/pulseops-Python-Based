@@ -26,8 +26,10 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from typing import Any, Dict, Optional
+import subprocess
 import urllib.request
 import urllib.error
+import urllib.parse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -199,45 +201,256 @@ def collect_snapshot() -> Dict[str, Any]:
     }
 
 
-# ─── HTTP Server (Telemetry Endpoint) ────────────────────────────────────────
+_GLOBAL_TOKEN: Optional[str] = None
+_GLOBAL_MASTER_URL: Optional[str] = None
+
+
+# ─── Remote Management Helpers ────────────────────────────────────────────────
+
+def collect_processes() -> Dict[str, Any]:
+    """List running processes on this agent host."""
+    procs = []
+    try:
+        import psutil
+        for p in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent', 'status', 'cmdline', 'memory_info']):
+            try:
+                info = p.info
+                cmdline = " ".join(info.get('cmdline') or []) or info.get('name') or ''
+                name_val = info.get('name') or (cmdline.split()[0].split('/')[-1] if cmdline else 'unknown')
+                status_val = info.get('status') or 'running'
+                mem_info = info.get('memory_info')
+                rss_val = mem_info.rss if mem_info and hasattr(mem_info, 'rss') else 0
+                procs.append({
+                    'pid': info['pid'],
+                    'user': info.get('username') or 'root',
+                    'cpu': round(info.get('cpu_percent') or 0.0, 1),
+                    'mem': round(info.get('memory_percent') or 0.0, 1),
+                    'status': status_val,
+                    'stat': status_val,
+                    'command': cmdline[:150],
+                    'name': name_val,
+                    'comm': name_val,
+                    'rss': rss_val
+                })
+            except Exception:
+                continue
+    except Exception:
+        try:
+            out = subprocess.check_output(['ps', 'aux', '--sort=-%cpu'], text=True, timeout=5)
+            for line in out.splitlines()[1:150]:
+                parts = line.split(None, 10)
+                if len(parts) >= 11:
+                    comm_name = parts[10].split()[0].split('/')[-1]
+                    rss_kb = int(parts[5]) if parts[5].isdigit() else 0
+                    procs.append({
+                        'user': parts[0],
+                        'pid': int(parts[1]),
+                        'cpu': float(parts[2]),
+                        'mem': float(parts[3]),
+                        'status': parts[7],
+                        'stat': parts[7],
+                        'command': parts[10][:150],
+                        'name': comm_name,
+                        'comm': comm_name,
+                        'rss': rss_kb * 1024
+                    })
+        except Exception as e:
+            logger.error("[Agent] Error fetching processes: %s", e)
+    return {"success": True, "processes": procs}
+
+
+def kill_proc(pid: int, sig_num: int = 15) -> Dict[str, Any]:
+    """Terminate or kill a process by PID."""
+    try:
+        os.kill(pid, sig_num)
+        return {"success": True, "message": f"Signal {sig_num} sent to PID {pid}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def collect_services() -> Dict[str, Any]:
+    """List systemd services on this agent host."""
+    services = []
+    try:
+        out = subprocess.check_output(
+            ['systemctl', 'list-units', '--type=service', '--all', '--no-pager', '--no-legend'],
+            text=True, timeout=6
+        )
+        for line in out.splitlines():
+            parts = line.strip().split(None, 4)
+            if len(parts) >= 5:
+                name = parts[0]
+                if name.endswith('.service'):
+                    services.append({
+                        'unit': name,
+                        'name': name.replace('.service', ''),
+                        'load': parts[1],
+                        'active': parts[2],
+                        'sub': parts[3],
+                        'description': parts[4]
+                    })
+    except Exception as e:
+        logger.error("[Agent] Error listing services: %s", e)
+    return {"success": True, "services": services}
+
+
+def exec_service_action(service_name: str, action: str) -> Dict[str, Any]:
+    """Perform start/stop/restart/reload on a systemd service."""
+    allowed_actions = {'start', 'stop', 'restart', 'reload', 'enable', 'disable'}
+    if action not in allowed_actions:
+        return {"success": False, "error": f"Invalid action {action}"}
+    unit = service_name if service_name.endswith('.service') else f"{service_name}.service"
+    try:
+        subprocess.check_output(['systemctl', action, unit], stderr=subprocess.STDOUT, timeout=10)
+        return {"success": True, "message": f"Service {service_name} {action}ed successfully"}
+    except subprocess.CalledProcessError as e:
+        return {"success": False, "error": e.output.decode('utf-8', errors='ignore') if isinstance(e.output, bytes) else str(e.output)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def get_service_logs(service_name: str, lines: int = 100) -> Dict[str, Any]:
+    """Fetch recent journalctl logs for a systemd service."""
+    unit = service_name if service_name.endswith('.service') else f"{service_name}.service"
+    try:
+        out = subprocess.check_output(['journalctl', '-u', unit, '-n', str(lines), '--no-pager'], text=True, timeout=6)
+        return {"success": True, "logs": out}
+    except Exception as e:
+        return {"success": False, "error": str(e), "logs": f"Error fetching logs: {e}"}
+
+
+def exec_terminal_cmd(command: str) -> Dict[str, Any]:
+    """Execute a bash command on the host."""
+    forbidden = ['rm -rf /', 'mkfs', 'dd if=/dev/zero', ':(){ :|:& };:']
+    for fb in forbidden:
+        if fb in command:
+            return {"success": False, "error": "Command blocked by PulseOps safety policy."}
+    try:
+        proc = subprocess.Popen(
+            command, shell=True, executable='/bin/bash',
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = proc.communicate(timeout=15)
+        out_str = stdout.decode('utf-8', errors='ignore')
+        err_str = stderr.decode('utf-8', errors='ignore')
+        return {
+            "success": proc.returncode == 0,
+            "stdout": out_str,
+            "stderr": err_str,
+            "error": None if proc.returncode == 0 else f"Exited with code {proc.returncode}"
+        }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Command timed out after 15s"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def collect_system_logs(lines: int = 50) -> Dict[str, Any]:
+    """Fetch recent system journal logs."""
+    try:
+        out = subprocess.check_output(['journalctl', '-n', str(lines), '--no-pager'], text=True, timeout=5)
+        logs = []
+        for l in out.splitlines():
+            logs.append({"time": datetime.now(timezone.utc).isoformat(), "line": l})
+        return {"success": True, "logs": logs}
+    except Exception as e:
+        return {"success": False, "logs": []}
+
+
+# ─── HTTP Server (Operations & Telemetry Endpoint) ──────────────────────────
 
 class AgentHTTPHandler(BaseHTTPRequestHandler):
-    """Minimal HTTP handler exposing the agent's telemetry snapshot endpoint."""
+    """HTTP handler exposing agent telemetry and remote operations."""
 
     def log_message(self, format, *args):
         """Suppress default stdout logging."""
         pass
 
-    def do_GET(self):
-        """Handle GET requests."""
-        if self.path in ("/api/telemetry/snapshot", "/health"):
-            data = collect_snapshot()
-            body = json.dumps(data).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"Not Found")
+    def _auth(self) -> bool:
+        if not _GLOBAL_TOKEN:
+            return True
+        token = self.headers.get("X-Agent-Token") or self.headers.get("Authorization", "").replace("Bearer ", "")
+        return token == _GLOBAL_TOKEN
 
-    def do_OPTIONS(self):
-        """CORS preflight."""
-        self.send_response(204)
+    def _send_json(self, data: Any, status: int = 200):
+        body = json.dumps(data).encode('utf-8')
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Agent-Token, Authorization")
+        self.end_headers()
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+
+        if path in ("/api/telemetry/snapshot", "/health"):
+            return self._send_json(collect_snapshot())
+
+        if not self._auth():
+            return self._send_json({"detail": "Unauthorized"}, status=401)
+
+        if path == "/api/processes":
+            return self._send_json(collect_processes())
+
+        if path == "/api/services":
+            return self._send_json(collect_services())
+
+        if path == "/api/services/logs":
+            svc = qs.get("service", [""])[0]
+            lines = int(qs.get("lines", [100])[0])
+            return self._send_json(get_service_logs(svc, lines))
+
+        if path == "/api/logs":
+            lines = int(qs.get("lines", [50])[0])
+            return self._send_json(collect_system_logs(lines))
+
+        self._send_json({"detail": "Not found"}, status=404)
+
+    def do_POST(self):
+        if not self._auth():
+            return self._send_json({"detail": "Unauthorized"}, status=401)
+
+        length = int(self.headers.get("Content-Length", 0))
+        raw_body = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            body = json.loads(raw_body.decode("utf-8"))
+        except Exception:
+            body = {}
+
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        if path == "/api/processes/kill":
+            pid = int(body.get("pid", 0))
+            sig = int(body.get("signal", 15))
+            return self._send_json(kill_proc(pid, sig))
+
+        if path == "/api/services/action":
+            svc = body.get("serviceName", "")
+            act = body.get("action", "")
+            return self._send_json(exec_service_action(svc, act))
+
+        if path == "/api/terminal/exec":
+            cmd = body.get("command", "")
+            return self._send_json(exec_terminal_cmd(cmd))
+
+        self._send_json({"detail": "Not found"}, status=404)
 
 
 def start_http_server(port: int) -> None:
-    """Start the agent HTTP server in a background thread.
-
-    Args:
-        port: TCP port to bind to.
-    """
+    """Start the agent HTTP server in a background thread."""
     server = HTTPServer(("0.0.0.0", port), AgentHTTPHandler)
-    logger.info("[Agent] HTTP telemetry endpoint listening on :%d", port)
+    logger.info("[Agent] HTTP management endpoint listening on :%d", port)
     server.serve_forever()
 
 
@@ -348,6 +561,10 @@ def main():
     if not agent_token:
         logger.error("--token or AGENT_TOKEN config required")
         sys.exit(1)
+
+    global _GLOBAL_TOKEN, _GLOBAL_MASTER_URL
+    _GLOBAL_TOKEN = agent_token
+    _GLOBAL_MASTER_URL = master_url
 
     logger.info("[Agent] PulseOps Agent starting — master=%s port=%d", master_url, port)
 
