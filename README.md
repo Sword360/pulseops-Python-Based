@@ -172,7 +172,14 @@ PulseOps can run immediately using Python 3.10+ without compiling anything:
 git clone https://github.com/Sword360/pulseops-Python-Based.git
 cd pulseops-Python-Based
 
-# 2. Start the master server
+# 2. (Recommended) Create and activate a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Start the master server
 python3 server.py
 ```
 
