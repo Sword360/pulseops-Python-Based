@@ -1,19 +1,19 @@
-# ⚡ PulseOps (Python Edition)
+# ⚡ PulseOps Enterprise — Real-Time Linux Infrastructure Management
 
 <div align="center">
 
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Architecture](https://img.shields.io/badge/Architecture-Pure%20AsyncIO%20%7C%20FastAPI-blueviolet.svg?style=for-the-badge)](https://fastapi.tiangolo.com/)
-[![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)](https://kernel.org/)
+[![Security](https://img.shields.io/badge/Security-JWT%20%7C%202FA%20%7C%20RBAC-success.svg?style=for-the-badge)](https://jwt.io/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%28RHEL%20%7C%20Debian%20%7C%20Ubuntu%29-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)](https://kernel.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Zero Dependencies](https://img.shields.io/badge/Core%20Deps-Zero%20External%20Required-success.svg?style=for-the-badge)](#-quick-start)
 
 <p align="center">
-  <strong>A high-performance, real-time Linux server management dashboard, systemd operations center, and remote telemetry platform.</strong>
+  <strong>An enterprise-grade, real-time Linux fleet monitoring dashboard, remote systemd operations center, process manager, and web terminal platform.</strong>
 </p>
 
 <p align="center">
-  Built with pure Python standard library asynchronous architecture, an optional FastAPI runtime, and a zero-build Obsidian glassmorphic interface.
+  Engineered with high-performance asynchronous Python, an optional ASGI runtime, multi-node agent RPC telemetry, 3-tier RBAC security, and an ultra-responsive dark glassmorphic dashboard with zero frontend build dependencies.
 </p>
 
 </div>
@@ -22,25 +22,26 @@
 
 ## 📑 Table of Contents
 
-- [🌟 Highlights](#-highlights)
-- [🏛️ Architecture & Data Flow](#️-architecture--data-flow)
-- [🚀 Quick Start](#-quick-start)
-  - [Mode 1: Zero-Dependency Run (Standard Library)](#mode-1-zero-dependency-run-pure-python-standard-library)
-  - [Mode 2: FastAPI / Uvicorn Run (Enhanced)](#mode-2-fastapi--uvicorn-run-enhanced)
-  - [Mode 3: Systemd Daemon (Persistent Service)](#mode-3-systemd-daemon-auto-start-on-boot)
-- [🌐 Local Network (LAN) & Remote Access](#-local-network-lan--remote-access)
-  - [Network IP Auto-Discovery](#network-ip-auto-discovery)
-  - [Firewall Setup (firewalld / ufw)](#firewall-setup)
-- [🎛️ Modules & Capabilities](#️-modules--capabilities)
-  - [1. Real-Time Telemetry & Health Monitoring](#1-real-time-telemetry--health-monitoring)
-  - [2. Systemd Service Operations Center](#2-systemd-service-operations-center)
-  - [3. Interactive Process Explorer](#3-interactive-process-explorer)
-  - [4. Live WebSocket Log Streaming](#4-live-websocket-log-streaming)
-  - [5. Secure Web Terminal](#5-secure-web-terminal)
-  - [6. Embedded HTML5 VNC / RFB Desktop](#6-embedded-html5-vnc--rfb-desktop)
-- [🔌 API & WebSocket Protocol Reference](#-api--websocket-protocol-reference)
-  - [REST Endpoints](#rest-endpoints)
-  - [WebSocket Channels](#websocket-channels)
+- [🌟 Highlights & Key Features](#-highlights--key-features)
+- [🏛️ System Architecture](#️-system-architecture)
+- [👥 Role-Based Access Control (RBAC)](#-role-based-access-control-rbac)
+- [🚀 Quick Start Guide](#-quick-start-guide)
+  - [1. Running the Master Server](#1-running-the-master-server)
+  - [2. Default Login Credentials](#2-default-login-credentials)
+  - [3. Running as a Persistent Systemd Service](#3-running-as-a-persistent-systemd-service)
+- [🌐 Multi-Node Fleet Management](#-multi-node-fleet-management)
+  - [Auto-Agent Installation (One-Liner)](#auto-agent-installation-one-liner)
+  - [Remote Agent Upgrades](#remote-agent-upgrades)
+  - [Manual Agent Registration](#manual-agent-registration)
+- [🎛️ Core Capabilities & Modules](#️-core-capabilities--modules)
+  - [1. Real-Time Telemetry & Smooth Canvas Charts](#1-real-time-telemetry--smooth-canvas-charts)
+  - [2. Systemd Operations & Live Journalctl](#2-systemd-operations--live-journalctl)
+  - [3. Process Explorer & Signal Management](#3-process-explorer--signal-management)
+  - [4. Multi-Host Web Terminal](#4-multi-host-web-terminal)
+  - [5. Embedded HTML5 VNC / RFB Desktop](#5-embedded-html5-vnc--rfb-desktop)
+  - [6. Alert Rules Engine & Notifications](#6-alert-rules-engine--notifications)
+  - [7. Compliance Audit Log & System Settings](#7-compliance-audit-log--system-settings)
+- [🔌 API Reference](#-api-reference)
 - [⚙️ Configuration & Environment Variables](#️-configuration--environment-variables)
 - [🛡️ Security & Hardening Guidelines](#️-security--hardening-guidelines)
 - [📁 Project Structure](#-project-structure)
@@ -49,131 +50,165 @@
 
 ---
 
-## 🌟 Highlights
+## 🌟 Highlights & Key Features
 
-* 🚀 **Zero External Dependencies Required**: Run the entire web server, REST API, WebSocket streams, and static assets out of the box using **only standard Python 3.10+ libraries** (`asyncio`, `socket`, `struct`, `hashlib`, `json`).
-* ⚡ **Dual Execution Engine**:
-  * **Standalone AsyncIO Engine** (`server.py`): Minimal footprint, native non-blocking HTTP 1.1 + RFC 6455 WebSocket implementation.
-  * **FastAPI + Uvicorn Engine** (`fastapi_app.py`): Production-grade ASGI framework with automatic OpenAPI docs and optional `psutil` acceleration.
-* 📊 **Kernel & `/proc` Telemetry**: Direct parsing of `/proc/stat`, `/proc/meminfo`, `/proc/net/dev`, `/proc/uptime`, and `/proc/cpuinfo` for accurate system readings with near-zero overhead.
-* ⚙️ **Comprehensive Systemd Control**: Real-time service monitoring, unit lifecycle management (`start`, `stop`, `restart`, `enable`, `disable`), and `journalctl` log inspection.
-* ⚡ **Interactive Process Manager**: Live CPU/Memory sorted process tree with guarded `SIGTERM` and `SIGKILL` termination controls.
-* 📜 **Real-Time Log Stream**: Continuous WebSocket stream with dynamic log-level filters (`INFO`, `DEBUG`, `WARN`, `ERROR`), source filters, and text search.
-* 💻 **Safe Web Terminal**: In-browser CLI execution supporting `sudo` password prompts and dangerous command blacklisting.
-* 🖥️ **Embedded VNC / RFB Desktop**: Includes a native pure-Python RFB 3.8 protocol server and WebSocket-to-TCP RFB proxy for embedded remote desktop viewing directly in the browser canvas.
-* 💎 **Obsidian Glassmorphic UI**: Ultra-responsive vanilla HTML5, CSS3, and JavaScript frontend with dark glassmorphism styling—no Node.js, webpack, or npm builds needed.
+* 🚀 **Zero External Frontend Build Tools**: Built with pure vanilla HTML5, CSS3, and JavaScript—no Node.js, Webpack, Vite, or npm compilation pipelines required.
+* ⚡ **Dual Backend Engine**:
+  * **Standalone AsyncIO Engine** (`server.py`): Zero external framework dependencies. Native non-blocking HTTP 1.1 + RFC 6455 WebSocket streaming.
+  * **FastAPI + Uvicorn Runtime** (`fastapi_app.py`): Full ASGI integration with interactive Swagger UI (`/docs`) and ReDoc.
+* 🛰️ **Distributed Multi-Node Fleet Management**: Seamlessly monitor dozens of remote Linux servers from a single master dashboard with dedicated telemetry, service management, process control, and terminal access per node.
+* 🔒 **Enterprise RBAC & Security**:
+  * Strict 3-tier Role-Based Access Control: **Admin**, **Operator**, and **Viewer**.
+  * Cryptographic JWT access & refresh tokens with auto-renewal and server-side blacklisting on logout.
+  * Two-Factor Authentication (TOTP 2FA) compatible with Google Authenticator, Authy, and 1Password.
+  * Brute-force rate limiting and automated account lockout protection.
+* 📊 **Kernel `/proc` Telemetry**: Direct zero-overhead parsing of `/proc/stat`, `/proc/meminfo`, `/proc/net/dev`, `/proc/uptime`, and `/proc/diskstats`.
+* ⚙️ **Remote Systemd Management**: Inspect unit statuses, start/stop/restart/reload services, and tail live `journalctl` logs across master and agent nodes.
+* ⚡ **Live Process Explorer**: Filter and inspect processes with real-time CPU/memory sorting and protected POSIX signal dispatching (`SIGTERM`, `SIGKILL`).
+* 💻 **Browser-Based SSH/Web Terminal**: Execute shell commands, configure saved commands, and prompt for `sudo` elevation with destructive command safeguards.
+* 🖥️ **Embedded HTML5 VNC / RFB Remote Desktop**: Integrated pure-Python RFB 3.8 protocol server and WebSocket-to-TCP RFB proxy for embedded graphical display control.
+* 🚨 **Automated Alerting Engine**: Define threshold-based alert rules for CPU, RAM, Disk, and node offline events with instant UI bell notifications.
 
 ---
 
-## 🏛️ Architecture & Data Flow
+## 🏛️ System Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Browser["PulseOps UI (Browser / Remote LAN Client)"]
-        UI_Dash["📊 Dashboard & SVG Charts"]
-        UI_Srv["⚙️ Systemd Service Manager"]
-        UI_Proc["⚡ Process Explorer"]
-        UI_Logs["📜 Live Log Viewer"]
-        UI_Term["💻 Web Terminal"]
-        UI_VNC["🖥️ Canvas VNC Viewer"]
+    subgraph Clients["Browser Dashboard (Glassmorphic UI)"]
+        UI_Admin["👑 Administrator<br/>Full Fleet & User Control"]
+        UI_Op["⚡ Operator<br/>Services, Processes & Terminal"]
+        UI_View["👁️ Viewer<br/>Read-Only Dashboards & Logs"]
     end
 
-    subgraph Server["PulseOps Core Engine (Python 3.10+)"]
-        Router["HTTP Request Dispatcher & Static File Server"]
-        WS_Hub["RFC 6455 WebSocket Hub"]
-        VNC_Bridge["VNC RFB WebSocket-to-TCP Proxy"]
-        
-        subgraph Subsystems["Backend Python Modules"]
-            Mod_Tele["telemetry.py<br/>Direct /proc Parsing"]
-            Mod_Srv["services.py<br/>systemctl & journalctl"]
-            Mod_Proc["processes.py<br/>ps & signal management"]
-            Mod_Term["terminal.py<br/>Safe Subprocess Shell"]
-            Mod_VNC["vnc.py<br/>Pure Python RFB Protocol"]
+    subgraph Master["PulseOps Master Node (:3500)"]
+        HTTP_Router["AsyncIO HTTP Dispatcher & Static File Server"]
+        WS_Server["RFC 6455 WebSocket Broadcast Hub"]
+        Auth_Engine["JWT Auth & RBAC Guard<br/>(auth.py / users.py)"]
+        Fleet_Mgr["Fleet Coordinator & RPC Proxy<br/>(fleet.py)"]
+        Alerts_Sys["Alerts Engine & Evaluator<br/>(alerts.py)"]
+        Audit_Sys["Audit Trail Logger<br/>(audit.py)"]
+        SQLite_DB[("SQLite Database (WAL Mode)<br/>pulseops.db")]
+
+        subgraph Master_Local["Master Host Controls"]
+            M_Tele["telemetry.py"]
+            M_Svc["services.py"]
+            M_Proc["processes.py"]
+            M_Term["terminal.py"]
+            M_VNC["vnc.py (RFB 3.8)"]
         end
     end
 
-    subgraph HostOS["Linux Host Subsystems"]
-        ProcFS["/proc/ (stat, meminfo, net/dev)"]
-        SystemdUnit["systemd & journald"]
-        KernelSignals["Kernel Process Table"]
-        RFBDaemon["VNC Server (:5900 / Native RFB)"]
+    subgraph RemoteAgents["Remote Fleet Nodes (:3501)"]
+        subgraph Agent1["Remote Server: node-01"]
+            A1_Daemon["pulseops_agent.py (v2.0)"]
+            A1_RPC["HTTP RPC Server<br/>(Services, Processes, Terminal)"]
+            A1_ProcFS["/proc/ & systemd"]
+        end
+
+        subgraph Agent2["Remote Server: node-02"]
+            A2_Daemon["pulseops_agent.py (v2.0)"]
+            A2_RPC["HTTP RPC Server<br/>(Services, Processes, Terminal)"]
+            A2_ProcFS["/proc/ & systemd"]
+        end
     end
 
-    UI_Dash <-->|HTTP GET / WebSocket Push| WS_Hub
-    UI_Logs <-->|WebSocket Stream| WS_Hub
-    UI_Srv <-->|REST API| Router
-    UI_Proc <-->|REST API| Router
-    UI_Term <-->|REST API| Router
-    UI_VNC <-->|WebSocket Binary RFB| VNC_Bridge
+    Clients <-->|HTTPS / WSS / JWT| Master
+    HTTP_Router --> Auth_Engine
+    Auth_Engine --> Fleet_Mgr
+    Auth_Engine --> SQLite_DB
+    Alerts_Sys <--> SQLite_DB
+    Audit_Sys --> SQLite_DB
+    WS_Server <--> M_Tele
 
-    Router --> Subsystems
-    WS_Hub --> Mod_Tele
-    VNC_Bridge <--> Mod_VNC
+    Fleet_Mgr <-->|Bidirectional RPC & Heartbeats| RemoteAgents
+    A1_Daemon --> A1_RPC
+    A1_RPC <--> A1_ProcFS
+    A2_Daemon --> A2_RPC
+    A2_RPC <--> A2_ProcFS
 
-    Mod_Tele <--> ProcFS
-    Mod_Srv <--> SystemdUnit
-    Mod_Proc <--> KernelSignals
-    Mod_VNC <--> RFBDaemon
+    M_Tele <--> Master_Local
+    M_Svc <--> Master_Local
+    M_Proc <--> Master_Local
+    M_Term <--> Master_Local
+    M_VNC <--> Master_Local
 ```
 
 ---
 
-## 🚀 Quick Start
+## 👥 Role-Based Access Control (RBAC)
 
-### Mode 1: Zero-Dependency Run (Pure Python Standard Library)
+PulseOps enforces strict permissions across both the UI and backend REST API:
 
-You can run PulseOps instantly without installing any third-party packages:
+| Feature / Operation | 👑 Admin | ⚡ Operator | 👁️ Viewer | API Enforcement |
+| :--- | :---: | :---: | :---: | :--- |
+| **View Dashboards, Charts & Telemetry** | ✅ | ✅ | ✅ | Open / Read authenticated |
+| **View Systemd Services & Journalctl Logs** | ✅ | ✅ | ✅ | `GET /api/services` |
+| **View Process Explorer List** | ✅ | ✅ | ✅ | `GET /api/processes` |
+| **View Active Alerts & History** | ✅ | ✅ | ✅ | `GET /api/alerts/*` |
+| **Systemd Service Control (Start/Stop/Restart)** | ✅ | ✅ | ❌ | `POST /api/services/action` (403 for Viewers) |
+| **Terminate Processes (SIGTERM / SIGKILL)** | ✅ | ✅ | ❌ | `POST /api/processes/kill` (403 for Viewers) |
+| **Web Terminal Command Execution** | ✅ | ✅ | ❌ | `POST /api/terminal/exec` (403 for Viewers) |
+| **Launch Remote VNC Desktop Sessions** | ✅ | ✅ | ❌ | `POST /api/vnc/launch` (403 for Viewers) |
+| **Host Quick Actions (Reboot, Free RAM)** | ✅ | ✅ | ❌ | `POST /api/terminal/exec` (403 for Viewers) |
+| **Register & Auto-Install Fleet Servers** | ✅ | ❌ | ❌ | `POST /api/fleet/servers` (Admin only) |
+| **Edit Server Metadata & Tags** | ✅ | ❌ | ❌ | `PUT /api/fleet/servers/{id}` (Admin only) |
+| **Remove Server from Fleet** | ✅ | ❌ | ❌ | `DELETE /api/fleet/servers/{id}` (Admin only) |
+| **User Account Management (Create/Edit/Lock)** | ✅ | ❌ | ❌ | `/api/admin/users/*` (Admin only) |
+| **Alert Rules Configuration** | ✅ | ❌ | ❌ | `POST/DELETE /api/alerts/rules` (Admin only) |
+| **Audit Logs Inspection** | ✅ | ❌ | ❌ | `GET /api/admin/audit` (Admin only) |
+| **System Settings Configuration** | ✅ | ❌ | ❌ | `PUT /api/admin/settings` (Admin only) |
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Running the Master Server
+
+PulseOps can run immediately using Python 3.10+ without compiling anything:
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/Sword360/pulseops-Python-Based.git
 cd pulseops-Python-Based
 
-# Start the standalone server (Default: port 3500)
+# 2. Start the master server
 python3 server.py
 ```
 
-On launch, the server binds to `0.0.0.0:3500` and displays your accessible URLs:
+On startup, the server automatically initializes `pulseops.db` in SQLite WAL mode and binds to `0.0.0.0:3500`:
+
 ```text
-⚡ PulseOps Python Server running:
+⚡ PulseOps Enterprise Server running:
    ➜ Local:   http://localhost:3500
-   ➜ Network: http://192.168.1.100:3500
+   ➜ Network: http://192.168.100.10:3500
 ```
 
 ---
 
-### Mode 2: FastAPI / Uvicorn Run (Enhanced)
+### 2. Default Login Credentials
 
-For an ASGI production deployment with automated API documentation:
+On first run, the database is seeded with a default administrator account:
 
-```bash
-# Optional: create and activate a virtual environment
-python3 -m venv venv
-source venv/bin/activate
+* **URL**: `http://<MASTER_IP>:3500/login`
+* **Email**: `admin@pulseops.local`
+* **Password**: `Admin@PulseOps2026!`
 
-# Install requirements
-pip install -r requirements.txt
-
-# Run via Uvicorn (binds to all network interfaces)
-uvicorn fastapi_app:app --host 0.0.0.0 --port 3500
-```
-
-* **Web Dashboard**: `http://localhost:3500/`
-* **Interactive Swagger API Docs**: `http://localhost:3500/docs`
-* **ReDoc Documentation**: `http://localhost:3500/redoc`
+> [!IMPORTANT]
+> Immediately change your password after initial login under **User Management** (`#users`) or via your profile dropdown menu.
 
 ---
 
-### Mode 3: Systemd Daemon (Auto-Start on Boot)
+### 3. Running as a Persistent Systemd Service
 
-To run PulseOps as a persistent background Linux daemon:
+To ensure 24/7 uptime and automated reboot recovery on your master node:
 
-1. Create a systemd service file:
+1. Create the systemd unit file:
    ```bash
    sudo nano /etc/systemd/system/pulseops.service
    ```
 
-2. Paste the following configuration (adjust `WorkingDirectory` and paths as needed):
+2. Add the following unit configuration:
    ```ini
    [Unit]
    Description=PulseOps Linux Server Telemetry & Operations Dashboard
@@ -197,174 +232,157 @@ To run PulseOps as a persistent background Linux daemon:
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now pulseops.service
-   ```
-
-4. Verify service status:
-   ```bash
    sudo systemctl status pulseops.service
    ```
 
 ---
 
-## 🌐 Local Network (LAN) & Remote Access
+## 🌐 Multi-Node Fleet Management
 
-PulseOps binds to `0.0.0.0` by default, allowing connections from other PCs, laptops, tablets, and phones on the same network.
+PulseOps enables centralized multi-server management through lightweight agent nodes (`pulseops-agent`).
 
-### Network IP Auto-Discovery
+### Auto-Agent Installation (One-Liner)
 
-When you start `server.py`, the console automatically detects and displays all network interface addresses:
+1. Open the PulseOps web dashboard as an Administrator.
+2. Navigate to **Fleet Overview** and click **`+ Add Server`** (or select **Agent Auto-Install**).
+3. Copy the generated one-line command and execute it on the target remote server as root:
 
-```text
-⚡ PulseOps Python Server running:
-   ➜ Local:   http://localhost:3500
-   ➜ Network: http://192.168.160.135:3500
-   ➜ Network: http://192.168.100.10:3500
-```
-
-Simply navigate to `http://<SERVER_IP>:3500` from any browser on the same LAN or VPN.
-
-### Firewall Setup
-
-If other systems cannot connect, open TCP port `3500` in your firewall:
-
-#### For RHEL / CentOS / Fedora / AlmaLinux / Rocky Linux (`firewalld`):
 ```bash
-sudo firewall-cmd --add-port=3500/tcp --permanent
-sudo firewall-cmd --reload
+curl -sSL http://<MASTER_IP>:3500/api/fleet/agent-install.sh | sudo bash
 ```
 
-#### For Ubuntu / Debian (`ufw`):
+The installer automatically:
+- Detects the package manager (`apt-get`, `dnf`, `yum`, `pacman`).
+- Installs Python 3 and creates an isolated virtual environment (`/opt/pulseops-agent/venv`) handling PEP 668 restrictions.
+- Installs the v2 RPC agent daemon.
+- Configures and starts `pulseops-agent.service` pointing to the master node.
+
+### Remote Agent Upgrades
+
+If a remote node is running an older agent version, upgrade it instantly to unlock remote systemd and process management:
+
 ```bash
-sudo ufw allow 3500/tcp
-sudo ufw reload
+curl -sSL http://<MASTER_IP>:3500/api/fleet/agent-update.sh | sudo bash
 ```
 
-#### For Raw `iptables`:
-```bash
-sudo iptables -A INPUT -p tcp --dport 3500 -j ACCEPT
-```
+### Manual Agent Registration
+
+For air-gapped or pre-provisioned environments:
+1. Generate an invite token in **Fleet** > **Manual Registration**.
+2. Run `pulseops_agent.py` on the target machine:
+   ```bash
+   python3 pulseops_agent.py --master http://<MASTER_IP>:3500 --token <INVITE_TOKEN> --port 3501
+   ```
 
 ---
 
-## 🎛️ Modules & Capabilities
+## 🎛️ Core Capabilities & Modules
 
-### 1. Real-Time Telemetry & Health Monitoring
-* **CPU Load**: Calculates total vs. idle ticks directly from `/proc/stat`.
-* **Memory & Swap**: Parses `/proc/meminfo` for active, cached, buffer, total, and swap usage metrics.
-* **Disk Filesystem**: Queries filesystem size, consumed storage, and available capacity.
-* **Network Throughput**: Computes instantaneous RX/TX transfer rates (KB/s, MB/s) and lifetime byte counters from `/proc/net/dev`.
-* **Host Metadata**: Automatically retrieves OS distribution (`/etc/os-release`), kernel version, hardware architecture, CPU model, core count, and system uptime (`/proc/uptime`).
+### 1. Real-Time Telemetry & Smooth Canvas Charts
+* **Zero Overhead**: Direct `/proc` filesystem metrics parser (`CPU`, `Memory`, `Disk`, `Network RX/TX`, `Load Averages`).
+* **Hardware Information**: Kernel version, architecture, CPU model, core topology, and active storage volume mounts.
+* **Smooth Canvas Engine**: Custom HTML5 Canvas rendering engine with Bezier curve smoothing, dynamic Y-axis scaling, and dual network traffic visualization.
 
-### 2. Systemd Service Operations Center
-* **Live Unit Listing**: Reads loaded systemd units via `systemctl list-units`.
-* **State Badges**: Color-coded indicators for `active (running)`, `inactive (dead)`, and `failed`.
-* **Lifecycle Actions**: Send `start`, `stop`, `restart`, `reload`, `enable`, and `disable` commands.
-* **Journal Inspection**: Read the latest systemd journal logs (`journalctl -u <service>`) directly in a modal overlay.
+### 2. Systemd Operations & Live Journalctl
+* **Unit Lifecycle**: Start, stop, restart, enable, or disable any loaded systemd unit.
+* **Instant Triage**: View color-coded states (`active`, `inactive`, `failed`).
+* **Live Logs**: Inspect the latest `journalctl` service logs directly in a modal console.
 
-### 3. Interactive Process Explorer
-* **Real-Time Process Table**: Displays PID, User, CPU%, Mem%, VSZ, RSS, Status, and Command line args.
-* **Live Search & Sort**: Filter processes by name, PID, or user; sort by CPU or memory usage.
-* **Process Termination**: Safely dispatch `SIGTERM` (15) for graceful exit or `SIGKILL` (9) for immediate termination.
+### 3. Process Explorer & Signal Management
+* **Resource Sorting**: Live table sorting by CPU%, Memory% (RSS), and PID.
+* **Signal Dispatch**: Send graceful `SIGTERM` (15) or immediate `SIGKILL` (9) signals with role confirmation safeguards.
 
-### 4. Live WebSocket Log Streaming
-* **Real-Time Push**: Pushes system logs and events directly over WebSocket.
-* **Filtering & Triage**:
-  * Severity filters: `INFO`, `WARN`, `ERROR`, `DEBUG`.
-  * Source filters: `kernel`, `systemd-journald`, `sshd`, `nginx`, `dockerd`, `cron`.
-* **Controls**: Live search, log clearing, pause/resume streaming, and auto-scroll locking.
+### 4. Multi-Host Web Terminal
+* **Target Node Switching**: Execute terminal commands directly on Master or transparently on any remote fleet node.
+* **Sudo Elevation**: Prompts and handles elevated `sudo` commands securely without plaintext storage.
+* **Safety Filter**: Protects against accidental execution of destructive patterns (`rm -rf /`, `mkfs`, fork bombs).
 
-### 5. Secure Web Terminal
-* **In-Browser Shell**: Execute administration commands safely from the web console.
-* **Sudo Integration**: Supports elevated execution with secure credential masking.
-* **Destructive Command Guard**: Automatically intercepts and blocks dangerous commands such as:
-  * `rm -rf /`
-  * `mkfs`
-  * `dd if=/dev/zero`
-  * Fork bombs (`:(){ :|:& };:`)
+### 5. Embedded HTML5 VNC / RFB Desktop
+* **Pure Python RFB Server**: Implements RFB 3.8 protocol handshaking and frame encoding.
+* **WebSocket Proxy**: Bi-directionally bridges browser canvas input and video frames to X11/Wayland sessions.
 
-### 6. Embedded HTML5 VNC / RFB Desktop
-* **Pure Python RFB Server**: Implements RFB 3.8 handshaking, security negotiation (None/VNC auth), ServerInit, and raw framebuffer updates.
-* **WebSocket Proxy Bridge**: Bi-directionally bridges browser WebSocket traffic to remote or local RFB TCP daemons (`localhost:5900` to `5905`).
-* **HTML5 Canvas Rendering**: Interactive canvas viewer transmitting pointer coordinates, mouse clicks, and keyboard strokes.
-* **Daemon Auto-Detection**: Scans for installed VNC daemons (`x11vnc`, `tigervnc`, `wayvnc`) and open VNC ports.
+### 6. Alert Rules Engine & Notifications
+* Define automated rules for CPU%, Memory%, Disk%, and Agent heartbeats (`> 85% for 2 consecutive intervals`).
+* Real-time notifications pop up in the top navigation bell with event severity tags (`WARNING`, `CRITICAL`).
+
+### 7. Compliance Audit Log & System Settings
+* **Audit Trail**: Every login attempt, terminal command, service modification, process kill, and fleet mutation is logged with timestamp, user ID, IP address, and status.
+* **Central Settings**: Configure global retention limits, session timeout hours, SMTP alerts, and branding.
 
 ---
 
-## 🔌 API & WebSocket Protocol Reference
+## 🔌 API Reference
 
-### REST Endpoints
+### Authentication & User Management
+* `POST /api/auth/login` — Authenticate credentials with optional TOTP 2FA.
+* `POST /api/auth/refresh` — Refresh access token using refresh token.
+* `POST /api/auth/logout` — Invalidate session and blacklist token.
+* `GET  /api/auth/me` — Fetch current user profile and role permissions.
+* `GET  /api/admin/users` — List all registered users (Admin only).
+* `POST /api/admin/users` — Create new user account (Admin only).
+* `PUT  /api/admin/users/{id}` — Update user role, status, or password (Admin only).
+* `DELETE /api/admin/users/{id}` — Delete user account (Admin only).
 
-| Method | Endpoint | Description | Request Body / Query |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/services` | Retrieve list of all systemd services and states | None |
-| `POST` | `/api/services/action` | Trigger action on a systemd service | `{"serviceName": "nginx.service", "action": "restart"}` |
-| `GET` | `/api/services/{name}/logs` | Fetch recent journald logs for a service | None |
-| `GET` | `/api/processes` | List active processes sorted by CPU usage | None |
-| `POST` | `/api/processes/kill` | Terminate process with a signal | `{"pid": 1234, "signal": "15"}` |
-| `POST` | `/api/terminal/exec` | Execute shell command with optional sudo | `{"command": "uname -a", "sudoPassword": "..."}` |
-| `GET` | `/api/vnc/status` | Query host VNC daemons and open ports | `?host=127.0.0.1` |
-| `POST` | `/api/vnc/launch` | Start native or host VNC server | `{"display": ":0", "port": 5900, "useNative": true}` |
+### Fleet Operations
+* `GET    /api/fleet/servers` — List all monitored servers and current telemetry snapshots.
+* `POST   /api/fleet/servers` — Manually register a new server node (Admin only).
+* `PUT    /api/fleet/servers/{id}` — Update server display name, tags, and notes (Admin only).
+* `DELETE /api/fleet/servers/{id}` — Remove a server from the fleet (Admin only).
+* `GET    /api/fleet/servers/{id}/metrics` — Fetch historical telemetry timeseries.
+* `POST   /api/fleet/register` — Agent registration endpoint using invite token.
+* `POST   /api/fleet/heartbeat` — Periodic agent telemetry submission.
+* `GET    /api/fleet/agent-install.sh` — Dynamic agent installer script.
+* `GET    /api/fleet/agent-update.sh` — Dynamic agent updater script.
 
-### WebSocket Channels
+### System & Control Operations
+* `GET  /api/services` — List systemd units (`?server_id=...`).
+* `POST /api/services/action` — Start/stop/restart unit (`admin`, `operator`).
+* `GET  /api/services/{name}/logs` — Fetch journalctl logs.
+* `GET  /api/processes` — List running processes (`?server_id=...`).
+* `POST /api/processes/kill` — Dispatch kill signal (`admin`, `operator`).
+* `POST /api/terminal/exec` — Execute shell command on target node (`admin`, `operator`).
+* `GET  /api/vnc/status` — Query VNC availability.
+* `POST /api/vnc/launch` — Launch VNC desktop session (`admin`, `operator`).
 
-#### 1. Telemetry & Log Stream (`/`)
-* **Endpoint**: `ws://<HOST>:<PORT>/` (or `wss://` over SSL/TLS)
-* **Message Types**:
-  * `telemetry`: Periodic payload with CPU, RAM, Disk, Network, and System specs.
-  * `logStream`: Continuous event log entries with timestamps, severity levels, and sources.
-
-```json
-{
-  "type": "telemetry",
-  "data": {
-    "cpu": 12.4,
-    "memory": {
-      "total": 16777216000,
-      "used": 4294967296,
-      "free": 12482248704,
-      "usagePercent": 25.6
-    },
-    "network": { "rxSec": 1048576, "txSec": 524288 },
-    "system": { "hostname": "prod-server-01", "uptime": 86400 }
-  }
-}
-```
-
-#### 2. VNC RFB Proxy (`/api/vnc/ws`)
-* **Endpoint**: `ws://<HOST>:<PORT>/api/vnc/ws?host=127.0.0.1&port=5900`
-* **Protocol**: Binary RFB (Remote Framebuffer) protocol data bridged to TCP.
+### Alerts & Administration
+* `GET    /api/alerts/rules` — List active alert evaluation rules.
+* `POST   /api/alerts/rules` — Create a new alert rule (Admin only).
+* `DELETE /api/alerts/rules/{id}` — Delete an alert rule (Admin only).
+* `GET    /api/alerts/active` — List currently firing alerts.
+* `GET    /api/admin/audit` — Query audit log events with filter parameters (Admin only).
+* `GET    /api/admin/settings` — Read system configuration settings (Admin only).
+* `PUT    /api/admin/settings` — Update system configuration settings (Admin only).
 
 ---
 
 ## ⚙️ Configuration & Environment Variables
 
-PulseOps can be configured using standard environment variables:
+PulseOps can be configured via environment variables or the `.env` file:
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `PORT` | `3500` | Port for the HTTP and WebSocket server |
-| `HOST` | `0.0.0.0` | Network interface IP to bind to (`0.0.0.0` listens on all interfaces) |
-| `DISPLAY` | `:0` | Target X11/Wayland display for VNC desktop sessions |
-
-Example:
-```bash
-HOST=192.168.1.50 PORT=8080 python3 server.py
-```
+| `HOST` | `0.0.0.0` | Bind IP interface (`0.0.0.0` listens across all network interfaces) |
+| `DB_PATH` | `./pulseops.db` | File path for the SQLite database |
+| `SECRET_KEY` | *(Auto-generated)* | 256-bit cryptographic secret for signing JWT access tokens |
+| `REFRESH_SECRET_KEY` | *(Auto-generated)* | Secret key for signing JWT refresh tokens |
+| `SESSION_TIMEOUT_HOURS` | `24` | Default expiration window for user authentication sessions |
 
 ---
 
 ## 🛡️ Security & Hardening Guidelines
 
-> [!WARNING]
-> PulseOps provides administrative access to your Linux host (service control, process termination, and shell execution). When exposing it over an untrusted network, apply the following security measures:
-
-1. **Reverse Proxy & SSL/TLS**: Place PulseOps behind **Nginx**, **Caddy**, or **Traefik** with HTTPS and secure WebSockets (`wss://`).
-2. **Authentication**: Use Basic Auth, Authelia, or OAuth via reverse proxy.
-3. **Firewall Restriction**: Restrict access to trusted subnets or a VPN (e.g. WireGuard, Tailscale) instead of exposing port 3500 directly to the public internet:
+1. **Production Reverse Proxy & TLS**: Always terminate SSL/TLS via **Nginx**, **Caddy**, or an enterprise load balancer when exposing PulseOps outside a trusted LAN.
+2. **Dedicated User Execution**: Run `server.py` under an unprivileged user (e.g. `pulseops`) and configure targeted `sudoers.d/pulseops` permissions for specific commands if complete root access is unnecessary.
+3. **Firewall Isolation**: Restrict port `3500` and agent port `3501` to your management subnet or VPN (e.g. WireGuard, Tailscale):
    ```bash
-   sudo ufw allow from 192.168.1.0/24 to any port 3500 proto tcp
+   # firewalld (RHEL/Rocky/CentOS)
+   sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="192.168.100.0/24" port port="3500" protocol="tcp" accept'
+   sudo firewall-cmd --reload
+
+   # ufw (Debian/Ubuntu)
+   sudo ufw allow from 192.168.100.0/24 to any port 3500 proto tcp
    ```
-4. **Least Privilege**: Run PulseOps with a dedicated non-root user and grant fine-grained `sudoers` permissions for specific commands if full root is not required.
 
 ---
 
@@ -372,38 +390,52 @@ HOST=192.168.1.50 PORT=8080 python3 server.py
 
 ```text
 pulseops-Python-Based/
-├── server.py             # Pure Python asyncio HTTP & RFC 6455 WebSocket server
-├── fastapi_app.py        # Alternative FastAPI / ASGI implementation with OpenAPI
+├── server.py             # High-performance async HTTP & WebSocket server (master runtime)
+├── fastapi_app.py        # Alternative ASGI FastAPI implementation with OpenAPI
+├── pulseops_agent.py     # Remote agent daemon (telemetry, service & process RPC)
 ├── telemetry.py          # /proc filesystem metrics engine (CPU, RAM, Disk, Net)
 ├── services.py           # Systemd unit manager and journalctl log parser
 ├── processes.py          # Process explorer and POSIX signal dispatcher
-├── terminal.py           # Web terminal subprocess runner with sudo handling
+├── terminal.py           # Safe Web terminal subprocess runner with sudo handling
 ├── vnc.py                # Pure Python embedded RFB 3.8 VNC server & TCP proxy
-├── requirements.txt      # Optional dependencies (FastAPI, Uvicorn, psutil)
-├── REQUIREMENTS.md       # Technical architecture specification
-├── README.md             # Project documentation and guide
-└── public/               # Obsidian Glassmorphic Web Dashboard
-    ├── index.html        # Main dashboard interface
+├── fleet.py              # Multi-node server coordinator and remote RPC client
+├── auth.py               # Enterprise JWT, bcrypt, TOTP 2FA, and RBAC authorization
+├── users.py              # User authentication, credential storage, and profile management
+├── database.py           # Async SQLite database layer with automated migrations
+├── alerts.py             # Metric threshold rule evaluator and notification dispatcher
+├── audit.py              # Immutable compliance audit trail logging system
+├── requirements.txt      # Python dependencies (PyJWT, passlib, aiosqlite, cryptography)
+├── README.md             # Comprehensive project documentation
+└── public/               # Zero-build Glassmorphic Web Dashboard
+    ├── index.html        # Main enterprise dashboard interface
+    ├── login.html        # Glassmorphic login page with 2FA TOTP modal
     ├── css/
-    │   └── style.css     # Glassmorphic dark theme CSS design system
+    │   ├── style.css     # Dark glassmorphism design system & RBAC visibility rules
+    │   └── login.css     # Animated login page stylesheet
     └── js/
-        ├── app.js        # Core app initialization and WebSocket telemetry client
-        ├── charts.js     # Real-time SVG performance charts
-        ├── services.js   # Systemd service manager UI logic
-        ├── processes.js  # Process explorer and kill dialog logic
-        ├── logs.js       # Live log streaming and filter engine
-        └── vnc.js        # HTML5 Canvas RFB client and input handling
+        ├── app.js        # Dashboard state management and real-time WebSocket client
+        ├── auth.js       # Global JWT management, token auto-refresh, and auth guard
+        ├── charts.js     # High-performance HTML5 Canvas performance charts
+        ├── fleet.js      # Multi-node fleet grid, card actions, and server modals
+        ├── services.js   # Systemd service manager and journalctl modal
+        ├── processes.js  # Process explorer, filters, and termination controls
+        ├── logs.js       # Live system log streamer and WebTerminal console
+        ├── users.js      # User management, role badges, and password meter
+        ├── alerts.js     # Alert rules engine modal and active notifications
+        ├── audit.js      # Compliance audit activity log viewer
+        ├── settings.js   # Enterprise system settings configuration
+        └── vnc.js        # HTML5 Canvas RFB VNC desktop client
 ```
 
 ---
 
 ## 🤝 Contributing
 
-Contributions, feature requests, and bug reports are welcome!
+Contributions, feedback, and bug reports are welcome!
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+3. Commit your changes (`git commit -m 'feat: Add AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
@@ -411,8 +443,8 @@ Contributions, feature requests, and bug reports are welcome!
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
 
 <div align="center">
-  <sub>Built with ⚡ and Python Asyncio. Designed for Linux administrators and DevOps engineers.</sub>
+  <sub>Built with ⚡ and Python Asyncio. Engineered for Linux system administrators, DevOps engineers, and SREs.</sub>
 </div>
