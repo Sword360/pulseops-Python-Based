@@ -19,6 +19,19 @@ import processes
 import terminal
 import vnc
 
+# Enterprise modules (optional — degrade gracefully if dependencies missing)
+try:
+    import database
+    import auth
+    import users as users_module
+    import fleet as fleet_module
+    import alerts as alerts_module
+    import audit
+    ENTERPRISE_AVAILABLE = True
+except ImportError as _e:
+    ENTERPRISE_AVAILABLE = False
+    print(f"[Warning] Enterprise modules not available: {_e}")
+
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", 3500))
 PUBLIC_DIR = os.path.join(os.path.dirname(__file__), 'public')
@@ -323,9 +336,352 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             res_data = await vnc.launch_vnc(display, vnc_port, use_native)
             return await send_json_response(writer, res_data)
 
+        # Local telemetry snapshot for agent polling
+        if path == '/api/telemetry/snapshot' and method == 'GET':
+            data = await telemetry.get_full_telemetry()
+            mem = data.get('memory', {})
+            disks = data.get('disks', [])
+            net = data.get('network', {})
+            sys_info = data.get('sysInfo', {})
+            snapshot = {
+                'cpu': data.get('cpu', 0),
+                'mem': mem.get('usagePercent', 0),
+                'disk': disks[0]['usagePercent'] if disks else 0,
+                'rx_sec': net.get('rxSec', 0),
+                'tx_sec': net.get('txSec', 0),
+                'load1': (sys_info.get('loadAvg') or [0])[0],
+                'uptime': sys_info.get('uptime', 0),
+                'hostname': sys_info.get('hostname', ''),
+                'os_info': sys_info.get('osName', ''),
+                'arch': sys_info.get('arch', ''),
+            }
+            return await send_json_response(writer, snapshot)
+
+        # ── Enterprise API Routes (require ENTERPRISE_AVAILABLE) ─────────────
+        if ENTERPRISE_AVAILABLE:
+
+            # ── Auth ─────────────────────────────────────────────────────────
+            if path == '/api/auth/login' and method == 'POST':
+                email = json_body.get('email', '').strip().lower()
+                password = json_body.get('password', '')
+                totp_code = json_body.get('totp_code')
+                ip = headers.get('x-forwarded-for', 'unknown').split(',')[0].strip()
+
+                if not await auth.check_rate_limit(ip):
+                    return await send_json_response(writer, {'detail': 'Too many attempts'}, 429)
+
+                user = await users_module.authenticate_user(email, password)
+                if not user:
+                    await audit.log_action('auth.login', user_email=email, ip_address=ip, result='failure')
+                    return await send_json_response(writer, {'detail': 'Invalid email or password'}, 401)
+
+                if user.get('locked'):
+                    return await send_json_response(writer, {'detail': f"Account locked until {user.get('locked_until')}"}, 423)
+
+                if user.get('totp_enabled') and not totp_code:
+                    return await send_json_response(writer, {'totp_required': True})
+
+                if user.get('totp_enabled') and totp_code:
+                    if not auth.verify_totp(user['totp_secret'], totp_code):
+                        return await send_json_response(writer, {'detail': 'Invalid 2FA code'}, 401)
+
+                await auth.reset_failed_login(user['id'])
+                access_token = auth.create_access_token(user['id'], user['email'], user['role'])
+                refresh_token = auth.create_refresh_token(user['id'])
+                await audit.log_action('auth.login', user_id=user['id'], user_email=email, ip_address=ip)
+                return await send_json_response(writer, {
+                    'access_token': access_token, 'refresh_token': refresh_token,
+                    'token_type': 'bearer',
+                    'user': {'id': user['id'], 'email': user['email'], 'display_name': user['display_name'], 'role': user['role']}
+                })
+
+            if path == '/api/auth/logout' and method == 'POST':
+                return await send_json_response(writer, {'success': True})
+
+            if path == '/api/auth/refresh' and method == 'POST':
+                rt = json_body.get('refresh_token')
+                decoded = auth.decode_token(rt, 'refresh') if rt else None
+                if not decoded:
+                    return await send_json_response(writer, {'detail': 'Invalid refresh token'}, 401)
+                user = await users_module.get_user_by_id(int(decoded['sub']))
+                if not user or not user['is_active']:
+                    return await send_json_response(writer, {'detail': 'User inactive'}, 401)
+                new_token = auth.create_access_token(user['id'], user['email'], user['role'])
+                return await send_json_response(writer, {'access_token': new_token, 'token_type': 'bearer'})
+
+            if path == '/api/auth/me' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                u = await users_module.get_user_by_id(user['id'])
+                return await send_json_response(writer, u or user)
+
+            # ── User Management (admin only) ──────────────────────────────────
+            if path == '/api/admin/users' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                return await send_json_response(writer, await users_module.list_users())
+
+            if path == '/api/admin/users' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                result = await users_module.create_user(
+                    email=json_body.get('email', ''),
+                    display_name=json_body.get('display_name', ''),
+                    password=json_body.get('password', ''),
+                    role=json_body.get('role', 'viewer'),
+                    created_by=user['id'],
+                )
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result['error']}, 400)
+                await audit.log_action('user.create', user_id=user['id'], user_email=user['email'], resource_type='user', details={'email': json_body.get('email')})
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/admin/users/') and method == 'PUT':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                uid = int(path.split('/')[-1])
+                result = await users_module.update_user(uid, json_body, updated_by=user['id'])
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result['error']}, 400)
+                await audit.log_action('user.update', user_id=user['id'], user_email=user['email'], resource_type='user', resource_id=str(uid))
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/admin/users/') and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                uid = int(path.split('/')[-1])
+                result = await users_module.delete_user(uid, user['id'])
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result['error']}, 400)
+                return await send_json_response(writer, result)
+
+            # ── Fleet Management ──────────────────────────────────────────────
+            if path == '/api/fleet/servers' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                q = query_params.get('q')
+                group_id = query_params.get('group_id')
+                return await send_json_response(writer, await fleet_module.list_servers(search=q, group_id=group_id))
+
+            if path == '/api/fleet/servers' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                result = await fleet_module.register_server(
+                    hostname=json_body.get('hostname', ''),
+                    host_ip=json_body.get('host_ip', ''),
+                    display_name=json_body.get('display_name'),
+                    agent_port=int(json_body.get('agent_port', 3500)),
+                    tags=json_body.get('tags', []),
+                    notes=json_body.get('notes'),
+                    added_by=user['id'],
+                )
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result['error']}, 400)
+                await audit.log_action('fleet.server.add', user_id=user['id'], user_email=user['email'], resource_type='server', details={'hostname': json_body.get('hostname')})
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/fleet/servers/') and method == 'GET' and len(path.split('/')) == 5:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                server_id = path.split('/')[4]
+                srv = await fleet_module.get_server(server_id)
+                if not srv:
+                    return await send_json_response(writer, {'detail': 'Server not found'}, 404)
+                return await send_json_response(writer, srv)
+
+            if path.startswith('/api/fleet/servers/') and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                server_id = path.split('/')[-1]
+                result = await fleet_module.delete_server(server_id)
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result.get('error')}, 400)
+                await audit.log_action('fleet.server.remove', user_id=user['id'], user_email=user['email'], resource_type='server', resource_id=server_id)
+                return await send_json_response(writer, result)
+
+            # ── Agent registration & heartbeat ────────────────────────────────
+            if path == '/api/fleet/register' and method == 'POST':
+                token = json_body.get('invite_token')
+                if not token:
+                    return await send_json_response(writer, {'detail': 'invite_token required'}, 400)
+                invite = await fleet_module.consume_invite_token(token)
+                if not invite:
+                    return await send_json_response(writer, {'detail': 'Invalid or expired token'}, 403)
+                result = await fleet_module.register_server(
+                    hostname=json_body.get('hostname', 'unknown'),
+                    host_ip=json_body.get('host_ip', ''),
+                    agent_port=int(json_body.get('agent_port', 3501)),
+                    os_info=json_body.get('os_info'),
+                    arch=json_body.get('arch'),
+                    added_by=invite.get('created_by'),
+                )
+                return await send_json_response(writer, result)
+
+            if path == '/api/fleet/heartbeat' and method == 'POST':
+                agent_token = headers.get('x-agent-token') or json_body.get('agent_token', '')
+                if not agent_token:
+                    return await send_json_response(writer, {'detail': 'X-Agent-Token required'}, 401)
+                result = await fleet_module.process_heartbeat(agent_token, json_body)
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result.get('error')}, 403)
+                return await send_json_response(writer, result)
+
+            # ── Invite tokens ─────────────────────────────────────────────────
+            if path == '/api/fleet/invite-tokens' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                expires_hours = int(json_body.get('expires_hours', 24))
+                return await send_json_response(writer, await fleet_module.create_invite_token(user['id'], expires_hours))
+
+            if path == '/api/fleet/invite-tokens' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                return await send_json_response(writer, await fleet_module.list_invite_tokens())
+
+            # ── Alert rules ───────────────────────────────────────────────────
+            if path == '/api/alerts/rules' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                server_id = query_params.get('server_id')
+                return await send_json_response(writer, await alerts_module.list_alert_rules(server_id))
+
+            if path == '/api/alerts/rules' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                result = await alerts_module.create_alert_rule(
+                    name=json_body.get('name', ''), metric=json_body.get('metric', 'cpu_percent'),
+                    operator=json_body.get('operator', 'gt'), threshold=json_body.get('threshold'),
+                    severity=json_body.get('severity', 'warning'), server_id=json_body.get('server_id'),
+                    notify_email=json_body.get('notify_email', False), notify_webhook=json_body.get('notify_webhook', False),
+                    webhook_url=json_body.get('webhook_url'), created_by=user['id'],
+                )
+                if not result['success']:
+                    return await send_json_response(writer, {'detail': result['error']}, 400)
+                return await send_json_response(writer, result)
+
+            if path == '/api/alerts/active' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                server_id = query_params.get('server_id')
+                return await send_json_response(writer, await alerts_module.get_active_alerts(server_id))
+
+            # ── Audit log ─────────────────────────────────────────────────────
+            if path == '/api/admin/audit' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                page = int(query_params.get('page', 1))
+                page_size = int(query_params.get('page_size', 50))
+                result = await audit.get_audit_log(
+                    page=page, page_size=page_size,
+                    user_filter=query_params.get('user_filter'),
+                    action_filter=query_params.get('action_filter'),
+                    resource_type_filter=query_params.get('resource_type'),
+                    result_filter=query_params.get('result_filter'),
+                )
+                return await send_json_response(writer, result)
+
+            if path == '/api/admin/audit/recent' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                limit = int(query_params.get('limit', 20))
+                return await send_json_response(writer, await audit.get_recent_activity(limit))
+
+            # ── Settings ──────────────────────────────────────────────────────
+            if path == '/api/admin/settings' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                rows = await database.fetchall("SELECT key, value FROM settings ORDER BY key ASC")
+                result = {}
+                for row in rows:
+                    result[row['key']] = '••••••••' if 'password' in row['key'] and row['value'] else row['value']
+                return await send_json_response(writer, result)
+
+            if path == '/api/admin/settings' and method == 'PUT':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                allowed = {'app_name', 'session_timeout_hours', 'agent_poll_interval', 'snapshot_retention_hours',
+                           'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_from',
+                           'global_cpu_alert_threshold', 'global_mem_alert_threshold', 'global_disk_alert_threshold', 'master_url'}
+                count = 0
+                for key, value in json_body.items():
+                    if key in allowed:
+                        await database.set_setting(key, str(value), user['id'])
+                        count += 1
+                return await send_json_response(writer, {'success': True, 'updated_count': count})
+
+            # Agent script download
+            if path == '/api/fleet/agent-download' and method == 'GET':
+                agent_path = os.path.join(os.path.dirname(__file__), 'pulseops_agent.py')
+                if os.path.exists(agent_path):
+                    with open(agent_path, 'rb') as f:
+                        content = f.read()
+                    res_hdr = (
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: text/plain\r\n"
+                        f"Content-Disposition: attachment; filename=pulseops_agent.py\r\n"
+                        f"Content-Length: {len(content)}\r\n\r\n"
+                    )
+                    writer.write(res_hdr.encode() + content)
+                    await writer.drain()
+                    writer.close()
+                    return
+                return await send_json_response(writer, {'detail': 'Not found'}, 404)
+
+            # Agent install script
+            if path == '/api/fleet/agent-install.sh' and method == 'GET':
+                token = query_params.get('token', '')
+                master_url = await database.get_setting('master_url', f'http://localhost:{PORT}')
+                script = fleet_module.get_agent_install_script(master_url, token)
+                res_hdr = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/x-shellscript\r\n"
+                    f"Content-Length: {len(script.encode())}\r\n\r\n"
+                )
+                writer.write(res_hdr.encode() + script.encode())
+                await writer.drain()
+                writer.close()
+                return
+
+        # -------------------------------------------------------------
+        # /login route — serve login.html
+        # -------------------------------------------------------------
+        if path == '/login' and method == 'GET':
+            login_path = os.path.join(PUBLIC_DIR, 'login.html')
+            if os.path.exists(login_path):
+                with open(login_path, 'rb') as f:
+                    content = f.read()
+                res_hdr = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(content)}\r\n\r\n"
+                )
+                writer.write(res_hdr.encode() + content)
+                await writer.drain()
+                writer.close()
+                return
+
         # -------------------------------------------------------------
         # Static File Serving (from public/)
         # -------------------------------------------------------------
+
         clean_path = path.lstrip('/')
         if not clean_path:
             clean_path = 'index.html'
@@ -433,15 +789,29 @@ async def log_stream_broadcast_loop():
 
 
 async def main():
+    # ── Enterprise initialization ────────────────────────────────────────
+    if ENTERPRISE_AVAILABLE:
+        try:
+            await database.init_db()
+            await auth.bootstrap_admin()
+            fleet_module.set_broadcast_callback(_fleet_broadcast)
+            asyncio.create_task(fleet_module.fleet_health_poll_loop())
+            print("✅ Enterprise features initialized (DB, Auth, Fleet)")
+        except Exception as e:
+            print(f"[Warning] Enterprise init error: {e}")
+
     server = await asyncio.start_server(handle_http_request, HOST, PORT)
-    print(f"\n⚡ PulseOps Python Server running:")
-    print(f"   ➜ Local:   http://localhost:{PORT}")
+    print(f"\n⚡ PulseOps Enterprise Server running:")
+    print(f"   ➜ Local:    http://localhost:{PORT}")
+    print(f"   ➜ Login:    http://localhost:{PORT}/login")
+    print(f"   ➜ API Docs: http://localhost:{PORT}/api/")
     net_ips = get_network_ips()
     if net_ips:
         for ip in net_ips:
-            print(f"   ➜ Network: http://{ip}:{PORT}")
+            print(f"   ➜ Network:  http://{ip}:{PORT}")
     elif HOST != "127.0.0.1":
-        print(f"   ➜ Network: http://{HOST}:{PORT}")
+        print(f"   ➜ Network:  http://{HOST}:{PORT}")
+    print(f"   ➜ Enterprise features: {'ENABLED' if ENTERPRISE_AVAILABLE else 'DISABLED (install dependencies)'}")
     print()
 
     asyncio.create_task(telemetry_broadcast_loop())
@@ -449,6 +819,14 @@ async def main():
 
     async with server:
         await server.serve_forever()
+
+
+async def _fleet_broadcast(payload: dict) -> None:
+    """Broadcast a fleet update to all connected WebSocket clients."""
+    msg = json.dumps(payload)
+    for ws in list(connected_ws_clients):
+        if ws.open and not ws.is_vnc:
+            asyncio.create_task(ws.send_text(msg))
 
 if __name__ == '__main__':
     try:
