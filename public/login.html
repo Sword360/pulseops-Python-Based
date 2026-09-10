@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PulseOps Enterprise — Login">
+    <meta name="theme-color" content="#070a11">
+    <title>PulseOps Enterprise — Sign In</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+
+    <!-- Animated Background Grid -->
+    <div class="bg-grid"></div>
+    <div class="bg-particles" id="bg-particles"></div>
+
+    <!-- Login Card -->
+    <div class="login-wrapper">
+        <div class="login-card" id="login-card">
+
+            <!-- Logo & Brand -->
+            <div class="login-brand">
+                <div class="login-logo">⚡</div>
+                <h1 class="login-title">PulseOps</h1>
+                <span class="login-subtitle">ENTERPRISE EDITION</span>
+            </div>
+
+            <!-- Alert Banner -->
+            <div class="login-alert" id="login-alert" style="display:none;">
+                <span class="login-alert-icon">⚠️</span>
+                <span id="login-alert-msg">Invalid credentials</span>
+            </div>
+
+            <!-- TOTP Step (hidden by default) -->
+            <div id="totp-step" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label">Two-Factor Authentication Code</label>
+                    <p class="form-hint">Enter the 6-digit code from your authenticator app</p>
+                    <input
+                        type="text"
+                        id="totp-input"
+                        class="form-input"
+                        placeholder="000000"
+                        maxlength="6"
+                        autocomplete="one-time-code"
+                        inputmode="numeric"
+                        pattern="[0-9]{6}"
+                    >
+                </div>
+                <button class="btn-login" id="totp-submit-btn" type="button">
+                    <span id="totp-btn-text">Verify Code</span>
+                    <span id="totp-btn-spinner" class="btn-spinner" style="display:none;"></span>
+                </button>
+                <button class="btn-back" id="totp-back-btn" type="button">← Back to Login</button>
+            </div>
+
+            <!-- Main Login Form -->
+            <form id="login-form" class="login-form" autocomplete="on" novalidate>
+
+                <div class="form-group">
+                    <label class="form-label" for="email-input">Email Address</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">📧</span>
+                        <input
+                            type="email"
+                            id="email-input"
+                            name="email"
+                            class="form-input padded"
+                            placeholder="admin@pulseops.local"
+                            autocomplete="email"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password-input">Password</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">🔒</span>
+                        <input
+                            type="password"
+                            id="password-input"
+                            name="password"
+                            class="form-input padded"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            required
+                        >
+                        <button type="button" class="btn-eye" id="toggle-password" title="Show/hide password">
+                            <span id="eye-icon">👁</span>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login" id="login-submit-btn">
+                    <span id="login-btn-text">Sign In →</span>
+                    <span id="login-btn-spinner" class="btn-spinner" style="display:none;"></span>
+                </button>
+
+            </form>
+
+            <!-- Footer Links -->
+            <div class="login-footer">
+                <span class="login-version">v2.0.0 Enterprise</span>
+                <span style="color: var(--text-dim);">•</span>
+                <span class="login-footer-link" id="forgot-link">Forgot password?</span>
+            </div>
+
+        </div>
+
+        <!-- Forgot Password panel (hidden by default) -->
+        <div class="login-card" id="forgot-card" style="display:none;">
+            <div class="login-brand">
+                <div class="login-logo" style="font-size: 2rem;">🔑</div>
+                <h2 class="login-title" style="font-size: 1.4rem;">Reset Password</h2>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" id="forgot-email" class="form-input" placeholder="admin@pulseops.local">
+            </div>
+            <div class="login-alert" id="forgot-alert" style="display:none; background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.3);">
+                <span>✅</span>
+                <span id="forgot-alert-msg">If an account exists, a reset link will be sent.</span>
+            </div>
+            <button class="btn-login" id="forgot-submit-btn" type="button">Send Reset Link</button>
+            <button class="btn-back" id="forgot-back-btn" type="button">← Back to Login</button>
+        </div>
+
+    </div>
+
+    <!-- Status Indicator -->
+    <div class="server-status" id="server-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-label">Connecting...</span>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script>
+        // ─── Particle background ───────────────────────────────────────────────
+        (function createParticles() {
+            const container = document.getElementById('bg-particles');
+            const count = 30;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.cssText = `
+                    left: ${Math.random() * 100}%;
+                    top: ${Math.random() * 100}%;
+                    width: ${Math.random() * 3 + 1}px;
+                    height: ${Math.random() * 3 + 1}px;
+                    animation-delay: ${Math.random() * 8}s;
+                    animation-duration: ${Math.random() * 10 + 8}s;
+                    opacity: ${Math.random() * 0.5 + 0.1};
+                `;
+                container.appendChild(p);
+            }
+        })();
+
+        // ─── Server connectivity check ──────────────────────────────────────────
+        (async function checkServer() {
+            const dot = document.getElementById('status-dot');
+            const label = document.getElementById('status-label');
+            try {
+                const r = await fetch('/api/auth/me', { method: 'GET' });
+                if (r.status === 401 || r.status === 200) {
+                    dot.classList.add('online');
+                    label.textContent = 'Server Online';
+                } else {
+                    dot.classList.add('degraded');
+                    label.textContent = 'Server Degraded';
+                }
+            } catch {
+                dot.classList.add('offline');
+                label.textContent = 'Server Unreachable';
+            }
+        })();
+
+        // ─── Login form handling ───────────────────────────────────────────────
+        const loginForm   = document.getElementById('login-form');
+        const loginCard   = document.getElementById('login-card');
+        const forgotCard  = document.getElementById('forgot-card');
+        const totpStep    = document.getElementById('totp-step');
+        const alertEl     = document.getElementById('login-alert');
+        const alertMsg    = document.getElementById('login-alert-msg');
+
+        let pendingEmail = '', pendingPassword = '';
+
+        function showAlert(msg, type = 'error') {
+            alertEl.style.display = 'flex';
+            alertEl.className = 'login-alert' + (type === 'success' ? ' success' : '');
+            alertMsg.textContent = msg;
+        }
+
+        function hideAlert() { alertEl.style.display = 'none'; }
+
+        function setLoading(btnId, spinnerId, loading) {
+            const btn  = document.getElementById(btnId);
+            const spin = document.getElementById(spinnerId);
+            btn.disabled = loading;
+            spin.style.display = loading ? 'inline-block' : 'none';
+            document.getElementById(btnId.replace('btn', 'text') + '-text' in document.getElementById(btnId) ? btnId.replace('-btn','') + '-text' : btnId.replace('submit', 'btn-text').replace('-btn', '-text')).style.display = loading ? 'none' : 'inline';
+        }
+
+        // Password toggle
+        document.getElementById('toggle-password').addEventListener('click', () => {
+            const inp = document.getElementById('password-input');
+            inp.type = inp.type === 'password' ? 'text' : 'password';
+            document.getElementById('eye-icon').textContent = inp.type === 'password' ? '👁' : '🙈';
+        });
+
+        // Main login submit
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideAlert();
+            const email    = document.getElementById('email-input').value.trim();
+            const password = document.getElementById('password-input').value;
+            if (!email || !password) { showAlert('Please enter email and password'); return; }
+
+            const submitBtn = document.getElementById('login-submit-btn');
+            const spinner   = document.getElementById('login-btn-spinner');
+            const btnText   = document.getElementById('login-btn-text');
+            submitBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnText.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await resp.json();
+
+                if (resp.status === 200 && data.totp_required) {
+                    pendingEmail = email;
+                    pendingPassword = password;
+                    loginForm.style.display = 'none';
+                    totpStep.style.display = 'block';
+                    document.getElementById('totp-input').focus();
+                    return;
+                }
+
+                if (!resp.ok) {
+                    showAlert(data.detail || 'Authentication failed');
+                    return;
+                }
+
+                // Store tokens and redirect
+                PulseOpsAuth.saveTokens(data.access_token, data.refresh_token, data.user);
+                window.location.href = '/';
+            } catch (err) {
+                showAlert('Network error — is the server running?');
+            } finally {
+                submitBtn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.style.display = 'inline';
+            }
+        });
+
+        // TOTP submit
+        document.getElementById('totp-submit-btn').addEventListener('click', async () => {
+            const totp_code = document.getElementById('totp-input').value.trim();
+            if (totp_code.length !== 6) { showAlert('Enter a 6-digit code'); return; }
+
+            document.getElementById('totp-submit-btn').disabled = true;
+            document.getElementById('totp-btn-spinner').style.display = 'inline-block';
+            document.getElementById('totp-btn-text').style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: pendingEmail, password: pendingPassword, totp_code }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) { showAlert(data.detail || 'Invalid code'); return; }
+                PulseOpsAuth.saveTokens(data.access_token, data.refresh_token, data.user);
+                window.location.href = '/';
+            } catch { showAlert('Network error'); }
+            finally {
+                document.getElementById('totp-submit-btn').disabled = false;
+                document.getElementById('totp-btn-spinner').style.display = 'none';
+                document.getElementById('totp-btn-text').style.display = 'inline';
+            }
+        });
+
+        // TOTP back button
+        document.getElementById('totp-back-btn').addEventListener('click', () => {
+            totpStep.style.display = 'none';
+            loginForm.style.display = 'block';
+            pendingEmail = pendingPassword = '';
+        });
+
+        // Forgot password toggle
+        document.getElementById('forgot-link').addEventListener('click', () => {
+            loginCard.style.display = 'none';
+            forgotCard.style.display = 'block';
+        });
+        document.getElementById('forgot-back-btn').addEventListener('click', () => {
+            forgotCard.style.display = 'none';
+            loginCard.style.display = 'block';
+        });
+        document.getElementById('forgot-submit-btn').addEventListener('click', async () => {
+            const email = document.getElementById('forgot-email').value.trim();
+            if (!email) return;
+            // Show confirmation (even if no SMTP configured)
+            document.getElementById('forgot-alert').style.display = 'flex';
+            document.getElementById('forgot-alert-msg').textContent =
+                'If an account with this email exists, a reset link will be sent.';
+        });
+
+        // TOTP input auto-submit on 6 digits
+        document.getElementById('totp-input').addEventListener('input', (e) => {
+            if (e.target.value.length === 6) {
+                document.getElementById('totp-submit-btn').click();
+            }
+        });
+    </script>
+</body>
+</html>
