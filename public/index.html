@@ -1,529 +1,962 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="PulseOps - Real-time Linux Server & Systemd Management Operations Center. Monitor CPU, RAM, Disk, Network I/O, inspect processes, manage systemd services, stream logs, and execute commands safely.">
+    <meta name="description" content="PulseOps Enterprise — Multi-Server Linux Operations Dashboard">
     <meta name="theme-color" content="#070a11">
-    <title>PulseOps — Linux Server & Systemd Dashboard</title>
-    
+    <title>PulseOps Enterprise</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
 
-    <!-- Header Navigation -->
-    <header class="app-header">
-        <div class="brand">
-            <div class="brand-icon">⚡</div>
-            <div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <h1 class="brand-title">PulseOps</h1>
-                    <span class="brand-tag">LINUX OPS</span>
-                </div>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SIDEBAR NAVIGATION
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-logo">⚡</div>
+            <div class="sidebar-brand-text">
+                <div class="sidebar-title">PulseOps</div>
+                <div class="sidebar-edition">ENTERPRISE</div>
             </div>
         </div>
 
-        <div class="header-status">
-            <div class="status-badge">
-                <span class="pulse-dot" id="connection-dot"></span>
-                <span id="connection-text" style="font-weight: 600;">CONNECTING</span>
-            </div>
-
-            <div class="status-badge" style="font-family: var(--font-mono);">
-                <span style="color: var(--text-dim);">HOST:</span>
-                <strong id="header-hostname" style="color: var(--accent-cyan);">localhost</strong>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content Layout -->
-    <main class="main-container">
-        
-        <!-- Navigation Tabs -->
-        <nav class="nav-tabs" aria-label="Dashboard Navigation">
-            <button class="tab-btn active" data-tab="dashboard">
-                <span>📊</span> Overview
+        <nav class="sidebar-nav" aria-label="Main Navigation">
+            <button class="sidebar-btn active" data-section="fleet" title="Fleet Overview">
+                <span class="sidebar-icon">🏠</span>
+                <span class="sidebar-label">Fleet Overview</span>
             </button>
-            <button class="tab-btn" data-tab="services">
-                <span>⚙️</span> Systemd Services
+            <button class="sidebar-btn" data-section="server-dashboard" title="Server Dashboard" id="sidebar-server-btn" style="display:none;">
+                <span class="sidebar-icon">📊</span>
+                <span class="sidebar-label" id="sidebar-server-label">Dashboard</span>
             </button>
-            <button class="tab-btn" data-tab="processes">
-                <span>⚡</span> Process Explorer
+            <div class="sidebar-divider"></div>
+            <button class="sidebar-btn admin-only" data-section="users" title="User Management">
+                <span class="sidebar-icon">👥</span>
+                <span class="sidebar-label">Users</span>
             </button>
-            <button class="tab-btn" data-tab="logs">
-                <span>📜</span> Live Log Stream
+            <button class="sidebar-btn" data-section="alerts" title="Alerts &amp; Rules">
+                <span class="sidebar-icon">🔔</span>
+                <span class="sidebar-label">Alerts</span>
+                <span class="sidebar-badge" id="sidebar-alert-badge" style="display:none;">0</span>
             </button>
-            <button class="tab-btn" data-tab="terminal">
-                <span>💻</span> Web Terminal
+            <button class="sidebar-btn admin-only" data-section="audit" title="Audit Log">
+                <span class="sidebar-icon">📋</span>
+                <span class="sidebar-label">Audit Log</span>
             </button>
-            <button class="tab-btn" data-tab="vnc">
-                <span>🖥️</span> VNC Desktop
+            <button class="sidebar-btn admin-only" data-section="settings" title="Settings">
+                <span class="sidebar-icon">⚙️</span>
+                <span class="sidebar-label">Settings</span>
             </button>
         </nav>
 
-        <!-- TAB 1: OVERVIEW DASHBOARD -->
-        <section id="dashboard-tab" class="tab-content active">
-            
-            <!-- Top Metric Cards -->
-            <div class="metrics-grid">
-                
-                <!-- CPU Card -->
-                <div class="metric-card">
-                    <div class="metric-header">
-                        <span class="metric-title">CPU Utilization</span>
-                        <div class="metric-icon" style="color: var(--accent-cyan);">⚡</div>
-                    </div>
-                    <div class="metric-body">
-                        <div class="metric-value" id="metric-cpu-val">0.0%</div>
-                        <div class="metric-sub" id="sys-cores-sub">Overall Load</div>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" id="metric-cpu-bar" style="width: 0%;"></div>
-                    </div>
-                </div>
+        <div class="sidebar-footer">
+            <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse sidebar">◀</button>
+        </div>
+    </aside>
 
-                <!-- Memory Card -->
-                <div class="metric-card">
-                    <div class="metric-header">
-                        <span class="metric-title">Memory Usage</span>
-                        <div class="metric-icon" style="color: var(--accent-purple);">🧠</div>
-                    </div>
-                    <div class="metric-body">
-                        <div class="metric-value" id="metric-mem-val">0.0%</div>
-                        <div class="metric-sub" id="metric-mem-sub">0.0 GB / 0.0 GB</div>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" id="metric-mem-bar" style="width: 0%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));"></div>
-                    </div>
-                </div>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         MAIN CONTENT AREA
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="main-wrapper" id="main-wrapper">
 
-                <!-- Disk Card -->
-                <div class="metric-card">
-                    <div class="metric-header">
-                        <span class="metric-title">Disk Mount (Root)</span>
-                        <div class="metric-icon" style="color: var(--accent-amber);">💾</div>
-                    </div>
-                    <div class="metric-body">
-                        <div class="metric-value" id="metric-disk-val">0.0%</div>
-                        <div class="metric-sub" id="metric-disk-sub">0 GB / 0 GB</div>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" id="metric-disk-bar" style="width: 0%; background: linear-gradient(90deg, var(--accent-amber), #f97316);"></div>
-                    </div>
-                </div>
-
-                <!-- Network Card -->
-                <div class="metric-card">
-                    <div class="metric-header">
-                        <span class="metric-title">Network I/O</span>
-                        <div class="metric-icon" style="color: var(--accent-green);">🌐</div>
-                    </div>
-                    <div class="metric-body">
-                        <div class="metric-value" id="metric-net-val">0.0 KB/s</div>
-                        <div class="metric-sub" id="metric-net-sub">↓ 0 KB/s  ↑ 0 KB/s</div>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" style="width: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));"></div>
-                    </div>
-                </div>
-
+        <!-- ── Top Header Bar ─────────────────────────────────────────────── -->
+        <header class="app-header">
+            <div class="header-left">
+                <button class="header-menu-btn" id="sidebar-toggle-btn" title="Toggle sidebar">☰</button>
+                <!-- Breadcrumb -->
+                <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb">
+                    <span class="breadcrumb-item active">Fleet Overview</span>
+                </nav>
             </div>
 
-            <!-- Real-time Charts & System Overview Layout -->
-            <div class="charts-layout">
-                
-                <!-- Left Charts Area -->
-                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                    
-                    <div class="card">
-                        <div class="card-title">
-                            <span style="color: var(--accent-cyan);">📈</span> CPU Usage History
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="cpu-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-title">
-                            <span style="color: var(--accent-purple);">🧠</span> Memory Usage History
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="mem-chart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-title">
-                            <span style="color: var(--accent-green);">🌐</span> Network Bandwidth Stream (RX / TX)
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="net-chart"></canvas>
-                        </div>
-                    </div>
-
+            <div class="header-center">
+                <!-- Connection status (shown when on server dashboard) -->
+                <div class="header-conn-status" id="header-conn-status" style="display:none;">
+                    <span class="pulse-dot" id="connection-dot"></span>
+                    <span id="connection-text" style="font-weight:600; font-size:0.8rem;">CONNECTING</span>
+                    <span style="color:var(--text-dim); font-size:0.75rem;">HOST:</span>
+                    <strong id="header-hostname" style="color:var(--accent-cyan); font-family:var(--font-mono); font-size:0.8rem;">localhost</strong>
                 </div>
-
-                <!-- Right System Info & Disk Storage -->
-                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                    
-                    <div class="card">
-                        <div class="card-title">
-                            <span style="color: var(--accent-purple);">ℹ️</span> System Specification
-                        </div>
-
-                        <div class="sys-info-list">
-                            <div class="sys-info-item">
-                                <span class="sys-label">OS Distribution</span>
-                                <span class="sys-val" id="sys-os">Linux</span>
-                            </div>
-                            <div class="sys-info-item">
-                                <span class="sys-label">Kernel Version</span>
-                                <span class="sys-val" id="sys-kernel">0.0.0</span>
-                            </div>
-                            <div class="sys-info-item">
-                                <span class="sys-label">Architecture</span>
-                                <span class="sys-val" id="sys-arch">x86_64</span>
-                            </div>
-                            <div class="sys-info-item">
-                                <span class="sys-label">Processor</span>
-                                <span class="sys-val" id="sys-cores">--</span>
-                            </div>
-                            <div class="sys-info-item">
-                                <span class="sys-label">System Uptime</span>
-                                <span class="sys-val" id="sys-uptime" style="color: var(--accent-cyan);">--</span>
-                            </div>
-                            <div class="sys-info-item">
-                                <span class="sys-label">Load Average (1m, 5m, 15m)</span>
-                                <span class="sys-val" id="sys-load">0.0 0.0 0.0</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-title">
-                            <span style="color: var(--accent-amber);">💽</span> Storage Volumes
-                        </div>
-                        <div id="disk-mounts-list">
-                            <div style="color: var(--text-dim); font-size: 0.9rem;">Loading filesystem storage mounts...</div>
-                        </div>
-                    </div>
-
-                </div>
-
             </div>
 
-        </section>
+            <div class="header-right">
+                <!-- Alert Bell -->
+                <div class="alert-bell-container" id="alert-bell-container">
+                    <button class="alert-bell-btn" id="alert-bell-btn" title="Alerts">
+                        🔔
+                        <span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">
+                            <span id="alert-bell-count">0</span>
+                        </span>
+                    </button>
+                    <!-- Alert Dropdown -->
+                    <div class="alert-dropdown" id="alert-dropdown" style="display:none;">
+                        <div class="alert-dropdown-header">
+                            <span>Active Alerts</span>
+                            <button onclick="showSection('alerts')" class="btn-see-all">View All →</button>
+                        </div>
+                        <div id="alert-dropdown-content" class="alert-dropdown-content">
+                            <div class="alert-dropdown-empty">
+                                <div style="font-size:1.5rem;">✅</div>
+                                <div>All systems nominal</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        <!-- TAB 2: SYSTEMD SERVICES MANAGER -->
-        <section id="services-tab" class="tab-content">
-            <div class="card">
-                
-                <div class="table-toolbar">
-                    <div class="search-box">
+                <!-- User Menu -->
+                <div class="user-menu-container" id="user-menu-container">
+                    <button class="user-menu-btn" id="user-menu-btn">
+                        <div class="user-avatar-sm" id="user-avatar-sm">?</div>
+                        <div class="user-info-sm">
+                            <div class="user-name-sm" id="header-user-name">Loading...</div>
+                            <div class="user-role-sm" id="header-user-role">--</div>
+                        </div>
+                        <span style="color:var(--text-dim);">▾</span>
+                    </button>
+                    <div class="user-dropdown" id="user-dropdown" style="display:none;">
+                        <div class="user-dropdown-header" id="user-dropdown-header">
+                            <div class="user-avatar-lg" id="user-avatar-lg">?</div>
+                            <div>
+                                <div id="dropdown-user-name" style="font-weight:600;"></div>
+                                <div id="dropdown-user-email" style="font-size:0.8rem; color:var(--text-dim);"></div>
+                                <span class="role-badge" id="dropdown-user-role">viewer</span>
+                            </div>
+                        </div>
+                        <div class="user-dropdown-divider"></div>
+                        <button class="user-dropdown-item" onclick="showSection('settings')">⚙️ Settings</button>
+                        <button class="user-dropdown-item" id="theme-toggle-btn">☀️ Light Mode</button>
+                        <div class="user-dropdown-divider"></div>
+                        <button class="user-dropdown-item danger" onclick="PulseOpsAuth.logout()">🚪 Sign Out</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SECTIONS (one visible at a time)
+             ══════════════════════════════════════════════════════════════════ -->
+        <main class="content-area">
+
+            <!-- ── SECTION: Fleet Overview ───────────────────────────────── -->
+            <section id="section-fleet" class="app-section active">
+                <!-- Summary Stats Row -->
+                <div class="fleet-stats-row">
+                    <div class="fleet-stat-card">
+                        <div class="fleet-stat-value" id="fleet-stat-total">0</div>
+                        <div class="fleet-stat-label">Total Servers</div>
+                    </div>
+                    <div class="fleet-stat-card online">
+                        <div class="fleet-stat-value" id="fleet-stat-online">0</div>
+                        <div class="fleet-stat-label">● Online</div>
+                    </div>
+                    <div class="fleet-stat-card degraded">
+                        <div class="fleet-stat-value" id="fleet-stat-degraded">0</div>
+                        <div class="fleet-stat-label">⚠ Degraded</div>
+                    </div>
+                    <div class="fleet-stat-card offline">
+                        <div class="fleet-stat-value" id="fleet-stat-offline">0</div>
+                        <div class="fleet-stat-label">✗ Offline</div>
+                    </div>
+                </div>
+
+                <!-- Fleet Toolbar -->
+                <div class="fleet-toolbar">
+                    <div class="search-box" style="flex:1; max-width:400px;">
                         <span class="search-icon">🔍</span>
-                        <input type="text" id="service-search" class="search-input" placeholder="Search systemd services...">
+                        <input type="text" id="fleet-search-input" class="search-input" placeholder="Search servers by hostname, IP, tags...">
                     </div>
-
-                    <div class="btn-group">
-                        <button class="btn-filter active" data-filter="all">All Services (<span id="service-count-total">0</span>)</button>
-                        <button class="btn-filter" data-filter="active">Active (<span id="service-count-running">0</span>)</button>
-                        <button class="btn-filter" data-filter="failed">Failed (<span id="service-count-failed">0</span>)</button>
-                        <button class="btn-filter" data-filter="inactive">Inactive</button>
-                    </div>
-                </div>
-
-                <div class="data-table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Unit Name & Description</th>
-                                <th>Status</th>
-                                <th>Load</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="services-table-body">
-                            <tr>
-                                <td colspan="4" style="text-align: center; color: var(--text-dim); padding: 2rem;">
-                                    Loading systemd services...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- TAB 3: PROCESS EXPLORER -->
-        <section id="processes-tab" class="tab-content">
-            <div class="card">
-                
-                <div class="table-toolbar">
-                    <div class="search-box">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="proc-search" class="search-input" placeholder="Filter process by name, PID, or user...">
-                    </div>
-
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted);">Sort By:</span>
-                        <select id="proc-sort-select" class="search-input" style="padding-left: 0.8rem; width: 140px;">
-                            <option value="cpu">CPU %</option>
-                            <option value="mem">Memory %</option>
-                            <option value="pid">PID</option>
+                    <div id="fleet-tag-filters" class="fleet-tag-filters"></div>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-shrink:0;">
+                        <select id="fleet-sort-select" class="search-input" style="width:140px; padding-left:0.75rem;">
+                            <option value="status">Sort: Status</option>
+                            <option value="cpu">Sort: CPU</option>
+                            <option value="mem">Sort: Memory</option>
+                            <option value="name">Sort: Name</option>
                         </select>
-                        <span style="font-size: 0.85rem; color: var(--text-dim);">Total: <strong id="proc-count-total" style="color: var(--accent-cyan);">0</strong></span>
+                        <button class="btn-primary admin-only" id="fleet-add-server-btn">+ Add Server</button>
                     </div>
                 </div>
 
-                <div class="data-table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>PID</th>
-                                <th>User</th>
-                                <th>CPU %</th>
-                                <th>Mem % (RSS)</th>
-                                <th>Stat</th>
-                                <th>Command</th>
-                                <th>Terminate</th>
-                            </tr>
-                        </thead>
-                        <tbody id="processes-table-body">
-                            <tr>
-                                <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 2rem;">
-                                    Loading process list...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- TAB 4: LIVE LOG STREAM -->
-        <section id="logs-tab" class="tab-content">
-            <div class="card">
-                
-                <div class="table-toolbar">
-                    <div class="search-box">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="log-search-filter" class="search-input" placeholder="Filter live stream logs...">
-                    </div>
-
-                    <div style="display: flex; gap: 0.75rem; align-items: center;">
-                        <select id="log-level-filter" class="search-input" style="padding-left: 0.8rem; width: 130px;">
-                            <option value="ALL">ALL Levels</option>
-                            <option value="INFO">INFO</option>
-                            <option value="WARN">WARN</option>
-                            <option value="ERROR">ERROR</option>
-                            <option value="DEBUG">DEBUG</option>
-                        </select>
-                        <button id="log-autoscroll-toggle" class="btn-filter active">Auto-scroll: ON</button>
-                        <button id="log-clear-btn" class="btn-filter">Clear Logs</button>
+                <!-- Server Grid -->
+                <div class="fleet-grid" id="fleet-grid">
+                    <div class="fleet-loading">
+                        <div class="loading-spinner"></div>
+                        <span>Loading fleet servers...</span>
                     </div>
                 </div>
+            </section>
 
-                <div id="log-terminal-container" class="log-terminal">
-                    <div class="log-line">
-                        <span class="log-time">[SYSTEM INITIALIZED]</span>
-                        <span class="log-source">pulseops-daemon:</span>
-                        <span class="log-lvl INFO">INFO</span>
-                        <span class="log-msg">Live log streaming socket connected. Listening for journald & syslog events...</span>
-                    </div>
+            <!-- ── SECTION: Server Dashboard (per-server) ────────────────── -->
+            <section id="section-server-dashboard" class="app-section">
+                <!-- Server identity pill -->
+                <div class="server-identity-bar" id="server-identity-bar">
+                    <span class="pulse-dot" id="server-identity-dot"></span>
+                    <strong id="server-identity-hostname">--</strong>
+                    <span style="color:var(--text-dim);">|</span>
+                    <span id="server-identity-ip" style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">--</span>
+                    <button class="btn-back-fleet" onclick="showSection('fleet')">← Back to Fleet</button>
                 </div>
 
-            </div>
-        </section>
+                <!-- Server sub-tabs -->
+                <nav class="nav-tabs" aria-label="Server Dashboard">
+                    <button class="tab-btn active" data-tab="dashboard">📊 Overview</button>
+                    <button class="tab-btn" data-tab="services">⚙️ Services</button>
+                    <button class="tab-btn" data-tab="processes">⚡ Processes</button>
+                    <button class="tab-btn" data-tab="logs">📜 Live Logs</button>
+                    <button class="tab-btn operator-only" data-tab="terminal">💻 Terminal</button>
+                    <button class="tab-btn" data-tab="vnc">🖥️ VNC</button>
+                </nav>
 
-        <!-- TAB 5: WEB TERMINAL -->
-        <section id="terminal-tab" class="tab-content">
-            <div class="terminal-window">
-                
-                <div class="terminal-header">
-                    <div class="term-dots">
-                        <span class="term-dot dot-red"></span>
-                        <span class="term-dot dot-yellow"></span>
-                        <span class="term-dot dot-green"></span>
-                    </div>
-                    <div class="term-title">bash — pulseops@linux</div>
-                    <div style="font-size: 0.75rem; color: var(--text-dim);">Bash Terminal Console</div>
-                </div>
-
-                <div id="terminal-body" class="terminal-body">
-                    <div class="term-output" style="color: var(--accent-cyan);">
-PulseOps Linux Terminal Shell v1.0.0
-Type Linux bash commands below or use quick action preset buttons.
-                    </div>
-                </div>
-
-                <div class="preset-bar">
-                    <span style="font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center;">Quick Presets:</span>
-                    <button class="btn-preset" data-cmd="uname -a">uname -a</button>
-                    <button class="btn-preset" data-cmd="free -h">free -h</button>
-                    <button class="btn-preset" data-cmd="df -h">df -h</button>
-                    <button class="btn-preset" data-cmd="uptime">uptime</button>
-                    <button class="btn-preset" data-cmd="sudo systemctl status">sudo systemctl status</button>
-                    <button class="btn-preset" data-cmd="sudo dmesg | tail -n 15">sudo dmesg</button>
-                    <button class="btn-preset" data-cmd="sudo netstat -tulpn">sudo netstat</button>
-                    <button class="btn-preset" data-cmd="clear">clear</button>
-                    <button id="btn-sudo-auth" class="btn-preset" style="border-color: rgba(234, 179, 8, 0.4); color: #facc15;" title="Configure Sudo Password">🔑 Sudo Auth</button>
-                </div>
-
-                <div style="padding: 0.75rem 1rem; background: #04070d; border-top: 1px solid var(--border-color);">
-                    <div class="term-input-line">
-                        <span id="term-prompt" class="term-prompt">pulseops@linux:~$</span>
-                        <input type="text" id="terminal-input" class="term-input" placeholder="Type a command (e.g. sudo apt update, uptime) and press Enter..." autocomplete="off" spellcheck="false">
-                    </div>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- TAB 6: VNC REMOTE DESKTOP -->
-        <section id="vnc-tab" class="tab-content">
-            <div class="card vnc-container-card">
-                
-                <!-- VNC Connection Bar & Controls Header -->
-                <div class="vnc-header-bar">
-                    <div class="vnc-conn-inputs">
-                        <div class="input-badge">
-                            <span class="sys-label">Host:</span>
-                            <input type="text" id="vnc-host-input" class="vnc-input" value="127.0.0.1">
-                        </div>
-                        <div class="input-badge">
-                            <span class="sys-label">Port:</span>
-                            <input type="number" id="vnc-port-input" class="vnc-input" value="5900" style="width: 75px;">
-                        </div>
-                        <div class="input-badge">
-                            <span class="sys-label">Password:</span>
-                            <input type="password" id="vnc-pass-input" class="vnc-input" placeholder="Optional" style="width: 100px;">
-                        </div>
-                        <button id="vnc-connect-btn" class="btn-preset primary">
-                            <span>🔌</span> Connect
-                        </button>
-                        <button id="vnc-disconnect-btn" class="btn-preset danger" style="display: none;">
-                            <span>⏹</span> Disconnect
-                        </button>
-                    </div>
-
-                    <div class="vnc-status-indicator">
-                        <span class="pulse-dot disconnected" id="vnc-dot"></span>
-                        <span id="vnc-status-text" style="font-weight: 600; font-size: 0.85rem;">DISCONNECTED</span>
-                    </div>
-                </div>
-
-                <!-- Quick Action Macros & Control Toolbar -->
-                <div class="vnc-toolbar">
-                    <div class="vnc-macro-group">
-                        <span class="vnc-toolbar-label">Quick Actions:</span>
-                        <button id="vnc-btn-cad" class="btn-vnc-tool" title="Send Ctrl+Alt+Delete">
-                            <span>⚡</span> Ctrl+Alt+Del
-                        </button>
-                        <button id="vnc-btn-alttab" class="btn-vnc-tool" title="Send Alt+Tab">
-                            <span>⇄</span> Alt+Tab
-                        </button>
-                        <button id="vnc-btn-super" class="btn-vnc-tool" title="Send Super/Meta Key">
-                            <span>❖</span> Super Key
-                        </button>
-                        <button id="vnc-btn-esc" class="btn-vnc-tool" title="Send Escape Key">
-                            <span>⎋</span> Esc
-                        </button>
-                    </div>
-
-                    <div class="vnc-macro-group">
-                        <span class="vnc-toolbar-label">Display & Scaling:</span>
-                        <select id="vnc-scale-select" class="vnc-select">
-                            <option value="fit">Fit Screen (Scaled)</option>
-                            <option value="1:1">Original Size (1:1)</option>
-                            <option value="stretch">Stretch Window</option>
-                        </select>
-                        <button id="vnc-fullscreen-btn" class="btn-vnc-tool" title="Full Screen Canvas">
-                            <span>⛶</span> Fullscreen
-                        </button>
-                        <button id="vnc-demo-toggle-btn" class="btn-vnc-tool highlight" title="Launch Interactive Desktop Simulator">
-                            <span>🖥️</span> Demo Desktop Mode
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Clipboard & Helper Bar -->
-                <div class="vnc-clip-bar">
-                    <div style="display: flex; gap: 0.5rem; flex: 1; align-items: center;">
-                        <span class="vnc-toolbar-label">Send Text / Clipboard:</span>
-                        <input type="text" id="vnc-clip-input" class="vnc-clip-input" placeholder="Type text to send directly into remote session desktop keyboard buffer...">
-                        <button id="vnc-clip-send-btn" class="btn-vnc-tool"><span>📋</span> Send Text</button>
-                    </div>
-                    <div id="vnc-res-badge" class="vnc-res-badge">Res: 1280x800</div>
-                </div>
-
-                <!-- Canvas Viewport -->
-                <div id="vnc-viewport-container" class="vnc-viewport">
-                    <canvas id="vnc-canvas" width="1280" height="800"></canvas>
-
-                    <!-- Disconnected Overlay Prompt -->
-                    <div id="vnc-overlay" class="vnc-overlay">
-                        <div class="vnc-overlay-card">
-                            <div class="vnc-icon-hero">🖥️</div>
-                            <h2>Remote System VNC Desktop</h2>
-                            <p id="vnc-overlay-desc">Connect to a remote or local Linux RFB/VNC Server (Port 5900/5901) or start Interactive Demo Mode to interact with the system graphics console.</p>
-                            <div style="display: flex; gap: 1rem; margin-top: 1.2rem; flex-wrap: wrap; justify-content: center;">
-                                <button id="vnc-overlay-connect-btn" class="btn-vnc-hero primary">
-                                    <span>🔌</span> Connect VNC Server
-                                </button>
-                                <button id="vnc-overlay-launch-btn" class="btn-vnc-hero secondary">
-                                    <span>⚙️</span> Detect & Start Local VNC Daemon
-                                </button>
-                                <button id="vnc-overlay-demo-btn" class="btn-vnc-hero accent">
-                                    <span>🚀</span> Launch Interactive Desktop Simulator
-                                </button>
+                <!-- TAB: Overview Dashboard -->
+                <section id="dashboard-tab" class="tab-content active">
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">CPU Utilization</span>
+                                <div class="metric-icon" style="color:var(--accent-cyan);">⚡</div>
                             </div>
-                            <div id="vnc-server-info" class="vnc-server-info-box">
-                                Checking host VNC daemon availability...
+                            <div class="metric-body">
+                                <div class="metric-value" id="metric-cpu-val">0.0%</div>
+                                <div class="metric-sub" id="sys-cores-sub">Overall Load</div>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="metric-cpu-bar" style="width:0%;"></div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Memory Usage</span>
+                                <div class="metric-icon" style="color:var(--accent-purple);">🧠</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="metric-mem-val">0.0%</div>
+                                <div class="metric-sub" id="metric-mem-sub">0.0 GB / 0.0 GB</div>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="metric-mem-bar" style="width:0%; background:linear-gradient(90deg,var(--accent-purple),var(--accent-blue));"></div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Disk Mount (Root)</span>
+                                <div class="metric-icon" style="color:var(--accent-amber);">💾</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="metric-disk-val">0.0%</div>
+                                <div class="metric-sub" id="metric-disk-sub">0 GB / 0 GB</div>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="metric-disk-bar" style="width:0%; background:linear-gradient(90deg,var(--accent-amber),#f97316);"></div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Network I/O</span>
+                                <div class="metric-icon" style="color:var(--accent-green);">🌐</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="metric-net-val">0.0 KB/s</div>
+                                <div class="metric-sub" id="metric-net-sub">↓ 0 KB/s  ↑ 0 KB/s</div>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" style="width:100%; background:linear-gradient(90deg,var(--accent-green),var(--accent-cyan));"></div>
                             </div>
                         </div>
                     </div>
+
+                    <div class="charts-layout">
+                        <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                            <div class="card">
+                                <div class="card-title"><span style="color:var(--accent-cyan);">📈</span> CPU Usage History</div>
+                                <div class="chart-container"><canvas id="cpu-chart"></canvas></div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title"><span style="color:var(--accent-purple);">🧠</span> Memory Usage History</div>
+                                <div class="chart-container"><canvas id="mem-chart"></canvas></div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title"><span style="color:var(--accent-green);">🌐</span> Network Bandwidth (RX / TX)</div>
+                                <div class="chart-container"><canvas id="net-chart"></canvas></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                            <div class="card">
+                                <div class="card-title"><span style="color:var(--accent-purple);">ℹ️</span> System Specification</div>
+                                <div class="sys-info-list">
+                                    <div class="sys-info-item"><span class="sys-label">OS Distribution</span><span class="sys-val" id="sys-os">Linux</span></div>
+                                    <div class="sys-info-item"><span class="sys-label">Kernel Version</span><span class="sys-val" id="sys-kernel">0.0.0</span></div>
+                                    <div class="sys-info-item"><span class="sys-label">Architecture</span><span class="sys-val" id="sys-arch">x86_64</span></div>
+                                    <div class="sys-info-item"><span class="sys-label">Processor</span><span class="sys-val" id="sys-cores">--</span></div>
+                                    <div class="sys-info-item"><span class="sys-label">System Uptime</span><span class="sys-val" id="sys-uptime" style="color:var(--accent-cyan);">--</span></div>
+                                    <div class="sys-info-item"><span class="sys-label">Load Average</span><span class="sys-val" id="sys-load">0.0 0.0 0.0</span></div>
+                                </div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title"><span style="color:var(--accent-amber);">💽</span> Storage Volumes</div>
+                                <div id="disk-mounts-list"><div style="color:var(--text-dim);font-size:0.9rem;">Loading...</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: Systemd Services -->
+                <section id="services-tab" class="tab-content">
+                    <div class="card">
+                        <div class="table-toolbar">
+                            <div class="search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="service-search" class="search-input" placeholder="Search systemd services...">
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn-filter active" data-filter="all">All (<span id="service-count-total">0</span>)</button>
+                                <button class="btn-filter" data-filter="active">Active (<span id="service-count-running">0</span>)</button>
+                                <button class="btn-filter" data-filter="failed">Failed (<span id="service-count-failed">0</span>)</button>
+                                <button class="btn-filter" data-filter="inactive">Inactive</button>
+                            </div>
+                        </div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead><tr><th>Unit Name &amp; Description</th><th>Status</th><th>Load</th><th>Actions</th></tr></thead>
+                                <tbody id="services-table-body"><tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:2rem;">Loading systemd services...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: Process Explorer -->
+                <section id="processes-tab" class="tab-content">
+                    <div class="card">
+                        <div class="table-toolbar">
+                            <div class="search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="proc-search" class="search-input" placeholder="Filter by name, PID, user...">
+                            </div>
+                            <div style="display:flex;align-items:center;gap:1rem;">
+                                <span style="font-size:0.85rem;color:var(--text-muted);">Sort By:</span>
+                                <select id="proc-sort-select" class="search-input" style="padding-left:0.8rem;width:140px;">
+                                    <option value="cpu">CPU %</option>
+                                    <option value="mem">Memory %</option>
+                                    <option value="pid">PID</option>
+                                </select>
+                                <span style="font-size:0.85rem;color:var(--text-dim);">Total: <strong id="proc-count-total" style="color:var(--accent-cyan);">0</strong></span>
+                            </div>
+                        </div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead><tr><th>PID</th><th>User</th><th>CPU %</th><th>Mem % (RSS)</th><th>Stat</th><th>Command</th><th>Terminate</th></tr></thead>
+                                <tbody id="processes-table-body"><tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:2rem;">Loading processes...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: Live Log Stream -->
+                <section id="logs-tab" class="tab-content">
+                    <div class="card">
+                        <div class="table-toolbar">
+                            <div class="search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="log-search-filter" class="search-input" placeholder="Filter live stream logs...">
+                            </div>
+                            <div style="display:flex;gap:0.75rem;align-items:center;">
+                                <select id="log-level-filter" class="search-input" style="padding-left:0.8rem;width:130px;">
+                                    <option value="ALL">ALL Levels</option>
+                                    <option value="INFO">INFO</option>
+                                    <option value="WARN">WARN</option>
+                                    <option value="ERROR">ERROR</option>
+                                    <option value="DEBUG">DEBUG</option>
+                                </select>
+                                <button id="log-autoscroll-toggle" class="btn-filter active">Auto-scroll: ON</button>
+                                <button id="log-clear-btn" class="btn-filter">Clear Logs</button>
+                            </div>
+                        </div>
+                        <div id="log-terminal-container" class="log-terminal">
+                            <div class="log-line">
+                                <span class="log-time">[SYSTEM]</span>
+                                <span class="log-source">pulseops:</span>
+                                <span class="log-lvl INFO">INFO</span>
+                                <span class="log-msg">Live log streaming connected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: Web Terminal -->
+                <section id="terminal-tab" class="tab-content">
+                    <div class="terminal-window">
+                        <div class="terminal-header">
+                            <div class="term-dots">
+                                <span class="term-dot dot-red"></span>
+                                <span class="term-dot dot-yellow"></span>
+                                <span class="term-dot dot-green"></span>
+                            </div>
+                            <div class="term-title">bash — pulseops@linux</div>
+                            <div style="font-size:0.75rem;color:var(--text-dim);">Bash Terminal Console</div>
+                        </div>
+                        <div id="terminal-body" class="terminal-body">
+                            <div class="term-output" style="color:var(--accent-cyan);">PulseOps Enterprise Terminal v2.0.0</div>
+                        </div>
+                        <div class="preset-bar">
+                            <span style="font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;">Quick Presets:</span>
+                            <button class="btn-preset" data-cmd="uname -a">uname -a</button>
+                            <button class="btn-preset" data-cmd="free -h">free -h</button>
+                            <button class="btn-preset" data-cmd="df -h">df -h</button>
+                            <button class="btn-preset" data-cmd="uptime">uptime</button>
+                            <button class="btn-preset" data-cmd="sudo systemctl status">systemctl status</button>
+                            <button class="btn-preset" data-cmd="sudo dmesg | tail -n 15">sudo dmesg</button>
+                            <button class="btn-preset" data-cmd="sudo netstat -tulpn">netstat</button>
+                            <button class="btn-preset" data-cmd="clear">clear</button>
+                            <button id="btn-sudo-auth" class="btn-preset" style="border-color:rgba(234,179,8,0.4);color:#facc15;">🔑 Sudo Auth</button>
+                        </div>
+                        <div style="padding:0.75rem 1rem;background:#04070d;border-top:1px solid var(--border-color);">
+                            <div class="term-input-line">
+                                <span id="term-prompt" class="term-prompt">pulseops@linux:~$</span>
+                                <input type="text" id="terminal-input" class="term-input" placeholder="Type a command and press Enter..." autocomplete="off" spellcheck="false">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: VNC Desktop -->
+                <section id="vnc-tab" class="tab-content">
+                    <div class="card vnc-container-card">
+                        <div class="vnc-header-bar">
+                            <div class="vnc-conn-inputs">
+                                <div class="input-badge"><span class="sys-label">Host:</span><input type="text" id="vnc-host-input" class="vnc-input" value="127.0.0.1"></div>
+                                <div class="input-badge"><span class="sys-label">Port:</span><input type="number" id="vnc-port-input" class="vnc-input" value="5900" style="width:75px;"></div>
+                                <div class="input-badge"><span class="sys-label">Password:</span><input type="password" id="vnc-pass-input" class="vnc-input" placeholder="Optional" style="width:100px;"></div>
+                                <button id="vnc-connect-btn" class="btn-preset primary"><span>🔌</span> Connect</button>
+                                <button id="vnc-disconnect-btn" class="btn-preset danger" style="display:none;"><span>⏹</span> Disconnect</button>
+                            </div>
+                            <div class="vnc-status-indicator">
+                                <span class="pulse-dot disconnected" id="vnc-dot"></span>
+                                <span id="vnc-status-text" style="font-weight:600;font-size:0.85rem;">DISCONNECTED</span>
+                            </div>
+                        </div>
+                        <div class="vnc-toolbar">
+                            <div class="vnc-macro-group">
+                                <span class="vnc-toolbar-label">Quick Actions:</span>
+                                <button id="vnc-btn-cad" class="btn-vnc-tool">⚡ Ctrl+Alt+Del</button>
+                                <button id="vnc-btn-alttab" class="btn-vnc-tool">⇄ Alt+Tab</button>
+                                <button id="vnc-btn-super" class="btn-vnc-tool">❖ Super Key</button>
+                                <button id="vnc-btn-esc" class="btn-vnc-tool">⎋ Esc</button>
+                            </div>
+                            <div class="vnc-macro-group">
+                                <span class="vnc-toolbar-label">Display:</span>
+                                <select id="vnc-scale-select" class="vnc-select">
+                                    <option value="fit">Fit Screen</option>
+                                    <option value="1:1">Original (1:1)</option>
+                                    <option value="stretch">Stretch</option>
+                                </select>
+                                <button id="vnc-fullscreen-btn" class="btn-vnc-tool">⛶ Fullscreen</button>
+                                <button id="vnc-demo-toggle-btn" class="btn-vnc-tool highlight">🖥️ Demo Mode</button>
+                            </div>
+                        </div>
+                        <div class="vnc-clip-bar">
+                            <div style="display:flex;gap:0.5rem;flex:1;align-items:center;">
+                                <span class="vnc-toolbar-label">Send Text:</span>
+                                <input type="text" id="vnc-clip-input" class="vnc-clip-input" placeholder="Type text to send to remote desktop...">
+                                <button id="vnc-clip-send-btn" class="btn-vnc-tool">📋 Send</button>
+                            </div>
+                            <div id="vnc-res-badge" class="vnc-res-badge">1280×800</div>
+                        </div>
+                        <div id="vnc-viewport-container" class="vnc-viewport">
+                            <canvas id="vnc-canvas" width="1280" height="800"></canvas>
+                            <div id="vnc-overlay" class="vnc-overlay">
+                                <div class="vnc-overlay-card">
+                                    <div class="vnc-icon-hero">🖥️</div>
+                                    <h2>Remote System VNC Desktop</h2>
+                                    <p id="vnc-overlay-desc">Connect to a remote RFB/VNC server or launch the interactive demo.</p>
+                                    <div style="display:flex;gap:1rem;margin-top:1.2rem;flex-wrap:wrap;justify-content:center;">
+                                        <button id="vnc-overlay-connect-btn" class="btn-vnc-hero primary">🔌 Connect VNC</button>
+                                        <button id="vnc-overlay-launch-btn" class="btn-vnc-hero secondary">⚙️ Detect Local VNC</button>
+                                        <button id="vnc-overlay-demo-btn" class="btn-vnc-hero accent">🚀 Demo Desktop</button>
+                                    </div>
+                                    <div id="vnc-server-info" class="vnc-server-info-box">Checking VNC availability...</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="vnc-log-footer">
+                            <div class="vnc-log-title">
+                                <span>📟 VNC Engine Log:</span>
+                                <span id="vnc-fps-indicator" style="color:var(--accent-cyan);">FPS: 0</span>
+                            </div>
+                            <div id="vnc-console-output" class="vnc-console-output">[System] PulseOps VNC Client ready.</div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ── SECTION: User Management ──────────────────────────────── -->
+            <section id="section-users" class="app-section admin-only">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">👥 User Management</h2>
+                        <p class="section-desc">Manage user accounts, roles, and access permissions.</p>
+                    </div>
+                    <div style="display:flex; gap:1rem; align-items:center;">
+                        <div class="search-box" style="width:250px;">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="user-search-input" class="search-input" placeholder="Search users...">
+                        </div>
+                        <select id="user-role-filter" class="search-input" style="width:130px; padding-left:0.75rem;">
+                            <option value="">All Roles</option>
+                            <option value="admin">Admin</option>
+                            <option value="operator">Operator</option>
+                            <option value="viewer">Viewer</option>
+                        </select>
+                        <button class="btn-primary" id="create-user-btn">+ Create User</button>
+                    </div>
                 </div>
 
-                <!-- VNC Console Diagnostic Logs Footer -->
-                <div class="vnc-log-footer">
-                    <div class="vnc-log-title">
-                        <span>📟 VNC Engine Log:</span>
-                        <span id="vnc-fps-indicator" style="color: var(--accent-cyan);">FPS: 0</span>
+                <!-- Stats row -->
+                <div class="user-stats-row">
+                    <div class="fleet-stat-card"><div class="fleet-stat-value" id="user-count-total">0</div><div class="fleet-stat-label">Total Users</div></div>
+                    <div class="fleet-stat-card"><div class="fleet-stat-value" id="user-count-admins">0</div><div class="fleet-stat-label">Admins</div></div>
+                    <div class="fleet-stat-card online"><div class="fleet-stat-value" id="user-count-active">0</div><div class="fleet-stat-label">Active</div></div>
+                </div>
+
+                <div class="card">
+                    <div class="data-table-wrapper">
+                        <table class="data-table">
+                            <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+                            <tbody id="users-table-body"><tr><td colspan="5" class="empty-table-cell">Loading users...</td></tr></tbody>
+                        </table>
                     </div>
-                    <div id="vnc-console-output" class="vnc-console-output">
-                        [System] PulseOps VNC Client ready.
+                </div>
+            </section>
+
+            <!-- ── SECTION: Alerts & Rules ────────────────────────────────── -->
+            <section id="section-alerts" class="app-section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">🔔 Alerts &amp; Rules</h2>
+                        <p class="section-desc">Monitor alert thresholds and notification rules across your fleet.</p>
+                    </div>
+                    <div style="display:flex; gap:1rem; align-items:center;">
+                        <div class="fleet-stat-card" style="min-width:120px;">
+                            <div class="fleet-stat-value" id="active-alerts-count">0</div>
+                            <div class="fleet-stat-label">Active Alerts</div>
+                        </div>
+                        <div class="fleet-stat-card" style="min-width:120px;">
+                            <div class="fleet-stat-value" id="alert-rules-count">0</div>
+                            <div class="fleet-stat-label">Rules Defined</div>
+                        </div>
+                        <button class="btn-primary admin-only" id="create-rule-btn">+ New Alert Rule</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">📋 Alert Rules</div>
+                    <div class="data-table-wrapper">
+                        <table class="data-table">
+                            <thead><tr><th>Rule Name</th><th>Metric</th><th>Condition</th><th>Severity</th><th>Scope</th><th>Actions</th></tr></thead>
+                            <tbody id="alert-rules-tbody"><tr><td colspan="6" class="empty-table-cell">Loading rules...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── SECTION: Audit Log ─────────────────────────────────────── -->
+            <section id="section-audit" class="app-section admin-only">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">📋 Audit Log</h2>
+                        <p class="section-desc">Complete trail of all administrative and operational actions.</p>
+                    </div>
+                    <button class="btn-secondary" id="audit-export-btn">⬇️ Export CSV</button>
+                </div>
+
+                <!-- Filters -->
+                <div class="card" style="padding:1rem 1.5rem;">
+                    <div class="audit-filters">
+                        <input type="text" id="audit-filter-user" class="search-input audit-filter-input" placeholder="Filter by user...">
+                        <input type="text" id="audit-filter-action" class="search-input audit-filter-input" placeholder="Filter by action...">
+                        <select id="audit-filter-resource" class="search-input">
+                            <option value="">All Resources</option>
+                            <option value="user">Users</option>
+                            <option value="server">Servers</option>
+                            <option value="service">Services</option>
+                            <option value="process">Processes</option>
+                            <option value="terminal">Terminal</option>
+                        </select>
+                        <select id="audit-filter-result" class="search-input">
+                            <option value="">All Results</option>
+                            <option value="success">Success</option>
+                            <option value="failure">Failure</option>
+                        </select>
+                        <input type="date" id="audit-filter-from" class="search-input">
+                        <input type="date" id="audit-filter-to" class="search-input">
+                        <button class="btn-primary" id="audit-filter-apply-btn">Apply</button>
+                        <button class="btn-secondary" id="audit-filter-clear-btn">Clear</button>
                     </div>
                 </div>
 
-            </div>
-        </section>
+                <div class="card">
+                    <div class="card-title">
+                        Audit Entries
+                        <span style="color:var(--text-dim);font-size:0.8rem;font-weight:400;">(<span id="audit-total-count">0</span> total)</span>
+                    </div>
+                    <div class="data-table-wrapper">
+                        <table class="data-table">
+                            <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Resource Type</th><th>Resource ID</th><th>Details</th><th>Result</th></tr></thead>
+                            <tbody id="audit-table-body"><tr><td colspan="7" class="empty-table-cell">Loading audit log...</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div id="audit-pagination" class="pagination"></div>
+                </div>
+            </section>
 
-    </main>
+            <!-- ── SECTION: Settings ──────────────────────────────────────── -->
+            <section id="section-settings" class="app-section admin-only">
+                <div class="section-header">
+                    <h2 class="section-title">⚙️ System Settings</h2>
+                </div>
 
-    <!-- Modal for Service Journal Logs -->
-    <div id="log-modal" class="modal-overlay" role="dialog" aria-modal="true">
-        <div class="modal-card">
+                <div class="settings-grid">
+                    <!-- General Settings -->
+                    <div class="card" id="settings-general-section">
+                        <div class="card-title">🏠 General</div>
+                        <div class="settings-form">
+                            <div class="setting-row">
+                                <label class="setting-label">Application Name</label>
+                                <input type="text" id="setting-app-name" class="form-input" data-setting-key="app_name" placeholder="PulseOps Enterprise">
+                            </div>
+                            <div class="setting-row">
+                                <label class="setting-label">Session Timeout (hours)</label>
+                                <input type="number" id="setting-session-timeout" class="form-input" data-setting-key="session_timeout_hours" min="1" max="720">
+                            </div>
+                            <div class="setting-row">
+                                <label class="setting-label">Master Server URL</label>
+                                <input type="text" id="setting-master-url" class="form-input" data-setting-key="master_url" placeholder="http://192.168.1.100:3500">
+                            </div>
+                        </div>
+                        <div class="setting-actions">
+                            <button class="btn-primary" data-save-section="settings-general-section">Save General</button>
+                        </div>
+                    </div>
+
+                    <!-- Fleet & Polling -->
+                    <div class="card" id="settings-fleet-section">
+                        <div class="card-title">🖥️ Fleet & Polling</div>
+                        <div class="settings-form">
+                            <div class="setting-row">
+                                <label class="setting-label">Agent Poll Interval (seconds)</label>
+                                <input type="number" id="setting-agent-poll" class="form-input" data-setting-key="agent_poll_interval" min="10" max="300">
+                            </div>
+                            <div class="setting-row">
+                                <label class="setting-label">Snapshot Retention (hours)</label>
+                                <input type="number" id="setting-snapshot-retention" class="form-input" data-setting-key="snapshot_retention_hours" min="1" max="720">
+                            </div>
+                            <div class="setting-row">
+                                <label class="setting-label">CPU Alert Threshold (%)</label>
+                                <input type="number" id="setting-cpu-threshold" class="form-input" data-setting-key="global_cpu_alert_threshold" min="1" max="100">
+                            </div>
+                            <div class="setting-row">
+                                <label class="setting-label">RAM Alert Threshold (%)</label>
+                                <input type="number" id="setting-mem-threshold" class="form-input" data-setting-key="global_mem_alert_threshold" min="1" max="100">
+                            </div>
+                            <div class="setting-row">
+                                <label class="setting-label">Disk Alert Threshold (%)</label>
+                                <input type="number" id="setting-disk-threshold" class="form-input" data-setting-key="global_disk_alert_threshold" min="1" max="100">
+                            </div>
+                        </div>
+                        <div class="setting-actions">
+                            <button class="btn-primary" data-save-section="settings-fleet-section">Save Fleet Settings</button>
+                        </div>
+                    </div>
+
+                    <!-- SMTP / Email -->
+                    <div class="card" id="settings-smtp-section">
+                        <div class="card-title">📧 Email / SMTP Notifications</div>
+                        <div class="settings-form">
+                            <div class="setting-row"><label class="setting-label">SMTP Host</label><input type="text" id="setting-smtp-host" class="form-input" data-setting-key="smtp_host" placeholder="smtp.gmail.com"></div>
+                            <div class="setting-row"><label class="setting-label">SMTP Port</label><input type="number" id="setting-smtp-port" class="form-input" data-setting-key="smtp_port"></div>
+                            <div class="setting-row"><label class="setting-label">Username</label><input type="email" id="setting-smtp-username" class="form-input" data-setting-key="smtp_username"></div>
+                            <div class="setting-row"><label class="setting-label">Password</label><input type="password" id="setting-smtp-password" class="form-input" data-setting-key="smtp_password" placeholder="••••••••"></div>
+                            <div class="setting-row"><label class="setting-label">From Address</label><input type="text" id="setting-smtp-from" class="form-input" data-setting-key="smtp_from" placeholder="PulseOps &lt;noreply@...&gt;"></div>
+                        </div>
+                        <div class="setting-actions">
+                            <button class="btn-primary" data-save-section="settings-smtp-section">Save SMTP</button>
+                            <button class="btn-secondary" id="test-smtp-btn">📧 Test SMTP</button>
+                        </div>
+                        <div id="smtp-test-result" style="display:none; margin-top:0.75rem; padding:0.6rem 1rem; border-radius:8px; font-size:0.85rem;"></div>
+                    </div>
+
+                    <!-- Security -->
+                    <div class="card">
+                        <div class="card-title">🛡️ Security</div>
+                        <div class="settings-form">
+                            <div class="setting-row" style="align-items:center;">
+                                <label class="setting-label">Require 2FA for all users</label>
+                                <label class="toggle-switch"><input type="checkbox" id="setting-require-2fa" data-setting-key="require_2fa"><span class="toggle-slider"></span></label>
+                            </div>
+                        </div>
+                        <div class="card-title" style="margin-top:1.5rem; font-size:0.85rem; color:var(--text-muted);">Your 2FA</div>
+                        <div style="margin-top:0.5rem;">
+                            <span id="2fa-status-text" style="color:var(--text-dim); font-size:0.85rem;">Not configured</span>
+                            <button class="btn-secondary" id="setup-2fa-btn" style="margin-left:1rem;">🔐 Setup 2FA</button>
+                        </div>
+                        <div id="2fa-setup-panel" style="display:none; margin-top:1rem;">
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">Scan this QR code with your authenticator app:</p>
+                            <img id="2fa-qr-img" style="display:none; width:180px; height:180px; border-radius:8px; border:2px solid var(--border-color);" alt="2FA QR Code">
+                            <p style="font-size:0.75rem; color:var(--text-dim); margin:0.5rem 0;">Or enter secret manually: <code id="2fa-secret-display" style="color:var(--accent-cyan);"></code></p>
+                            <div class="setting-row" style="margin-top:1rem;">
+                                <input type="text" id="2fa-verify-code" class="form-input" placeholder="Enter 6-digit code to confirm" maxlength="6" style="letter-spacing:0.3em;">
+                                <button class="btn-primary" id="verify-2fa-btn">Verify &amp; Enable</button>
+                            </div>
+                            <div id="backup-codes-container" style="display:none; margin-top:1rem;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Backup & Restore -->
+                    <div class="card">
+                        <div class="card-title">💾 Backup &amp; Restore</div>
+                        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:1rem;">Download a full SQLite database backup of all PulseOps data.</p>
+                        <button class="btn-secondary" id="backup-db-btn">💾 Download Backup</button>
+
+                        <div class="card-title" style="margin-top:1.5rem; font-size:0.85rem; color:var(--text-muted);">Appearance</div>
+                        <div style="margin-top:0.75rem;">
+                            <button class="btn-secondary" id="theme-toggle-btn" style="width:100%;">☀️ Switch to Light Mode</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         MODALS
+         ═══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Add Server Modal -->
+    <div id="add-server-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:540px;">
             <div class="modal-header">
-                <h3 id="modal-service-title" style="font-size: 1.1rem; color: var(--accent-cyan); font-family: var(--font-mono);">Service Journalctl Logs</h3>
-                <button id="modal-close-btn" class="modal-close">&times;</button>
+                <h3>Add Server to Fleet</h3>
+                <button class="modal-close" data-close-modal="add-server-modal">×</button>
             </div>
-            <pre id="modal-log-content" style="background: #04070d; padding: 1rem; border-radius: 8px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-main); max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--border-color);"></pre>
+            <div class="modal-tabs">
+                <button class="modal-tab active" id="add-server-tab-manual">Manual Registration</button>
+                <button class="modal-tab" id="add-server-tab-agent">Agent Auto-Install</button>
+            </div>
+            <!-- Manual pane -->
+            <div id="add-server-manual-pane">
+                <form id="add-server-form" class="modal-form">
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Hostname *</label><input type="text" id="new-server-hostname" class="form-input" placeholder="prod-web-01" required></div>
+                        <div class="form-group"><label class="form-label">Host IP *</label><input type="text" id="new-server-ip" class="form-input" placeholder="192.168.1.100" required></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Display Name</label><input type="text" id="new-server-displayname" class="form-input" placeholder="Production Web Server"></div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Agent Port</label><input type="number" id="new-server-port" class="form-input" value="3500"></div>
+                        <div class="form-group"><label class="form-label">Tags (comma-separated)</label><input type="text" id="new-server-tags" class="form-input" placeholder="production, webserver"></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Notes</label><textarea id="new-server-notes" class="form-input" rows="2" placeholder="Optional notes about this server..."></textarea></div>
+                </form>
+                <div class="modal-footer">
+                    <button class="btn-secondary" data-close-modal="add-server-modal">Cancel</button>
+                    <button class="btn-primary" id="add-server-submit-btn">Add Server</button>
+                </div>
+            </div>
+            <!-- Agent pane -->
+            <div id="add-server-agent-pane" style="display:none;">
+                <div style="padding:1rem 0;">
+                    <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:1rem; line-height:1.6;">
+                        Generate a one-time install token, then run the command below on the target server.
+                        The agent will automatically register itself.
+                    </p>
+                    <button class="btn-primary" id="generate-token-btn" style="width:100%;">🔑 Generate Install Token</button>
+
+                    <div id="agent-token-display" style="display:none; margin-top:1.25rem;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+                            <span style="font-size:0.8rem; color:var(--text-muted);">Run this command on the target server:</span>
+                            <button class="btn-secondary" id="copy-curl-btn" style="padding:0.3rem 0.75rem; font-size:0.8rem;">📋 Copy</button>
+                        </div>
+                        <pre id="agent-curl-cmd" class="agent-curl-cmd"></pre>
+                        <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-dim);">
+                            Expires: <span id="agent-token-expires">--</span> •
+                            Time remaining: <span id="agent-token-countdown" style="color:var(--accent-amber);">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" data-close-modal="add-server-modal">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Toast Notifications Container -->
+    <!-- Edit Server Modal -->
+    <div id="edit-server-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-header">
+                <h3>Edit Server</h3>
+                <button class="modal-close" data-close-modal="edit-server-modal">×</button>
+            </div>
+            <input type="hidden" id="edit-server-id">
+            <div class="modal-form">
+                <div class="form-group"><label class="form-label">Display Name</label><input type="text" id="edit-server-displayname" class="form-input"></div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Agent Port</label><input type="number" id="edit-server-port" class="form-input"></div>
+                    <div class="form-group"><label class="form-label">Tags</label><input type="text" id="edit-server-tags" class="form-input" placeholder="production, webserver"></div>
+                </div>
+                <div class="form-group"><label class="form-label">Notes</label><textarea id="edit-server-notes" class="form-input" rows="2"></textarea></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="edit-server-modal">Cancel</button>
+                <button class="btn-primary" id="edit-server-save-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="create-user-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-header">
+                <h3>Create New User</h3>
+                <button class="modal-close" data-close-modal="create-user-modal">×</button>
+            </div>
+            <div class="modal-form">
+                <div class="form-group"><label class="form-label">Display Name *</label><input type="text" id="new-user-displayname" class="form-input" placeholder="John Smith" required></div>
+                <div class="form-group"><label class="form-label">Email Address *</label><input type="email" id="new-user-email" class="form-input" placeholder="john@company.com" required></div>
+                <div class="form-group"><label class="form-label">Role *</label>
+                    <select id="new-user-role" class="form-input">
+                        <option value="viewer">Viewer — Read-only access</option>
+                        <option value="operator">Operator — Service &amp; process control</option>
+                        <option value="admin">Admin — Full access</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password *</label>
+                    <input type="password" id="new-user-password" class="form-input" placeholder="Minimum 8 characters" required>
+                    <div class="password-strength-container">
+                        <div class="password-strength-bar-bg"><div id="password-strength-bar" class="password-strength-bar-fill" style="width:0%;"></div></div>
+                        <span id="password-strength-label" style="font-size:0.75rem;"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="create-user-modal">Cancel</button>
+                <button class="btn-primary" id="create-user-submit-btn">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="edit-user-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-header">
+                <h3>Edit User</h3>
+                <button class="modal-close" data-close-modal="edit-user-modal">×</button>
+            </div>
+            <input type="hidden" id="edit-user-id">
+            <div class="modal-form">
+                <div class="form-group"><label class="form-label">Display Name</label><input type="text" id="edit-user-displayname" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Email</label><input type="email" id="edit-user-email" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Role</label>
+                    <select id="edit-user-role" class="form-input">
+                        <option value="viewer">Viewer</option>
+                        <option value="operator">Operator</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label">New Password (leave blank to keep)</label><input type="password" id="edit-user-password" class="form-input" placeholder="Leave blank to keep current"></div>
+                <div class="form-group" style="display:flex; align-items:center; gap:1rem;">
+                    <label class="form-label" style="margin:0;">Account Active</label>
+                    <label class="toggle-switch"><input type="checkbox" id="edit-user-active"><span class="toggle-slider"></span></label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="edit-user-modal">Cancel</button>
+                <button class="btn-primary" id="edit-user-submit-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Alert Rule Modal -->
+    <div id="create-rule-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:480px;">
+            <div class="modal-header">
+                <h3>Create Alert Rule</h3>
+                <button class="modal-close" data-close-modal="create-rule-modal">×</button>
+            </div>
+            <div class="modal-form">
+                <div class="form-group"><label class="form-label">Rule Name *</label><input type="text" id="rule-name" class="form-input" placeholder="High CPU Alert"></div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Metric *</label>
+                        <select id="rule-metric" class="form-input">
+                            <option value="cpu_percent">CPU %</option>
+                            <option value="mem_percent">Memory %</option>
+                            <option value="disk_percent">Disk %</option>
+                            <option value="agent_offline">Agent Offline</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label class="form-label">Operator *</label>
+                        <select id="rule-operator" class="form-input">
+                            <option value="gt">Greater than (&gt;)</option>
+                            <option value="lt">Less than (&lt;)</option>
+                            <option value="eq">Equal to (=)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Threshold *</label><input type="number" id="rule-threshold" class="form-input" placeholder="85" min="0" max="100"></div>
+                    <div class="form-group"><label class="form-label">Severity</label>
+                        <select id="rule-severity" class="form-input">
+                            <option value="warning">Warning</option>
+                            <option value="critical">Critical</option>
+                            <option value="info">Info</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group"><label class="form-label">Server ID (blank = global rule)</label><input type="text" id="rule-server-id" class="form-input" placeholder="Leave blank for all servers"></div>
+                <div class="form-group" style="display:flex;gap:1.5rem;">
+                    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.85rem;"><input type="checkbox" id="rule-notify-email"> Email Alerts</label>
+                    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.85rem;"><input type="checkbox" id="rule-notify-webhook"> Webhook</label>
+                </div>
+                <div id="webhook-url-group" style="display:none;">
+                    <div class="form-group"><label class="form-label">Webhook URL</label><input type="url" id="rule-webhook-url" class="form-input" placeholder="https://hooks.slack.com/..."></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="create-rule-modal">Cancel</button>
+                <button class="btn-primary" id="create-rule-submit-btn">Create Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Journal Log Modal -->
+    <div id="log-modal" class="modal-overlay" role="dialog" aria-modal="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-service-title" style="color:var(--accent-cyan);font-family:var(--font-mono);">Service Journalctl Logs</h3>
+                <button id="modal-close-btn" class="modal-close">×</button>
+            </div>
+            <pre id="modal-log-content" style="background:#04070d;padding:1rem;border-radius:8px;font-family:var(--font-mono);font-size:0.8rem;color:var(--text-main);max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;border:1px solid var(--border-color);"></pre>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
-    <!-- Scripts -->
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SCRIPTS
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <script src="js/auth.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/services.js"></script>
     <script src="js/processes.js"></script>
     <script src="js/logs.js"></script>
     <script src="js/vnc.js"></script>
+    <script src="js/fleet.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/alerts.js"></script>
+    <script src="js/audit.js"></script>
+    <script src="js/settings.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
