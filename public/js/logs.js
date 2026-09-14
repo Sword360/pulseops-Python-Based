@@ -350,10 +350,15 @@ class WebTerminal {
     }
 
     setServer(serverId, hostname, hostIp) {
-        this.serverId = serverId || window.PulseOpsCurrentServer || 'local-master';
-        const isMaster = !this.serverId || this.serverId === 'local-master';
-        this.hostname = hostname || window.PulseOpsCurrentServerHostname || (isMaster ? 'mail.sword.local' : 'node');
-        if (hostIp) this.hostIp = hostIp;
+        const targetId = serverId || window.PulseOpsCurrentServer || 'local-master';
+        const isMaster = !targetId || targetId === 'local-master';
+        const targetHost = hostname || window.PulseOpsCurrentServerHostname || (isMaster ? 'mail.sword.local' : 'node');
+        const targetIp = hostIp || (isMaster ? '127.0.0.1' : (this.hostIp || ''));
+
+        const serverChanged = (this.serverId !== targetId || this.hostname !== targetHost);
+        this.serverId = targetId;
+        this.hostname = targetHost;
+        if (targetIp) this.hostIp = targetIp;
 
         const targetBadge = document.getElementById('term-target-badge');
         if (targetBadge) {
@@ -368,7 +373,37 @@ class WebTerminal {
             statusPill.innerHTML = `<span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%;"></span> READY`;
         }
 
-        this.resetInputMode();
+        if (serverChanged) {
+            this.cwd = '~';
+            this.resetInputMode(false);
+        } else {
+            this.updatePromptOnly();
+        }
+    }
+
+    updatePromptOnly() {
+        if (this.pendingSudoCmd) return;
+        const isOperator = window.PulseOpsAuth ? window.PulseOpsAuth.isOperator() : true;
+        if (!isOperator) {
+            if (this.prompt) {
+                this.prompt.style.color = 'var(--text-dim)';
+                this.prompt.textContent = `[viewer@${this.hostname}:ro]$`;
+            }
+            if (this.input && !this.input.disabled) {
+                this.input.disabled = true;
+                this.input.placeholder = 'Read-only mode: Viewers cannot execute commands in terminal';
+            }
+            return;
+        }
+
+        if (this.prompt) {
+            this.prompt.style.color = '';
+            this.prompt.textContent = this.getTerminalPrompt();
+        }
+        if (this.input && this.input.disabled) {
+            this.input.disabled = false;
+            this.input.placeholder = `Type a command on ${this.hostname} and press Enter...`;
+        }
     }
 
     onTabActivated() {
@@ -377,10 +412,12 @@ class WebTerminal {
         if (currentSId && (currentSId !== this.serverId || currentHName !== this.hostname)) {
             this.setServer(currentSId, currentHName);
         } else {
-            this.resetInputMode();
+            this.updatePromptOnly();
         }
-        if (this.input) {
-            setTimeout(() => this.input.focus(), 60);
+        if (this.input && document.activeElement !== this.input) {
+            setTimeout(() => {
+                if (this.input && document.activeElement !== this.input) this.input.focus();
+            }, 60);
         }
     }
 
@@ -407,7 +444,9 @@ class WebTerminal {
         return `root@${hostname}:${dir}#`;
     }
 
-    resetInputMode() {
+    resetInputMode(clearInput = false) {
+        if (this.pendingSudoCmd) return;
+
         const isOperator = window.PulseOpsAuth ? window.PulseOpsAuth.isOperator() : true;
         if (!isOperator) {
             if (this.prompt) {
@@ -416,7 +455,7 @@ class WebTerminal {
             }
             if (this.input) {
                 this.input.type = 'text';
-                this.input.value = '';
+                if (clearInput) this.input.value = '';
                 this.input.disabled = true;
                 this.input.placeholder = 'Read-only mode: Viewers cannot execute commands in terminal';
             }
@@ -430,7 +469,7 @@ class WebTerminal {
         if (this.input) {
             this.input.type = 'text';
             this.input.disabled = false;
-            this.input.value = '';
+            if (clearInput) this.input.value = '';
             this.input.placeholder = `Type a command on ${this.hostname} and press Enter...`;
         }
     }
@@ -509,7 +548,7 @@ class WebTerminal {
             // Update CWD if returned
             if (data.cwd) {
                 this.cwd = data.cwd;
-                this.resetInputMode();
+                this.updatePromptOnly();
             }
 
             if (data.need_update) {

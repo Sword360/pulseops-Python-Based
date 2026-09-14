@@ -297,7 +297,9 @@ class PulseOpsDashboard {
                     const hostBtn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
                     const hostIp = hostBtn ? hostBtn.dataset.ip : '';
                     const hostDisplay = window.PulseOpsCurrentServerHostname || (this.currentServerId === 'local-master' ? 'mail.sword.local' : 'Remote Node');
-                    window.webTerminal.setServer(this.currentServerId, hostDisplay, hostIp);
+                    if (window.webTerminal.serverId !== this.currentServerId) {
+                        window.webTerminal.setServer(this.currentServerId, hostDisplay, hostIp);
+                    }
                     if (typeof window.webTerminal.onTabActivated === 'function') {
                         window.webTerminal.onTabActivated();
                     }
@@ -416,7 +418,9 @@ class PulseOpsDashboard {
         if (hostCtrlLbl) hostCtrlLbl.textContent = `Target: ${displayHost}`;
 
         if (window.webTerminal && typeof window.webTerminal.setServer === 'function') {
-            window.webTerminal.setServer(this.currentServerId, displayHost, ip);
+            if (window.webTerminal.serverId !== this.currentServerId) {
+                window.webTerminal.setServer(this.currentServerId, displayHost, ip);
+            }
         }
 
         const noticeEl = document.getElementById('remote-node-tab-notice');
@@ -566,7 +570,10 @@ class PulseOpsDashboard {
         if (hostCtrlLbl) hostCtrlLbl.textContent = `Target: ${displayName}`;
 
         if (window.webTerminal && typeof window.webTerminal.setServer === 'function') {
-            window.webTerminal.setServer(srv.id || this.currentServerId, displayName, srv.host_ip);
+            const sid = srv.id || this.currentServerId;
+            if (window.webTerminal.serverId !== sid) {
+                window.webTerminal.setServer(sid, displayName, srv.host_ip);
+            }
         }
 
         const dotEl = document.getElementById('server-identity-dot');
