@@ -18,7 +18,19 @@ except ImportError:
     logging.warning("[DB] aiosqlite not installed — database features disabled. Run: pip install aiosqlite")
 
 DB_PATH = os.environ.get("DB_PATH", "./pulseops.db")
-_db_lock = asyncio.Lock()
+_db_lock: Optional[asyncio.Lock] = None
+
+def get_db_lock() -> asyncio.Lock:
+    """Return an asyncio.Lock bound to the current running event loop."""
+    global _db_lock
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if _db_lock is None or (hasattr(_db_lock, '_loop') and _db_lock._loop != loop):
+        _db_lock = asyncio.Lock()
+    return _db_lock
+
 _connection: Optional[Any] = None
 
 logger = logging.getLogger("pulseops.db")
@@ -261,7 +273,7 @@ async def get_db() -> Any:
     if not AIOSQLITE_AVAILABLE:
         raise RuntimeError("aiosqlite is not installed")
     if _connection is None:
-        async with _db_lock:
+        async with get_db_lock():
             if _connection is None:
                 _connection = await aiosqlite.connect(DB_PATH)
                 _connection.row_factory = aiosqlite.Row

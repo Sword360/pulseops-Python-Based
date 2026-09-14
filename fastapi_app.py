@@ -16,6 +16,9 @@ import os
 import json
 import random
 import asyncio
+import shutil
+import sqlite3
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -936,9 +939,90 @@ async def api_backup_db(current_user: Dict = Depends(require_admin)):
     db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
     if not os.path.exists(db_path):
         raise HTTPException(status_code=404, detail="Database file not found")
+    
+    # Checkpoint WAL first
+    try:
+        await database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception:
+        pass
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     filename = f"pulseops-backup-{today}.db"
     return FileResponse(db_path, media_type="application/octet-stream", filename=filename)
+
+
+@app.post("/api/admin/restore")
+async def api_restore_db(request: Request, current_user: Dict = Depends(require_admin)):
+    """Restore database from uploaded SQLite file."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Enterprise modules not available")
+    body_data = await request.body()
+    if not body_data or len(body_data) < 100:
+        raise HTTPException(status_code=400, detail="No database file provided or file is empty")
+    if not body_data.startswith(b"SQLite format 3\x00"):
+        raise HTTPException(status_code=400, detail="Invalid file format: Uploaded file is not a valid SQLite database.")
+
+    db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
+    temp_restore_path = db_path + f".restore_tmp_{int(time.time())}.db"
+    safety_backup_path = db_path + f".pre_restore_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.bak"
+
+    try:
+        with open(temp_restore_path, 'wb') as f:
+            f.write(body_data)
+
+        chk_conn = sqlite3.connect(temp_restore_path)
+        try:
+            chk_cursor = chk_conn.cursor()
+            chk_cursor.execute("PRAGMA integrity_check;")
+            chk_row = chk_cursor.fetchone()
+            if not chk_row or str(chk_row[0]).lower() != "ok":
+                raise HTTPException(status_code=400, detail=f"SQLite integrity check failed: {chk_row}")
+
+            chk_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = {r[0] for r in chk_cursor.fetchall()}
+            if "users" not in tables or "settings" not in tables:
+                raise HTTPException(status_code=400, detail="Database schema invalid: Missing essential PulseOps tables (users, settings).")
+        finally:
+            chk_conn.close()
+
+        if os.path.exists(db_path):
+            try:
+                await database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            shutil.copy2(db_path, safety_backup_path)
+
+        async with database.get_db_lock():
+            await database.close_db()
+            for ext in ["-wal", "-shm"]:
+                wal_f = db_path + ext
+                if os.path.exists(wal_f):
+                    try:
+                        os.remove(wal_f)
+                    except Exception:
+                        pass
+            shutil.move(temp_restore_path, db_path)
+
+        # Re-initialize DB
+        await database.init_db()
+
+        await audit.log_action('database.restore', user_id=current_user['id'], user_email=current_user['email'],
+                               details={'bytes': len(body_data), 'safety_backup': os.path.basename(safety_backup_path)})
+        return {
+            "success": True,
+            "message": "Database restored and validated successfully.",
+            "safety_backup": os.path.basename(safety_backup_path)
+        }
+    except HTTPException:
+        raise
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=f"Restore failed: {str(ex)}")
+    finally:
+        if os.path.exists(temp_restore_path):
+            try:
+                os.remove(temp_restore_path)
+            except Exception:
+                pass
 
 
 # ─── Telemetry (local server snapshot) ───────────────────────────────────────

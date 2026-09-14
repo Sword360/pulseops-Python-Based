@@ -1474,7 +1474,11 @@
                         <div style="display:flex; flex-direction:column; gap:0.65rem;">
                             <button class="btn-secondary" id="btn-db-vacuum" style="width:100%; justify-content:center;">🧹 Optimize &amp; VACUUM Database</button>
                             <button class="btn-secondary" id="btn-db-purge" style="width:100%; justify-content:center;">🗑️ Purge Expired Metric History</button>
-                            <button class="btn-secondary" id="backup-db-btn" style="width:100%; justify-content:center;">💾 Download SQLite Backup</button>
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:0.5rem;">
+                                <button class="btn-secondary" id="backup-db-btn" style="width:100%; justify-content:center;">💾 Download Backup</button>
+                                <button class="btn-secondary" id="restore-db-btn" style="width:100%; justify-content:center;">📥 Restore Database</button>
+                            </div>
+                            <input type="file" id="db-restore-file-input" accept=".db,.sqlite,.sqlite3" style="display:none;" />
                             <button class="btn-danger-action" id="btn-reset-defaults" style="width:100%; justify-content:center; margin-top:0.5rem;">🔄 Reset Settings to Defaults</button>
                         </div>
 

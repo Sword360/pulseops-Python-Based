@@ -307,7 +307,62 @@ const SettingsManager = (() => {
         } catch {
             showToast('Backup download failed', 'error');
         } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '💾 Download SQLite Backup'; }
+            if (btn) { btn.disabled = false; btn.textContent = '💾 Download Backup'; }
+        }
+    }
+
+    function triggerRestore() {
+        const confirmMsg = "⚠️ RESTORE DATABASE WARNING:\n\nRestoring an external database backup will replace all current users, fleet servers, telemetry history, and settings.\n\nAn automated safety backup of your existing database will be created before restoring.\n\nDo you want to proceed and select a .db backup file to restore?";
+        if (!confirm(confirmMsg)) return;
+
+        const fileInput = document.getElementById('db-restore-file-input');
+        if (fileInput) {
+            fileInput.value = '';
+            fileInput.click();
+        }
+    }
+
+    async function handleRestoreFile(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const btn = document.getElementById('restore-db-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Restoring DB...'; }
+
+        showToast('Uploading and verifying database backup...', 'info', 4000);
+
+        try {
+            const token = PulseOpsAuth.getAccessToken();
+            const resp = await fetch('/api/admin/restore', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/octet-stream'
+                },
+                body: file
+            });
+
+            let data = {};
+            try {
+                data = await resp.json();
+            } catch {}
+
+            if (!resp.ok) {
+                showToast(data.detail || 'Database restore failed', 'error', 6000);
+                return;
+            }
+
+            const safetyBakMsg = data.safety_backup ? ` (Backup: ${data.safety_backup})` : '';
+            showToast('✅ Database restored successfully! Reloading in 2s...' + safetyBakMsg, 'success', 5000);
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } catch (err) {
+            showToast('Restore network error: ' + (err.message || 'Unknown failure'), 'error', 6000);
+        } finally {
+            event.target.value = '';
+            if (btn) { btn.disabled = false; btn.textContent = '📥 Restore Database'; }
         }
     }
 
@@ -434,6 +489,12 @@ const SettingsManager = (() => {
 
         const backupBtn = document.getElementById('backup-db-btn');
         if (backupBtn) backupBtn.addEventListener('click', downloadBackup);
+
+        const restoreBtn = document.getElementById('restore-db-btn');
+        if (restoreBtn) restoreBtn.addEventListener('click', triggerRestore);
+
+        const restoreInput = document.getElementById('db-restore-file-input');
+        if (restoreInput) restoreInput.addEventListener('change', handleRestoreFile);
 
         const refreshSettingsBtn = document.getElementById('btn-refresh-settings');
         if (refreshSettingsBtn) refreshSettingsBtn.addEventListener('click', () => {

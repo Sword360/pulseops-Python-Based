@@ -8,6 +8,9 @@ import random
 import mimetypes
 import urllib.parse
 import urllib.request
+import shutil
+import sqlite3
+import time
 from datetime import datetime, timezone
 from typing import Set, Dict, Any, Optional, List
 import subprocess
@@ -1642,8 +1645,26 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
                 if not os.path.exists(db_path):
                     return await send_json_response(writer, {'detail': 'Database file not found'}, 404)
-                with open(db_path, 'rb') as f:
-                    db_bytes = f.read()
+                
+                temp_backup = os.path.join(os.path.dirname(db_path), f"pulseops.backup_export_{int(time.time())}.db")
+                try:
+                    await database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    conn = sqlite3.connect(db_path)
+                    conn.execute(f'VACUUM INTO "{temp_backup}"')
+                    conn.close()
+                    with open(temp_backup, 'rb') as f:
+                        db_bytes = f.read()
+                except Exception as b_err:
+                    print(f"[Backup] VACUUM INTO error, fallback to direct read: {b_err}")
+                    with open(db_path, 'rb') as f:
+                        db_bytes = f.read()
+                finally:
+                    if os.path.exists(temp_backup):
+                        try:
+                            os.remove(temp_backup)
+                        except Exception:
+                            pass
+
                 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 filename = f"pulseops-backup-{today}.db"
                 res_hdr = (
@@ -1656,6 +1677,82 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 await writer.drain()
                 writer.close()
                 return
+
+            if path == '/api/admin/restore' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                if not body_data or len(body_data) < 100:
+                    return await send_json_response(writer, {'detail': 'No database file provided or file is empty'}, 400)
+
+                # Verify SQLite magic header
+                if not body_data.startswith(b"SQLite format 3\x00"):
+                    return await send_json_response(writer, {'detail': 'Invalid file format: Uploaded file is not a valid SQLite database.'}, 400)
+
+                db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
+                temp_restore_path = db_path + f".restore_tmp_{int(time.time())}.db"
+                safety_backup_path = db_path + f".pre_restore_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.bak"
+
+                try:
+                    # Write candidate file
+                    with open(temp_restore_path, 'wb') as f:
+                        f.write(body_data)
+
+                    # Verify integrity with sqlite3
+                    chk_conn = sqlite3.connect(temp_restore_path)
+                    try:
+                        chk_cursor = chk_conn.cursor()
+                        chk_cursor.execute("PRAGMA integrity_check;")
+                        chk_row = chk_cursor.fetchone()
+                        if not chk_row or str(chk_row[0]).lower() != "ok":
+                            return await send_json_response(writer, {'detail': f'SQLite integrity check failed: {chk_row}'}, 400)
+
+                        chk_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                        tables = {r[0] for r in chk_cursor.fetchall()}
+                        if "users" not in tables or "settings" not in tables:
+                            return await send_json_response(writer, {'detail': 'Database schema invalid: Missing essential PulseOps tables (users, settings).'}, 400)
+                    finally:
+                        chk_conn.close()
+
+                    # Create pre-restore safety backup of existing database
+                    if os.path.exists(db_path):
+                        try:
+                            await database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        except Exception:
+                            pass
+                        shutil.copy2(db_path, safety_backup_path)
+
+                    # Swap database under connection lock
+                    async with database.get_db_lock():
+                        await database.close_db()
+                        for ext in ["-wal", "-shm"]:
+                            wal_f = db_path + ext
+                            if os.path.exists(wal_f):
+                                try:
+                                    os.remove(wal_f)
+                                except Exception:
+                                    pass
+                        shutil.move(temp_restore_path, db_path)
+
+                    # Re-initialize DB (acquires lock cleanly on new connection)
+                    await database.init_db()
+
+                    await audit.log_action('database.restore', user_id=user['id'], user_email=user['email'],
+                                           details={'bytes': len(body_data), 'safety_backup': os.path.basename(safety_backup_path)})
+                    return await send_json_response(writer, {
+                        'success': True,
+                        'message': 'Database restored and validated successfully.',
+                        'safety_backup': os.path.basename(safety_backup_path)
+                    })
+                except Exception as ex:
+                    return await send_json_response(writer, {'detail': f'Restore failed: {str(ex)}'}, 500)
+                finally:
+                    if os.path.exists(temp_restore_path):
+                        try:
+                            os.remove(temp_restore_path)
+                        except Exception:
+                            pass
+
 
             # Agent script download
             if path == '/api/fleet/agent-download' and method == 'GET':
