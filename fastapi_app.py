@@ -34,6 +34,7 @@ import terminal
 import vnc
 import docker_manager
 import ports_manager
+import firewall_manager
 import commands_manager
 import maintenance_manager
 
@@ -1190,6 +1191,111 @@ async def api_network_ports(
         data, code = await proxy_to_agent(target, "/api/network/ports", "GET")
         return JSONResponse(status_code=code, content=data)
     return await ports_manager.get_listening_ports()
+
+
+# ─── Firewall Rules & Security Endpoints ────────────────────────────────────
+
+@app.get("/api/firewall/status")
+@app.get("/api/firewall/rules")
+async def api_firewall_status(
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/firewall/status", "GET")
+        return JSONResponse(status_code=code, content=data)
+    return await firewall_manager.get_firewall_status()
+
+
+@app.post("/api/firewall/rules")
+@app.post("/api/firewall/rules/add")
+async def api_firewall_add_rule(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(require_operator),
+):
+    target = payload.get("server_id") or payload.get("serverId") or server_id or serverId
+    if target and target != "local-master":
+        res, code = await proxy_to_agent(target, "/api/firewall/rules/add", "POST", json_body=payload)
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                "firewall.add_rule", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="firewall", resource_id=str(payload.get("port", "")), ip_address=get_client_ip(request),
+                details={"server_id": target, "rule": payload},
+                result="success" if (isinstance(res, dict) and res.get("success")) else "failure"
+            )
+        return JSONResponse(status_code=code, content=res)
+
+    res = await firewall_manager.add_firewall_rule(payload)
+    if ENTERPRISE_AVAILABLE:
+        await audit.log_action(
+            "firewall.add_rule", user_id=current_user["id"], user_email=current_user["email"],
+            resource_type="firewall", resource_id=str(payload.get("port", "")), ip_address=get_client_ip(request),
+            details={"server_id": "local-master", "rule": payload},
+            result="success" if res.get("success") else "failure"
+        )
+    return JSONResponse(status_code=200 if res.get("success") else 400, content=res)
+
+
+@app.post("/api/firewall/rules/delete")
+@app.delete("/api/firewall/rules")
+async def api_firewall_delete_rule(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(require_operator),
+):
+    target = payload.get("server_id") or payload.get("serverId") or server_id or serverId
+    if target and target != "local-master":
+        res, code = await proxy_to_agent(target, "/api/firewall/rules/delete", "POST", json_body=payload)
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                "firewall.delete_rule", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="firewall", resource_id=str(payload.get("id", "")), ip_address=get_client_ip(request),
+                details={"server_id": target, "rule": payload},
+                result="success" if (isinstance(res, dict) and res.get("success")) else "failure"
+            )
+        return JSONResponse(status_code=code, content=res)
+
+    res = await firewall_manager.delete_firewall_rule(payload)
+    if ENTERPRISE_AVAILABLE:
+        await audit.log_action(
+            "firewall.delete_rule", user_id=current_user["id"], user_email=current_user["email"],
+            resource_type="firewall", resource_id=str(payload.get("id", "")), ip_address=get_client_ip(request),
+            details={"server_id": "local-master", "rule": payload},
+            result="success" if res.get("success") else "failure"
+        )
+    return JSONResponse(status_code=200 if res.get("success") else 400, content=res)
+
+
+@app.post("/api/firewall/reload")
+async def api_firewall_reload(
+    request: Request,
+    payload: Optional[Dict[str, Any]] = Body(default={}),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(require_operator),
+):
+    body = payload or {}
+    target = body.get("server_id") or body.get("serverId") or server_id or serverId
+    if target and target != "local-master":
+        res, code = await proxy_to_agent(target, "/api/firewall/reload", "POST", json_body=body)
+        return JSONResponse(status_code=code, content=res)
+
+    res = await firewall_manager.reload_firewall()
+    if ENTERPRISE_AVAILABLE:
+        await audit.log_action(
+            "firewall.reload", user_id=current_user["id"], user_email=current_user["email"],
+            resource_type="firewall", resource_id="reload", ip_address=get_client_ip(request),
+            details={"server_id": "local-master"},
+            result="success" if res.get("success") else "failure"
+        )
+    return JSONResponse(status_code=200 if res.get("success") else 400, content=res)
 
 
 # ─── Saved Commands & Runbooks Endpoints ────────────────────────────────────

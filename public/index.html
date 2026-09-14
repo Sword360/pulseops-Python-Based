@@ -217,6 +217,7 @@
                     <button class="tab-btn active" data-tab="dashboard">📊 Overview</button>
                     <button class="tab-btn" data-tab="docker">🐳 Containers</button>
                     <button class="tab-btn" data-tab="ports">🔌 Ports</button>
+                    <button class="tab-btn" data-tab="firewall">🛡️ Firewall</button>
                     <button class="tab-btn" data-tab="services">⚙️ Services</button>
                     <button class="tab-btn" data-tab="processes">⚡ Processes</button>
                     <button class="tab-btn" data-tab="logs">📜 Live Logs</button>
@@ -437,6 +438,63 @@
                                 </thead>
                                 <tbody id="ports-table-body">
                                     <tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:2.5rem;">Inspecting open sockets...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: Firewall & Security Rules -->
+                <section id="firewall-tab" class="tab-content">
+                    <div class="card">
+                        <!-- Header Status Summary Bar -->
+                        <div class="firewall-summary-bar" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; padding-bottom:1rem; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.07);">
+                            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                                <span id="firewall-status-badge" class="badge badge-success">ACTIVE</span>
+                                <span id="firewall-engine-badge" class="badge" style="background:rgba(99,102,241,0.15); color:#a5b4fc; font-weight:600;">Engine: FIREWALLD</span>
+                                <span id="firewall-zone-badge" class="badge" style="background:rgba(56,189,248,0.12); color:#38bdf8;">Zone: public</span>
+                                <span id="firewall-policy-badge" class="badge badge-warning">Default: DROP</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.75rem;">
+                                <button class="btn btn-sm btn-secondary operator-only" id="firewall-reload-engine-btn" title="Reload firewall ruleset from disk" style="padding:0.4rem 0.85rem; font-size:0.82rem;">🔄 Reload Ruleset</button>
+                                <button class="btn btn-sm btn-primary operator-only" id="firewall-add-rule-btn" style="padding:0.4rem 0.95rem; font-size:0.82rem;">+ Add Firewall Rule</button>
+                            </div>
+                        </div>
+
+                        <!-- Table Toolbar -->
+                        <div class="table-toolbar">
+                            <div class="search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="firewall-search" class="search-input" placeholder="Search rules by port, service, IP, action...">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                                <div class="btn-group">
+                                    <button class="btn-filter active" data-firewall-filter="all">All (<span id="firewall-count-total">0</span>)</button>
+                                    <button class="btn-filter" data-firewall-filter="allow">Allow (<span id="firewall-count-allow">0</span>)</button>
+                                    <button class="btn-filter" data-firewall-filter="deny">Deny / Reject (<span id="firewall-count-deny">0</span>)</button>
+                                    <button class="btn-filter" data-firewall-filter="port">Ports</button>
+                                    <button class="btn-filter" data-firewall-filter="service">Services</button>
+                                </div>
+                                <button class="btn btn-sm btn-secondary" id="firewall-refresh-btn" title="Rescan firewall" style="padding:0.35rem 0.75rem; font-size:0.8rem;">🔄 Rescan</button>
+                            </div>
+                        </div>
+
+                        <!-- Data Table -->
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:100px;">Action</th>
+                                        <th>Port / Service</th>
+                                        <th style="width:90px;">Proto</th>
+                                        <th>Source Address</th>
+                                        <th style="width:110px;">Type</th>
+                                        <th>Description</th>
+                                        <th style="text-align:right; width:130px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="firewall-table-body">
+                                    <tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:2.5rem;">Inspecting firewall configuration...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1190,6 +1248,77 @@
         </div>
     </div>
 
+    <!-- Add Firewall Rule Modal -->
+    <div id="add-firewall-rule-modal" class="modal-overlay" role="dialog" aria-modal="true" style="display:none;">
+        <div class="modal-card" style="max-width: 520px; width: 95%;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="color:var(--accent-cyan); font-family:var(--font-mono); font-size:1.1rem; margin:0;">🛡️ Add Firewall Rule</h3>
+                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:3px;">Open or restrict TCP/UDP ports and traffic sources</div>
+                </div>
+                <button class="modal-close" id="cancel-add-firewall-rule-btn">×</button>
+            </div>
+            <form id="add-firewall-rule-form" style="padding-top:1rem;">
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+                    <div>
+                        <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Port / Port Range *</label>
+                        <input type="text" id="firewall-new-port" class="search-input" placeholder="e.g. 8080, 3306, 8000-8080" required>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Protocol</label>
+                        <select id="firewall-new-proto" class="search-input">
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:0.75rem; margin-bottom:1rem;">
+                    <div>
+                        <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Action</label>
+                        <select id="firewall-new-action" class="search-input">
+                            <option value="ALLOW">ALLOW (Accept)</option>
+                            <option value="DENY">DENY (Drop)</option>
+                            <option value="REJECT">REJECT</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Source CIDR / IP</label>
+                        <input type="text" id="firewall-new-source" class="search-input" placeholder="0.0.0.0/0 (Anywhere) or 192.168.1.0/24" value="0.0.0.0/0">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Description / Purpose</label>
+                    <input type="text" id="firewall-new-desc" class="search-input" placeholder="e.g. Production Web Service, Staging DB">
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                    <button type="button" class="btn btn-secondary" onclick="window.firewallMgr && window.firewallMgr.closeAddModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submit-add-firewall-rule-btn">Add Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Firewall Rule Confirmation Modal -->
+    <div id="delete-firewall-rule-modal" class="modal-overlay" role="dialog" aria-modal="true" style="display:none;">
+        <div class="modal-card" style="max-width: 440px; width: 95%;">
+            <div class="modal-header">
+                <h3 style="color:var(--accent-red); font-size:1.1rem; margin:0;">Confirm Rule Removal</h3>
+                <button class="modal-close" id="cancel-delete-firewall-rule-btn">×</button>
+            </div>
+            <div style="padding:1rem 0; color:var(--text-dim); font-size:0.9rem; line-height:1.5;">
+                Are you sure you want to permanently delete this firewall rule?
+                <div id="delete-firewall-target-desc" style="margin-top:0.75rem; padding:0.6rem 0.85rem; background:rgba(0,0,0,0.4); border-left:3px solid var(--accent-red); border-radius:4px; font-family:var(--font-mono); color:var(--text-primary); font-size:0.85rem;"></div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:0.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="window.firewallMgr && window.firewallMgr.closeDeleteModal()">Cancel</button>
+                <button type="button" class="btn btn-danger-action" id="confirm-delete-firewall-rule-btn">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -1200,6 +1329,7 @@
     <script src="js/charts.js"></script>
     <script src="js/docker.js"></script>
     <script src="js/ports.js"></script>
+    <script src="js/firewall.js"></script>
     <script src="js/commands.js"></script>
     <script src="js/services.js"></script>
     <script src="js/processes.js"></script>

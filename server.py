@@ -19,6 +19,7 @@ import terminal
 import vnc
 import docker_manager
 import ports_manager
+import firewall_manager
 import commands_manager
 import maintenance_manager
 
@@ -578,6 +579,96 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 return await send_json_response(writer, res_data, status=code)
             res_data = await ports_manager.get_listening_ports()
             return await send_json_response(writer, res_data)
+
+        # ─── Firewall Rules & Security Endpoints ────────────────────
+        if path in ('/api/firewall/status', '/api/firewall/rules') and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/firewall/status', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await firewall_manager.get_firewall_status()
+            return await send_json_response(writer, res_data)
+
+        if path in ('/api/firewall/rules', '/api/firewall/rules/add') and method == 'POST':
+            client_ip = headers.get('x-forwarded-for', '127.0.0.1').split(',')[0].strip()
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/firewall/rules/add', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        'firewall.add_rule', user_id=user['id'], user_email=user['email'],
+                        resource_type='firewall', resource_id=str(json_body.get('port', '')), ip_address=client_ip,
+                        details={'server_id': target_server, 'rule': json_body},
+                        result='success' if (isinstance(res_data, dict) and res_data.get('success')) else 'failure'
+                    )
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await firewall_manager.add_firewall_rule(json_body)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    'firewall.add_rule', user_id=user['id'], user_email=user['email'],
+                    resource_type='firewall', resource_id=str(json_body.get('port', '')), ip_address=client_ip,
+                    details={'server_id': 'local-master', 'rule': json_body},
+                    result='success' if res_data.get('success') else 'failure'
+                )
+            return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
+
+        if path in ('/api/firewall/rules/delete',) and method in ('POST', 'DELETE'):
+            client_ip = headers.get('x-forwarded-for', '127.0.0.1').split(',')[0].strip()
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/firewall/rules/delete', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        'firewall.delete_rule', user_id=user['id'], user_email=user['email'],
+                        resource_type='firewall', resource_id=str(json_body.get('id', '')), ip_address=client_ip,
+                        details={'server_id': target_server, 'rule': json_body},
+                        result='success' if (isinstance(res_data, dict) and res_data.get('success')) else 'failure'
+                    )
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await firewall_manager.delete_firewall_rule(json_body)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    'firewall.delete_rule', user_id=user['id'], user_email=user['email'],
+                    resource_type='firewall', resource_id=str(json_body.get('id', '')), ip_address=client_ip,
+                    details={'server_id': 'local-master', 'rule': json_body},
+                    result='success' if res_data.get('success') else 'failure'
+                )
+            return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
+
+        if path == '/api/firewall/reload' and method == 'POST':
+            client_ip = headers.get('x-forwarded-for', '127.0.0.1').split(',')[0].strip()
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/firewall/reload', 'POST', json_body=json_body)
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await firewall_manager.reload_firewall()
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    'firewall.reload', user_id=user['id'], user_email=user['email'],
+                    resource_type='firewall', resource_id='reload', ip_address=client_ip,
+                    details={'server_id': 'local-master'},
+                    result='success' if res_data.get('success') else 'failure'
+                )
+            return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
 
         # ─── Saved Commands & Runbooks Endpoints ─────────────────────
         if path == '/api/commands' and method == 'GET':

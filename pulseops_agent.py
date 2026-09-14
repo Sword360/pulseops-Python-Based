@@ -31,7 +31,15 @@ import re
 import urllib.request
 import urllib.error
 import urllib.parse
-import ports_manager
+try:
+    import ports_manager
+except ImportError:
+    ports_manager = None
+
+try:
+    import firewall_manager
+except ImportError:
+    firewall_manager = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -510,6 +518,76 @@ def inspect_docker_container(container_id: str) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
+def _agent_get_listening_ports() -> Dict[str, Any]:
+    if ports_manager:
+        try:
+            return ports_manager.get_listening_ports_sync()
+        except Exception as e:
+            logger.warning("ports_manager error: %s", e)
+    ss_cmd = shutil.which("ss")
+    if ss_cmd:
+        try:
+            out = subprocess.check_output([ss_cmd, "-tulpn"], stderr=subprocess.STDOUT, text=True, timeout=5)
+            ports = []
+            for line in out.strip().splitlines():
+                if not (line.startswith("tcp") or line.startswith("udp")):
+                    continue
+                parts = line.split()
+                if len(parts) >= 5:
+                    addr_port = parts[4]
+                    port_str = addr_port.rsplit(":", 1)[1] if ":" in addr_port else "0"
+                    proto = "TCP" if "tcp" in parts[0] else "UDP"
+                    ports.append({
+                        "protocol": proto,
+                        "state": parts[1] if len(parts) > 1 else "LISTEN",
+                        "address": addr_port.rsplit(":", 1)[0] if ":" in addr_port else addr_port,
+                        "port": int(port_str) if port_str.isdigit() else 0,
+                        "process": "daemon",
+                        "pid": 0,
+                        "service": "Service",
+                        "is_public": not ("127.0.0.1" in addr_port or "::1" in addr_port),
+                        "raw_line": line
+                    })
+            return {"success": True, "count": len(ports), "ports": ports, "engine": "ss", "fallback": False}
+        except Exception:
+            pass
+    return {"success": True, "count": 0, "ports": [], "engine": "none", "fallback": True}
+
+
+def _agent_get_firewall_status() -> Dict[str, Any]:
+    if firewall_manager:
+        try:
+            return firewall_manager.get_firewall_status_sync()
+        except Exception as e:
+            logger.warning("firewall_manager error: %s", e)
+    if shutil.which("firewall-cmd"):
+        try:
+            res = subprocess.run(["firewall-cmd", "--state"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+            active = res.returncode == 0 and "running" in res.stdout.lower()
+            return {"success": True, "active": active, "backend": "firewalld", "zone": "public", "rules": []}
+        except Exception:
+            pass
+    return {"success": True, "active": False, "backend": "none", "rules": []}
+
+
+def _agent_add_firewall_rule(spec: Dict[str, Any]) -> Dict[str, Any]:
+    if firewall_manager:
+        return firewall_manager.add_firewall_rule_sync(spec)
+    return {"success": False, "error": "Firewall manager module not found on agent"}
+
+
+def _agent_delete_firewall_rule(spec: Dict[str, Any]) -> Dict[str, Any]:
+    if firewall_manager:
+        return firewall_manager.delete_firewall_rule_sync(spec)
+    return {"success": False, "error": "Firewall manager module not found on agent"}
+
+
+def _agent_reload_firewall() -> Dict[str, Any]:
+    if firewall_manager:
+        return firewall_manager.reload_firewall_sync()
+    return {"success": False, "error": "Firewall manager module not found on agent"}
+
+
 # ─── HTTP Server (Operations & Telemetry Endpoint) ──────────────────────────
 
 class AgentHTTPHandler(BaseHTTPRequestHandler):
@@ -596,7 +674,10 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
             return self._send_json(inspect_docker_container(cid))
 
         if path == "/api/network/ports":
-            return self._send_json(ports_manager.get_listening_ports_sync())
+            return self._send_json(_agent_get_listening_ports())
+
+        if path in ("/api/firewall/status", "/api/firewall/rules"):
+            return self._send_json(_agent_get_firewall_status())
 
         self._send_json({"detail": "Not found"}, status=404)
 
@@ -638,6 +719,15 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
             cid = body.get("container_id", "") or body.get("container", "")
             act = body.get("action", "")
             return self._send_json(exec_docker_action(cid, act))
+
+        if path in ("/api/firewall/rules/add", "/api/firewall/rules"):
+            return self._send_json(_agent_add_firewall_rule(body))
+
+        if path == "/api/firewall/rules/delete":
+            return self._send_json(_agent_delete_firewall_rule(body))
+
+        if path == "/api/firewall/reload":
+            return self._send_json(_agent_reload_firewall())
 
         self._send_json({"detail": "Not found"}, status=404)
 
