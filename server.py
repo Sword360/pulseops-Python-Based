@@ -7,6 +7,7 @@ import struct
 import random
 import mimetypes
 import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from typing import Set, Dict, Any, Optional, List
 import subprocess
@@ -1471,9 +1472,16 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 user = await auth.get_current_user(headers.get('authorization', ''))
                 if not user or user.get('role') != 'admin':
                     return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
-                allowed = {'app_name', 'session_timeout_hours', 'agent_poll_interval', 'snapshot_retention_hours',
-                           'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_from',
-                           'global_cpu_alert_threshold', 'global_mem_alert_threshold', 'global_disk_alert_threshold', 'master_url'}
+                allowed = {
+                    'app_name', 'session_timeout_hours', 'master_url', 'timezone', 'maintenance_mode', 'maintenance_message',
+                    'metric_poll_interval', 'chart_history_points', 'top_processes_count', 'bandwidth_unit', 'temperature_unit', 'sound_alerts_enabled',
+                    'agent_poll_interval', 'snapshot_retention_hours', 'global_cpu_alert_threshold', 'global_mem_alert_threshold', 'global_disk_alert_threshold',
+                    'webhook_enabled', 'webhook_url', 'webhook_format', 'webhook_secret',
+                    'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_from',
+                    'ssl_warn_days', 'ssl_crit_days', 'ssl_auto_check_hours', 'ssl_alert_untrusted',
+                    'require_2fa', 'max_login_attempts', 'lockout_duration_minutes', 'password_min_length', 'idle_timeout_minutes', 'admin_ip_allowlist',
+                    'terminal_font_size', 'terminal_scrollback_lines', 'terminal_theme', 'terminal_confirm_sudo', 'terminal_audit_logging'
+                }
                 count = 0
                 for key, value in json_body.items():
                     if key in allowed:
@@ -1492,6 +1500,140 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 result = await alerts_module.send_test_email()
                 code = 200 if result.get('success') else 400
                 return await send_json_response(writer, result, code)
+
+            if path == '/api/admin/settings/test-webhook' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                url = json_body.get('webhook_url', '').strip()
+                fmt = json_body.get('webhook_format', 'slack').strip().lower()
+                if not url:
+                    saved_url = await database.get_setting('webhook_url')
+                    url = (saved_url or '').strip()
+                if not url:
+                    return await send_json_response(writer, {'success': False, 'detail': 'No webhook URL provided or configured'}, 400)
+
+                test_title = "PulseOps Enterprise Notification Test"
+                test_body = f"Test notification triggered by {user.get('email')} at {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}. Webhook alerts integration is active."
+                if fmt == 'slack':
+                    payload = {
+                        "text": f"*{test_title}*\n{test_body}",
+                        "attachments": [{"color": "#38bdf8", "fields": [{"title": "Status", "value": "Healthy", "short": True}]}]
+                    }
+                elif fmt == 'discord':
+                    payload = {
+                        "username": "PulseOps Observability",
+                        "embeds": [{
+                            "title": test_title,
+                            "description": test_body,
+                            "color": 3719160
+                        }]
+                    }
+                else:
+                    payload = {
+                        "event": "test.notification",
+                        "title": test_title,
+                        "message": test_body,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "user": user.get('email')
+                    }
+
+                try:
+                    data_bytes = json.dumps(payload).encode('utf-8')
+                    req = urllib.request.Request(
+                        url, data=data_bytes,
+                        headers={'Content-Type': 'application/json', 'User-Agent': 'PulseOps-Webhook-Client/2.0'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(req, timeout=8) as resp:
+                        resp_body = resp.read().decode('utf-8', errors='replace')
+                        return await send_json_response(writer, {
+                            'success': True,
+                            'status_code': resp.status,
+                            'response': resp_body[:200]
+                        })
+                except Exception as e:
+                    return await send_json_response(writer, {
+                        'success': False,
+                        'detail': f"Webhook delivery failed: {str(e)}"
+                    }, 400)
+
+            if path == '/api/admin/settings/reset-defaults' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                for key, val, dtype in database.DEFAULT_SETTINGS:
+                    await database.set_setting(key, val, user['id'])
+                await audit.log_action('settings.reset_defaults', user_id=user['id'], user_email=user['email'])
+                return await send_json_response(writer, {'success': True, 'count': len(database.DEFAULT_SETTINGS)})
+
+            if path == '/api/admin/database/stats' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
+                db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+                wal_path = db_path + "-wal"
+                wal_size = os.path.getsize(wal_path) if os.path.exists(wal_path) else 0
+
+                s_row = await database.fetchone("SELECT COUNT(*) as c FROM servers")
+                snap_row = await database.fetchone("SELECT COUNT(*) as c FROM server_snapshots")
+                a_row = await database.fetchone("SELECT COUNT(*) as c FROM audit_log")
+                u_row = await database.fetchone("SELECT COUNT(*) as c FROM users")
+                r_row = await database.fetchone("SELECT COUNT(*) as c FROM alert_rules")
+                m_row = await database.fetchone("SELECT COUNT(*) as c FROM ssl_monitored_domains")
+
+                return await send_json_response(writer, {
+                    'db_path': db_path,
+                    'db_size_bytes': db_size,
+                    'wal_size_bytes': wal_size,
+                    'total_size_mb': round((db_size + wal_size) / (1024 * 1024), 2),
+                    'servers_count': s_row['c'] if s_row else 0,
+                    'snapshots_count': snap_row['c'] if snap_row else 0,
+                    'audit_logs_count': a_row['c'] if a_row else 0,
+                    'users_count': u_row['c'] if u_row else 0,
+                    'alert_rules_count': r_row['c'] if r_row else 0,
+                    'monitored_domains_count': m_row['c'] if m_row else 0
+                })
+
+            if path == '/api/admin/database/vacuum' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
+                before_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+                db = await database.get_db()
+                await db.execute("VACUUM")
+                after_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+                reclaimed = max(0, before_size - after_size)
+                await audit.log_action('database.vacuum', user_id=user['id'], user_email=user['email'],
+                                       details={'reclaimed_bytes': reclaimed})
+                return await send_json_response(writer, {
+                    'success': True,
+                    'size_before_bytes': before_size,
+                    'size_after_bytes': after_size,
+                    'reclaimed_bytes': reclaimed,
+                    'reclaimed_kb': round(reclaimed / 1024, 1)
+                })
+
+            if path == '/api/admin/database/purge-metrics' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                hours_str = json_body.get('retention_hours')
+                if not hours_str:
+                    hours_str = await database.get_setting('snapshot_retention_hours') or "24"
+                try:
+                    hours = max(1, int(hours_str))
+                except Exception:
+                    hours = 24
+                await database.execute(
+                    "DELETE FROM server_snapshots WHERE timestamp < datetime('now', '-' || ? || ' hours')",
+                    (hours,)
+                )
+                await audit.log_action('database.purge_metrics', user_id=user['id'], user_email=user['email'],
+                                       details={'retention_hours': hours})
+                return await send_json_response(writer, {'success': True, 'retention_hours': hours})
 
             if path == '/api/admin/backup' and method == 'GET':
                 user = await auth.get_current_user(headers.get('authorization', ''))

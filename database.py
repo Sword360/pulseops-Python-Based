@@ -192,20 +192,62 @@ CREATE TABLE IF NOT EXISTS ssl_monitored_domains (
 """
 
 DEFAULT_SETTINGS = [
+    # General & System
     ("app_name", "PulseOps Enterprise", "string"),
     ("session_timeout_hours", "8", "int"),
+    ("master_url", "", "string"),
+    ("timezone", "UTC", "string"),
+    ("maintenance_mode", "false", "bool"),
+    ("maintenance_message", "System maintenance in progress. Live telemetry continues in background.", "string"),
+
+    # Observability & Metrics
+    ("metric_poll_interval", "5", "int"),
+    ("chart_history_points", "60", "int"),
+    ("top_processes_count", "15", "int"),
+    ("bandwidth_unit", "auto", "string"),
+    ("temperature_unit", "celsius", "string"),
+    ("sound_alerts_enabled", "false", "bool"),
+
+    # Fleet & Retention
     ("agent_poll_interval", "30", "int"),
-    ("snapshot_retention_hours", "12", "int"),
-    ("require_2fa", "false", "bool"),
+    ("snapshot_retention_hours", "24", "int"),
+    ("global_cpu_alert_threshold", "85", "int"),
+    ("global_mem_alert_threshold", "90", "int"),
+    ("global_disk_alert_threshold", "90", "int"),
+
+    # Webhook Alerts
+    ("webhook_enabled", "false", "bool"),
+    ("webhook_url", "", "string"),
+    ("webhook_format", "slack", "string"),
+    ("webhook_secret", "", "string"),
+
+    # SMTP / Email Alerts
     ("smtp_host", "", "string"),
     ("smtp_port", "587", "int"),
     ("smtp_username", "", "string"),
     ("smtp_password", "", "string"),
     ("smtp_from", "PulseOps Alerts <noreply@pulseops.local>", "string"),
-    ("global_cpu_alert_threshold", "85", "int"),
-    ("global_mem_alert_threshold", "90", "int"),
-    ("global_disk_alert_threshold", "90", "int"),
-    ("master_url", "", "string"),
+
+    # SSL / TLS Watchdog
+    ("ssl_warn_days", "30", "int"),
+    ("ssl_crit_days", "7", "int"),
+    ("ssl_auto_check_hours", "12", "int"),
+    ("ssl_alert_untrusted", "true", "bool"),
+
+    # Security & Access Governance
+    ("require_2fa", "false", "bool"),
+    ("max_login_attempts", "5", "int"),
+    ("lockout_duration_minutes", "15", "int"),
+    ("password_min_length", "8", "int"),
+    ("idle_timeout_minutes", "60", "int"),
+    ("admin_ip_allowlist", "", "string"),
+
+    # Web Terminal & Runbooks
+    ("terminal_font_size", "13", "int"),
+    ("terminal_scrollback_lines", "1000", "int"),
+    ("terminal_theme", "cyberpunk", "string"),
+    ("terminal_confirm_sudo", "true", "bool"),
+    ("terminal_audit_logging", "true", "bool"),
 ]
 
 
