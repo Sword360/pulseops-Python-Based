@@ -197,14 +197,19 @@
             <section id="section-server-dashboard" class="app-section">
                 <!-- Server identity pill -->
                 <div class="server-identity-bar" id="server-identity-bar">
-                    <span class="pulse-dot" id="server-identity-dot"></span>
-                    <strong id="server-identity-hostname">--</strong>
-                    <span style="color:var(--text-dim);">|</span>
-                    <span id="server-identity-ip" style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">--</span>
-                    <span id="server-identity-os" class="server-os-badge">--</span>
-                    <button class="btn-back-fleet" onclick="showSection('fleet')">← Back to Fleet</button>
-                    <button class="btn-primary admin-only" data-open-modal="add-server-modal" onclick="window.openAddServerModal && window.openAddServerModal()" style="font-size:0.8rem; padding:0.4rem 0.85rem;">+ Add Server</button>
-                    <button id="btn-dashboard-remove-server" class="btn btn-sm admin-only" style="display:none; font-size:0.8rem; padding:0.4rem 0.85rem; background:rgba(239, 68, 68, 0.15); border:1px solid rgba(239, 68, 68, 0.4); color:#ef4444; border-radius:6px; cursor:pointer; font-weight:600;" title="Remove this remote server from fleet">🗑️ Remove Server</button>
+                    <div class="server-identity-left">
+                        <span class="pulse-dot" id="server-identity-dot"></span>
+                        <div class="server-identity-meta">
+                            <span class="server-identity-title" id="server-identity-hostname">--</span>
+                            <span class="server-identity-ip-badge" id="server-identity-ip">--</span>
+                        </div>
+                        <span id="server-identity-os" class="server-os-badge">--</span>
+                    </div>
+                    <div class="server-identity-right">
+                        <button class="btn-back-fleet" onclick="showSection('fleet')">← Back to Fleet</button>
+                        <button class="btn-primary admin-only" data-open-modal="add-server-modal" onclick="window.openAddServerModal && window.openAddServerModal()" style="font-size:0.8rem; padding:0.45rem 0.95rem;">+ Add Server</button>
+                        <button id="btn-dashboard-remove-server" class="btn-danger-action admin-only" style="display:none;" title="Remove this remote server from fleet">🗑️ Remove Server</button>
+                    </div>
                 </div>
 
                 <!-- Server sub-tabs -->
@@ -227,7 +232,7 @@
                 <!-- TAB: Overview Dashboard -->
                 <section id="dashboard-tab" class="tab-content active">
                     <div class="metrics-grid">
-                        <div class="metric-card">
+                        <div class="metric-card metric-card-cpu">
                             <div class="metric-header">
                                 <span class="metric-title">CPU Utilization</span>
                                 <div class="metric-icon" style="color:var(--accent-cyan);">⚡</div>
@@ -240,7 +245,7 @@
                                 <div class="progress-bar-fill" id="metric-cpu-bar" style="width:0%;"></div>
                             </div>
                         </div>
-                        <div class="metric-card">
+                        <div class="metric-card metric-card-mem">
                             <div class="metric-header">
                                 <span class="metric-title">Memory Usage</span>
                                 <div class="metric-icon" style="color:var(--accent-purple);">🧠</div>
@@ -250,10 +255,10 @@
                                 <div class="metric-sub" id="metric-mem-sub">0.0 GB / 0.0 GB</div>
                             </div>
                             <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" id="metric-mem-bar" style="width:0%; background:linear-gradient(90deg,var(--accent-purple),var(--accent-blue));"></div>
+                                <div class="progress-bar-fill" id="metric-mem-bar" style="width:0%;"></div>
                             </div>
                         </div>
-                        <div class="metric-card">
+                        <div class="metric-card metric-card-disk">
                             <div class="metric-header">
                                 <span class="metric-title">Disk Mount (Root)</span>
                                 <div class="metric-icon" style="color:var(--accent-amber);">💾</div>
@@ -263,10 +268,10 @@
                                 <div class="metric-sub" id="metric-disk-sub">0 GB / 0 GB</div>
                             </div>
                             <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" id="metric-disk-bar" style="width:0%; background:linear-gradient(90deg,var(--accent-amber),#f97316);"></div>
+                                <div class="progress-bar-fill" id="metric-disk-bar" style="width:0%;"></div>
                             </div>
                         </div>
-                        <div class="metric-card">
+                        <div class="metric-card metric-card-net">
                             <div class="metric-header">
                                 <span class="metric-title">Network I/O</span>
                                 <div class="metric-icon" style="color:var(--accent-green);">🌐</div>
@@ -276,62 +281,71 @@
                                 <div class="metric-sub" id="metric-net-sub">↓ 0 KB/s  ↑ 0 KB/s</div>
                             </div>
                             <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" style="width:100%; background:linear-gradient(90deg,var(--accent-green),var(--accent-cyan));"></div>
+                                <div class="progress-bar-fill" id="metric-net-bar" style="width:100%; background:linear-gradient(90deg,var(--accent-green),var(--accent-cyan));"></div>
                             </div>
                         </div>
                     </div>
 
                     <div class="charts-layout">
-                        <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                        <div class="charts-column">
                             <div class="card">
-                                <div class="card-title"><span style="color:var(--accent-cyan);">📈</span> CPU Usage History</div>
+                                <div class="card-header-flex">
+                                    <div class="card-title"><span class="card-title-icon" style="color:var(--accent-cyan);">📈</span> CPU Usage History</div>
+                                    <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+                                </div>
                                 <div class="chart-container"><canvas id="cpu-chart"></canvas></div>
                             </div>
                             <div class="card">
-                                <div class="card-title"><span style="color:var(--accent-purple);">🧠</span> Memory Usage History</div>
+                                <div class="card-header-flex">
+                                    <div class="card-title"><span class="card-title-icon" style="color:var(--accent-purple);">🧠</span> Memory Usage History</div>
+                                    <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+                                </div>
                                 <div class="chart-container"><canvas id="mem-chart"></canvas></div>
                             </div>
                             <div class="card">
-                                <div class="card-title"><span style="color:var(--accent-green);">🌐</span> Network Bandwidth (RX / TX)</div>
+                                <div class="card-header-flex">
+                                    <div class="card-title"><span class="card-title-icon" style="color:var(--accent-green);">🌐</span> Network Bandwidth (RX / TX)</div>
+                                    <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+                                </div>
                                 <div class="chart-container"><canvas id="net-chart"></canvas></div>
                             </div>
                         </div>
-                        <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                        <div class="specs-column">
                             <div class="card">
-                                <div class="card-title"><span style="color:var(--accent-purple);">ℹ️</span> System Specification</div>
+                                <div class="card-title"><span class="card-title-icon" style="color:var(--accent-purple);">ℹ️</span> System Specification</div>
                                 <div class="sys-info-list">
                                     <div class="sys-info-item"><span class="sys-label">OS Distribution</span><span class="sys-val" id="sys-os">Linux</span></div>
                                     <div class="sys-info-item"><span class="sys-label">Kernel Version</span><span class="sys-val" id="sys-kernel">0.0.0</span></div>
                                     <div class="sys-info-item"><span class="sys-label">Architecture</span><span class="sys-val" id="sys-arch">x86_64</span></div>
                                     <div class="sys-info-item"><span class="sys-label">Processor</span><span class="sys-val" id="sys-cores">--</span></div>
-                                    <div class="sys-info-item"><span class="sys-label">System Uptime</span><span class="sys-val" id="sys-uptime" style="color:var(--accent-cyan);">--</span></div>
+                                    <div class="sys-info-item"><span class="sys-label">System Uptime</span><span class="sys-val sys-val-highlight" id="sys-uptime">--</span></div>
                                     <div class="sys-info-item"><span class="sys-label">Load Average</span><span class="sys-val" id="sys-load">0.0 0.0 0.0</span></div>
                                 </div>
                             </div>
                             <div class="card">
-                                <div class="card-title"><span style="color:var(--accent-amber);">💽</span> Storage Volumes</div>
+                                <div class="card-title"><span class="card-title-icon" style="color:var(--accent-amber);">💽</span> Storage Volumes</div>
                                 <div id="disk-mounts-list"><div style="color:var(--text-dim);font-size:0.9rem;">Loading...</div></div>
                             </div>
                             <div class="card operator-only">
-                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-                                    <span><span style="color:var(--accent-cyan);">⚡</span> Host Operations &amp; Control</span>
-                                    <span style="font-size:0.75rem; color:var(--text-dim);" id="host-ctrl-target-label">Target: Server</span>
+                                <div class="card-header-flex">
+                                    <div class="card-title"><span class="card-title-icon" style="color:var(--accent-cyan);">⚡</span> Host Operations &amp; Control</div>
+                                    <span class="host-target-tag" id="host-ctrl-target-label">Target: Server</span>
                                 </div>
-                                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.6rem; margin-top: 0.5rem;">
-                                    <button class="btn btn-sm btn-secondary" onclick="window.pulseDash &amp;&amp; window.pulseDash.quickSystemAction('drop_caches')" title="Purge cached RAM memory">
-                                        🧹 Free Caches
+                                <div class="host-actions-grid">
+                                    <button class="btn-host-action" onclick="window.pulseDash && window.pulseDash.quickSystemAction('drop_caches')" title="Purge cached RAM memory">
+                                        <span>🧹</span> Free Caches
                                     </button>
-                                    <button class="btn btn-sm btn-secondary" onclick="window.pulseDash &amp;&amp; window.pulseDash.quickSystemAction('check_updates')" title="Check OS package updates">
-                                        📦 Check Updates
+                                    <button class="btn-host-action" onclick="window.pulseDash && window.pulseDash.quickSystemAction('check_updates')" title="Check OS package updates">
+                                        <span>📦</span> Check Updates
                                     </button>
-                                    <button class="btn btn-sm btn-secondary" onclick="window.pulseDash &amp;&amp; window.pulseDash.quickSystemAction('failed_services')" title="Inspect failed systemd units">
-                                        ⚠️ Failed Units
+                                    <button class="btn-host-action" onclick="window.pulseDash && window.pulseDash.quickSystemAction('failed_services')" title="Inspect failed systemd units">
+                                        <span>⚠️</span> Failed Units
                                     </button>
-                                    <button class="btn btn-sm btn-secondary" onclick="window.pulseDash &amp;&amp; window.pulseDash.quickSystemAction('restart_agent')" title="Restart PulseOps daemon">
-                                        🔄 Restart Agent
+                                    <button class="btn-host-action" onclick="window.pulseDash && window.pulseDash.quickSystemAction('restart_agent')" title="Restart PulseOps daemon">
+                                        <span>🔄</span> Restart Agent
                                     </button>
-                                    <button class="btn btn-sm" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444;" onclick="window.pulseDash &amp;&amp; window.pulseDash.quickSystemAction('reboot')" title="Reboot this host machine">
-                                        ⚠️ Reboot Host
+                                    <button class="btn-host-action danger" onclick="window.pulseDash && window.pulseDash.quickSystemAction('reboot')" title="Reboot this host machine">
+                                        <span>⚠️</span> Reboot Host
                                     </button>
                                 </div>
                             </div>
@@ -343,7 +357,7 @@
                 <section id="docker-tab" class="tab-content">
                     <div class="card">
                         <!-- Top Engine Status Bar -->
-                        <div class="docker-engine-header" id="docker-engine-bar" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1.25rem; background:rgba(0,242,254,0.03); border-bottom:1px solid var(--border-color); border-radius:8px 8px 0 0; font-size:0.85rem;">
+                        <div class="docker-engine-header" id="docker-engine-bar">
                             <div style="display:flex; align-items:center; gap:0.75rem;">
                                 <span id="docker-engine-badge" class="badge badge-active">🐳 Docker Active</span>
                                 <span id="docker-engine-info" style="color:var(--text-muted); font-family:var(--font-mono); font-size:0.8rem;">Detecting container runtime...</span>

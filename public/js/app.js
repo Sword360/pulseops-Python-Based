@@ -613,17 +613,20 @@ class PulseOpsDashboard {
         if (diskContainer) {
             const color = diskPct > 90 ? '#ef4444' : diskPct > 75 ? '#f59e0b' : 'var(--accent-amber)';
             diskContainer.innerHTML = `
-            <div style="margin-bottom:1rem;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
-                    <span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted);">/dev/root</span>
-                    <span style="font-size:0.8rem;color:var(--text-dim);">/ (Root Filesystem)</span>
+            <div class="disk-mount-card">
+                <div class="disk-mount-header">
+                    <div class="disk-mount-name">
+                        <span>💽</span>
+                        <span>/dev/root</span>
+                    </div>
+                    <span class="disk-mount-point">/</span>
                 </div>
                 <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width:${diskPct}%;background:linear-gradient(90deg,${color},${color}99);"></div>
+                    <div class="progress-bar-fill" style="width:${diskPct}%;background:linear-gradient(90deg,${color},${color}dd);"></div>
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-top:0.2rem;font-size:0.75rem;color:var(--text-dim);">
-                    <span>${diskPct.toFixed(1)}% Used</span>
-                    <span>Status: ${srv.status || 'Active'}</span>
+                <div class="disk-mount-footer">
+                    <span class="disk-mount-stats">${diskPct.toFixed(1)}% Used</span>
+                    <span class="disk-mount-pct">Status: ${srv.status || 'Active'}</span>
                 </div>
             </div>`;
         }
@@ -871,17 +874,20 @@ class PulseOpsDashboard {
                 ? ` • Inodes: ${d.inodesPercent}%` 
                 : '';
             return `
-            <div style="margin-bottom:1rem;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
-                    <span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted);">${d.fs}</span>
-                    <span style="font-size:0.8rem;color:var(--text-dim);">${d.mount}</span>
+            <div class="disk-mount-card">
+                <div class="disk-mount-header">
+                    <div class="disk-mount-name">
+                        <span>💽</span>
+                        <span>${d.fs}</span>
+                    </div>
+                    <span class="disk-mount-point">${d.mount}</span>
                 </div>
                 <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99);"></div>
+                    <div class="progress-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}dd);"></div>
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-top:0.2rem;font-size:0.75rem;color:var(--text-dim);">
-                    <span>${usedStr} used${inodeText}</span>
-                    <span>${totalStr} total (${pct.toFixed(0)}%)</span>
+                <div class="disk-mount-footer">
+                    <span class="disk-mount-stats">${usedStr} used${inodeText}</span>
+                    <span class="disk-mount-pct">${totalStr} (${pct.toFixed(0)}%)</span>
                 </div>
             </div>`;
         }).join('');
