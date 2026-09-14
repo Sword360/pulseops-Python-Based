@@ -869,6 +869,28 @@ async def api_recent_activity(
 
 # ─── Settings ─────────────────────────────────────────────────────────────────
 
+@app.get("/api/settings/public")
+async def api_public_settings():
+    """Return public UI settings (navigation visibility, app branding, maintenance status)."""
+    nav_keys = [
+        'app_name', 'maintenance_mode', 'maintenance_message',
+        'nav_docker_enabled', 'nav_ports_enabled', 'nav_firewall_enabled',
+        'nav_security_enabled', 'nav_ssl_enabled', 'nav_services_enabled',
+        'nav_processes_enabled', 'nav_logs_enabled', 'nav_terminal_enabled',
+        'nav_vnc_enabled', 'nav_alerts_enabled', 'nav_audit_enabled'
+    ]
+    result = {}
+    if ENTERPRISE_AVAILABLE:
+        placeholders = ','.join(['?'] * len(nav_keys))
+        rows = await database.fetchall(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", tuple(nav_keys))
+        for row in rows:
+            result[row['key']] = row['value']
+    for k in nav_keys:
+        if k not in result:
+            result[k] = "true" if k.startswith("nav_") else ""
+    return result
+
+
 @app.get("/api/admin/settings")
 async def api_get_settings(current_user: Dict = Depends(require_admin)):
     """Return all system settings."""
@@ -903,10 +925,17 @@ async def api_update_settings(
     if not ENTERPRISE_AVAILABLE:
         raise HTTPException(status_code=503)
     allowed_keys = {
-        "app_name", "session_timeout_hours", "agent_poll_interval",
-        "snapshot_retention_hours", "smtp_host", "smtp_port", "smtp_username",
-        "smtp_password", "smtp_from", "global_cpu_alert_threshold",
-        "global_mem_alert_threshold", "global_disk_alert_threshold", "master_url",
+        "app_name", "session_timeout_hours", "master_url", "timezone", "maintenance_mode", "maintenance_message",
+        "metric_poll_interval", "chart_history_points", "top_processes_count", "bandwidth_unit", "temperature_unit", "sound_alerts_enabled",
+        "agent_poll_interval", "snapshot_retention_hours", "global_cpu_alert_threshold", "global_mem_alert_threshold", "global_disk_alert_threshold",
+        "webhook_enabled", "webhook_url", "webhook_format", "webhook_secret",
+        "smtp_host", "smtp_port", "smtp_username", "smtp_password", "smtp_from",
+        "ssl_warn_days", "ssl_crit_days", "ssl_auto_check_hours", "ssl_alert_untrusted",
+        "require_2fa", "max_login_attempts", "lockout_duration_minutes", "password_min_length", "idle_timeout_minutes", "admin_ip_allowlist",
+        "terminal_font_size", "terminal_scrollback_lines", "terminal_theme", "terminal_confirm_sudo", "terminal_audit_logging",
+        "nav_docker_enabled", "nav_ports_enabled", "nav_firewall_enabled", "nav_security_enabled", "nav_ssl_enabled",
+        "nav_services_enabled", "nav_processes_enabled", "nav_logs_enabled", "nav_terminal_enabled", "nav_vnc_enabled",
+        "nav_alerts_enabled", "nav_audit_enabled"
     }
     count = 0
     for key, value in payload.items():

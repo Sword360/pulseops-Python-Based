@@ -110,11 +110,20 @@ class PulseOpsDashboard {
         this.initUserMenu();
         this.initModalSystem();
 
+        // Restore cached navigation visibility immediately to prevent UI flicker
+        try {
+            const cached = JSON.parse(localStorage.getItem('pulseops-nav-settings') || '{}');
+            if (Object.keys(cached).length > 0) {
+                this.applyNavigationVisibility(cached);
+            }
+        } catch (e) {}
+
         // Wait for auth to complete
         this.currentUser = await PulseOpsAuth.requireAuth();
         if (!this.currentUser) return; // Redirected to login
 
         this.applyUserContext();
+        await this.loadPublicSettings();
         this.connectWebSocket();
         this.initModules();
         this.updateSidebarServers();
@@ -178,6 +187,90 @@ class PulseOpsDashboard {
 
         // Populate sidebar servers list
         this.updateSidebarServers();
+
+        // Re-apply navigation visibility to ensure role + admin toggle consistency
+        if (this.navSettings) {
+            this.applyNavigationVisibility(this.navSettings);
+        }
+    }
+
+    async loadPublicSettings() {
+        try {
+            const res = await fetch('/api/settings/public');
+            if (res.ok) {
+                const settings = await res.json();
+                this.applyNavigationVisibility(settings);
+            }
+        } catch (e) {
+            console.error('[PublicSettings] Load error:', e);
+        }
+    }
+
+    applyNavigationVisibility(settings = {}) {
+        if (!settings || typeof settings !== 'object') return;
+
+        const navMap = {
+            nav_docker_enabled: document.querySelector('.tab-btn[data-tab="docker"]'),
+            nav_ports_enabled: document.querySelector('.tab-btn[data-tab="ports"]'),
+            nav_firewall_enabled: document.querySelector('.tab-btn[data-tab="firewall"]'),
+            nav_security_enabled: document.querySelector('.tab-btn[data-tab="security"]'),
+            nav_ssl_enabled: document.querySelector('.tab-btn[data-tab="ssl"]'),
+            nav_services_enabled: document.querySelector('.tab-btn[data-tab="services"]'),
+            nav_processes_enabled: document.querySelector('.tab-btn[data-tab="processes"]'),
+            nav_logs_enabled: document.querySelector('.tab-btn[data-tab="logs"]'),
+            nav_terminal_enabled: document.querySelector('.tab-btn[data-tab="terminal"]'),
+            nav_vnc_enabled: document.querySelector('.tab-btn[data-tab="vnc"]'),
+            nav_alerts_enabled: document.querySelector('.sidebar-btn[data-section="alerts"]'),
+            nav_audit_enabled: document.querySelector('.sidebar-btn[data-section="audit"]')
+        };
+
+        // Cache in localStorage for zero-flicker reload
+        try {
+            const cached = JSON.parse(localStorage.getItem('pulseops-nav-settings') || '{}');
+            for (const [k, v] of Object.entries(settings)) {
+                if (k.startsWith('nav_')) cached[k] = v;
+            }
+            localStorage.setItem('pulseops-nav-settings', JSON.stringify(cached));
+            settings = Object.assign({}, cached, settings);
+        } catch (e) {}
+
+        this.navSettings = settings;
+
+        for (const [key, el] of Object.entries(navMap)) {
+            if (!el) continue;
+            const isEnabled = settings[key] !== 'false' && settings[key] !== false;
+
+            if (!isEnabled) {
+                el.style.setProperty('display', 'none', 'important');
+                el.setAttribute('data-nav-disabled', 'true');
+
+                // If currently active tab is disabled, switch to overview
+                if (el.classList.contains('active')) {
+                    const defaultTab = document.querySelector('.tab-btn[data-tab="dashboard"]') || document.querySelector('.tab-btn[data-tab="overview"]');
+                    if (defaultTab) defaultTab.click();
+                }
+
+                // If currently active sidebar section is disabled, switch to fleet
+                if (key === 'nav_alerts_enabled' && document.getElementById('section-alerts')?.classList.contains('active')) {
+                    showSection('fleet');
+                }
+                if (key === 'nav_audit_enabled' && document.getElementById('section-audit')?.classList.contains('active')) {
+                    showSection('fleet');
+                }
+            } else {
+                el.removeAttribute('data-nav-disabled');
+                // Check role restrictions
+                const isOpOnly = el.classList.contains('operator-only');
+                const isAdminOnly = el.classList.contains('admin-only');
+                if (isOpOnly && window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
+                    el.style.setProperty('display', 'none', 'important');
+                } else if (isAdminOnly && window.PulseOpsAuth && !window.PulseOpsAuth.isAdmin()) {
+                    el.style.setProperty('display', 'none', 'important');
+                } else {
+                    el.style.removeProperty('display');
+                }
+            }
+        }
     }
 
     _initials(name) {
@@ -217,6 +310,10 @@ class PulseOpsDashboard {
         // Section navigation
         document.querySelectorAll('.sidebar-btn[data-section]').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (btn.getAttribute('data-nav-disabled') === 'true') {
+                    window.showToast && window.showToast('This section has been disabled by administrator in Settings.', 'warning');
+                    return;
+                }
                 const section = btn.dataset.section;
                 showSection(section);
                 updateBreadcrumb([{ label: btn.querySelector('.sidebar-label')?.textContent || section }]);
@@ -271,6 +368,10 @@ class PulseOpsDashboard {
 
         container.querySelectorAll('.nav-tabs .tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (btn.getAttribute('data-nav-disabled') === 'true') {
+                    window.showToast && window.showToast('This module has been disabled by administrator in Settings.', 'warning');
+                    return;
+                }
                 if (btn.dataset.tab === 'terminal' && window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
                     window.showToast && window.showToast('Access denied: Web Terminal is restricted to Operators and Admins', 'error');
                     return;

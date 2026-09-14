@@ -24,6 +24,9 @@ const SettingsManager = (() => {
             _settings = await resp.json();
             populateForm();
             loadDatabaseStats();
+            if (window.PulseOpsApp && typeof window.PulseOpsApp.applyNavigationVisibility === 'function') {
+                window.PulseOpsApp.applyNavigationVisibility(_settings);
+            }
         } catch (e) {
             console.error('[Settings] Load error:', e);
         }
@@ -89,6 +92,9 @@ const SettingsManager = (() => {
             if (resp.ok && data.success) {
                 showToast(`Settings updated (${data.updated_count} fields saved)`, 'success');
                 Object.assign(_settings, payload);
+                if (window.PulseOpsApp && typeof window.PulseOpsApp.applyNavigationVisibility === 'function') {
+                    window.PulseOpsApp.applyNavigationVisibility(_settings);
+                }
             } else {
                 showToast(data.detail || 'Failed to save settings', 'error');
             }

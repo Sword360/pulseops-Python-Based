@@ -1444,7 +1444,238 @@
                         </div>
                     </div>
 
-                    <!-- 9. Database Health, Maintenance & Storage -->
+                    <!-- 9. Navigation & Module Visibility -->
+                    <div class="card" id="settings-navigation-section">
+                        <div class="card-header-clean">
+                            <div class="card-title">🧭 Navigation &amp; Module Visibility</div>
+                            <span class="badge badge-info">Role &amp; UI Control</span>
+                        </div>
+                        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem; line-height:1.6;">
+                            Enable or disable navigation buttons and feature modules across the dashboard. Disabled modules are immediately hidden from the navigation bar for all users.
+                        </div>
+
+                        <div style="font-size:0.75rem; text-transform:uppercase; color:var(--accent-cyan); font-weight:700; letter-spacing:0.05em; margin-bottom:0.75rem;">
+                            Server Dashboard Navigation Tabs
+                        </div>
+
+                        <div class="settings-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem; margin-bottom:1.5rem;">
+                            <!-- Docker / Containers -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🐳</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Containers</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Docker containers &amp; logs</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_docker_enabled" data-setting-key="nav_docker_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Ports -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🔌</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Ports</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Listening sockets &amp; connections</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_ports_enabled" data-setting-key="nav_ports_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Firewall -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🛡️</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Firewall</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Firewalld &amp; iptables rules</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_firewall_enabled" data-setting-key="nav_firewall_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Security -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🚨</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Security</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Fail2ban &amp; scanner</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_security_enabled" data-setting-key="nav_security_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- SSL / TLS -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🔒</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">SSL / TLS</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Certificate expiry watchdog</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_ssl_enabled" data-setting-key="nav_ssl_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Services -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">⚙️</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Services</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">systemd service manager</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_services_enabled" data-setting-key="nav_services_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Processes -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">⚡</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Processes</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Process tree &amp; task killer</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_processes_enabled" data-setting-key="nav_processes_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Live Logs -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">📜</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Live Logs</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Systemd journal streaming</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_logs_enabled" data-setting-key="nav_logs_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Terminal -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">💻</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Terminal</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Interactive web shell</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_terminal_enabled" data-setting-key="nav_terminal_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- VNC -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🖥️</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">VNC Desktop</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Remote desktop viewer</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_vnc_enabled" data-setting-key="nav_vnc_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="font-size:0.75rem; text-transform:uppercase; color:var(--accent-cyan); font-weight:700; letter-spacing:0.05em; margin-bottom:0.75rem;">
+                            Sidebar Navigation Modules
+                        </div>
+
+                        <div class="settings-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem;">
+                            <!-- Alerts -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">🔔</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Alerts</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Sidebar alerts &amp; rules view</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_alerts_enabled" data-setting-key="nav_alerts_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Audit -->
+                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="display:flex; align-items:center; gap:0.65rem;">
+                                        <span style="font-size:1.25rem;">📋</span>
+                                        <div>
+                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Audit Log</div>
+                                            <div style="font-size:0.74rem; color:var(--text-dim);">Sidebar audit trail viewer</div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-nav_audit_enabled" data-setting-key="nav_audit_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="setting-actions" style="margin-top:1.25rem;">
+                            <button class="btn-primary" data-save-section="settings-navigation-section">Save Navigation Settings</button>
+                        </div>
+                    </div>
+
+                    <!-- 10. Database Health, Maintenance & Storage -->
                     <div class="card" id="settings-database-section">
                         <div class="card-header-clean">
                             <div class="card-title">💾 Database &amp; Maintenance</div>

@@ -260,6 +260,20 @@ DEFAULT_SETTINGS = [
     ("terminal_theme", "cyberpunk", "string"),
     ("terminal_confirm_sudo", "true", "bool"),
     ("terminal_audit_logging", "true", "bool"),
+
+    # Navigation & Feature Modules
+    ("nav_docker_enabled", "true", "bool"),
+    ("nav_ports_enabled", "true", "bool"),
+    ("nav_firewall_enabled", "true", "bool"),
+    ("nav_security_enabled", "true", "bool"),
+    ("nav_ssl_enabled", "true", "bool"),
+    ("nav_services_enabled", "true", "bool"),
+    ("nav_processes_enabled", "true", "bool"),
+    ("nav_logs_enabled", "true", "bool"),
+    ("nav_terminal_enabled", "true", "bool"),
+    ("nav_vnc_enabled", "true", "bool"),
+    ("nav_alerts_enabled", "true", "bool"),
+    ("nav_audit_enabled", "true", "bool"),
 ]
 
 

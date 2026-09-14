@@ -1461,6 +1461,25 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 return await send_json_response(writer, await audit.get_recent_activity(limit))
 
             # ── Settings ──────────────────────────────────────────────────────
+            if path == '/api/settings/public' and method == 'GET':
+                nav_keys = [
+                    'app_name', 'maintenance_mode', 'maintenance_message',
+                    'nav_docker_enabled', 'nav_ports_enabled', 'nav_firewall_enabled',
+                    'nav_security_enabled', 'nav_ssl_enabled', 'nav_services_enabled',
+                    'nav_processes_enabled', 'nav_logs_enabled', 'nav_terminal_enabled',
+                    'nav_vnc_enabled', 'nav_alerts_enabled', 'nav_audit_enabled'
+                ]
+                result = {}
+                if ENTERPRISE_AVAILABLE:
+                    placeholders = ','.join(['?'] * len(nav_keys))
+                    rows = await database.fetchall(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", tuple(nav_keys))
+                    for row in rows:
+                        result[row['key']] = row['value']
+                for k in nav_keys:
+                    if k not in result:
+                        result[k] = "true" if k.startswith("nav_") else ""
+                return await send_json_response(writer, result)
+
             if path == '/api/admin/settings' and method == 'GET':
                 user = await auth.get_current_user(headers.get('authorization', ''))
                 if not user or user.get('role') != 'admin':
@@ -1483,7 +1502,10 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_from',
                     'ssl_warn_days', 'ssl_crit_days', 'ssl_auto_check_hours', 'ssl_alert_untrusted',
                     'require_2fa', 'max_login_attempts', 'lockout_duration_minutes', 'password_min_length', 'idle_timeout_minutes', 'admin_ip_allowlist',
-                    'terminal_font_size', 'terminal_scrollback_lines', 'terminal_theme', 'terminal_confirm_sudo', 'terminal_audit_logging'
+                    'terminal_font_size', 'terminal_scrollback_lines', 'terminal_theme', 'terminal_confirm_sudo', 'terminal_audit_logging',
+                    'nav_docker_enabled', 'nav_ports_enabled', 'nav_firewall_enabled', 'nav_security_enabled', 'nav_ssl_enabled',
+                    'nav_services_enabled', 'nav_processes_enabled', 'nav_logs_enabled', 'nav_terminal_enabled', 'nav_vnc_enabled',
+                    'nav_alerts_enabled', 'nav_audit_enabled'
                 }
                 count = 0
                 for key, value in json_body.items():
