@@ -11,6 +11,9 @@ import json
 import logging
 import os
 import uuid
+import time
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*pysnmp.*")
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -65,7 +68,8 @@ async def list_servers(search: Optional[str] = None, group_id: Optional[str] = N
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
     servers = await fetchall(
         f"SELECT id, hostname, display_name, host_ip, agent_port, os_info, arch, tags, "
-        f"group_id, status, added_by, added_at, last_seen, notes, maintenance_until "
+        f"group_id, status, added_by, added_at, last_seen, notes, maintenance_until, "
+        f"driver_type, driver_config "
         f"FROM servers {where_sql} ORDER BY status ASC, hostname ASC",
         tuple(params)
     )
@@ -90,6 +94,12 @@ async def list_servers(search: Optional[str] = None, group_id: Optional[str] = N
         srv["latest_disk"] = snap.get("disk_percent")
         srv["latest_uptime"] = snap.get("uptime")
         srv["latest_load"] = snap.get("load_avg_1")
+        srv["driver_type"] = srv.get("driver_type") or "agent"
+        try:
+            srv["driver_config"] = json.loads(srv.get("driver_config") or "{}") if isinstance(srv.get("driver_config"), str) else (srv.get("driver_config") or {})
+        except Exception:
+            srv["driver_config"] = {}
+
         # Parse tags JSON
         try:
             srv["tags"] = json.loads(srv["tags"] or "[]")
@@ -117,6 +127,11 @@ async def get_server(server_id: str) -> Optional[Dict[str, Any]]:
         return None
     actual_id = srv["id"]
     srv["tags"] = json.loads(srv.get("tags") or "[]") if isinstance(srv.get("tags"), str) else []
+    srv["driver_type"] = srv.get("driver_type") or "agent"
+    try:
+        srv["driver_config"] = json.loads(srv.get("driver_config") or "{}") if isinstance(srv.get("driver_config"), str) else (srv.get("driver_config") or {})
+    except Exception:
+        srv["driver_config"] = {}
     snap = _latest_snapshots.get(actual_id)
     if not snap:
         last_snap = await fetchone(
@@ -143,19 +158,23 @@ async def register_server(
     tags: Optional[List[str]] = None,
     notes: Optional[str] = None,
     added_by: Optional[int] = None,
+    driver_type: str = "agent",
+    driver_config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Register a new server in the fleet.
+    """Register a new server or device in the fleet.
 
     Args:
-        hostname: Server hostname string.
-        host_ip: Server IP address.
+        hostname: Server or device hostname string.
+        host_ip: IP address or FQDN.
         display_name: Human-friendly name (defaults to hostname).
-        agent_port: Port where PulseOps agent listens (default 3500).
-        os_info: OS description string.
-        arch: CPU architecture string.
+        agent_port: Port where service/agent listens (3500 for agent, 161 for SNMP, 22 for SSH, etc).
+        os_info: OS or device description string.
+        arch: CPU architecture or device family.
         tags: List of tag strings.
         notes: Free-text notes.
         added_by: User ID performing registration.
+        driver_type: Monitoring driver ('agent', 'snmp', 'ssh', 'probe', 'prometheus').
+        driver_config: Dict of driver-specific settings (community, version, ssh user, etc).
 
     Returns:
         Dict with 'success', 'server_id', and 'agent_token' on success.
@@ -175,14 +194,16 @@ async def register_server(
     server_id = str(uuid.uuid4())
     agent_token = str(uuid.uuid4())
     tags_json = json.dumps(tags or [])
+    driver_config_json = json.dumps(driver_config or {})
 
     await execute(
         "INSERT INTO servers (id, hostname, display_name, host_ip, agent_port, agent_token, "
-        "os_info, arch, tags, status, added_by, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'unreachable', ?, ?)",
+        "os_info, arch, tags, status, added_by, notes, driver_type, driver_config) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'unreachable', ?, ?, ?, ?)",
         (server_id, hostname, display_name or hostname, host_ip, agent_port,
-         agent_token, os_info, arch, tags_json, added_by, notes)
+         agent_token, os_info, arch, tags_json, added_by, notes, driver_type, driver_config_json)
     )
-    logger.info("[Fleet] Registered server %s (%s) id=%s", hostname, host_ip, server_id)
+    logger.info("[Fleet] Registered server %s (%s) driver=%s id=%s", hostname, host_ip, driver_type, server_id)
     return {"success": True, "server_id": server_id, "agent_token": agent_token}
 
 
@@ -191,7 +212,7 @@ async def update_server(server_id: str, updates: Dict[str, Any]) -> Dict[str, An
 
     Args:
         server_id: Server UUID.
-        updates: Dict of fields to update (display_name, tags, notes, agent_port, maintenance_until).
+        updates: Dict of fields to update (display_name, tags, notes, agent_port, maintenance_until, driver_type, driver_config).
 
     Returns:
         Dict with 'success' bool.
@@ -204,13 +225,15 @@ async def update_server(server_id: str, updates: Dict[str, Any]) -> Dict[str, An
 
     set_clauses = []
     params = []
-    allowed = {"display_name", "notes", "agent_port", "tags", "group_id", "maintenance_until"}
+    allowed = {"display_name", "notes", "agent_port", "tags", "group_id", "maintenance_until", "driver_type", "driver_config"}
 
     for key in allowed:
         if key in updates:
             value = updates[key]
             if key == "tags":
                 value = json.dumps(value) if isinstance(value, list) else value
+            elif key == "driver_config":
+                value = json.dumps(value) if isinstance(value, dict) else value
             set_clauses.append(f"{key} = ?")
             params.append(value)
 
@@ -515,7 +538,7 @@ async def _poll_all_servers() -> None:
     """Poll each registered server for its current telemetry snapshot."""
     from database import fetchall
     servers = await fetchall(
-        "SELECT id, hostname, host_ip, agent_port, agent_token, status FROM servers"
+        "SELECT id, hostname, host_ip, agent_port, agent_token, status, driver_type, driver_config FROM servers"
     )
     if not servers:
         return
@@ -524,12 +547,297 @@ async def _poll_all_servers() -> None:
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def _poll_server(server: Dict[str, Any]) -> None:
-    """Poll a single server for its telemetry snapshot via HTTP.
+def _exec_ssh_sync(host_ip: str, port: int, username: str, auth_method: str,
+                   password: str, private_key: str, passphrase: str,
+                   cmd: str, timeout: float = 5.0) -> tuple:
+    """Run an SSH command synchronously using paramiko."""
+    import paramiko
+    import io
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        connect_kwargs = {
+            "hostname": host_ip,
+            "port": port or 22,
+            "username": username or "root",
+            "timeout": timeout,
+            "banner_timeout": timeout,
+            "auth_timeout": timeout,
+            "look_for_keys": False,
+            "allow_agent": False,
+        }
+        if auth_method == "key" and private_key:
+            pkey = None
+            for kcls in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey):
+                try:
+                    pkey = kcls.from_private_key(io.StringIO(private_key), password=passphrase or None)
+                    break
+                except Exception:
+                    continue
+            if not pkey:
+                raise ValueError("Could not parse private key (RSA, Ed25519, ECDSA supported)")
+            connect_kwargs["pkey"] = pkey
+        else:
+            connect_kwargs["password"] = password
 
-    Args:
-        server: Server dict from the database.
-    """
+        client.connect(**connect_kwargs)
+        stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout)
+        out = stdout.read().decode("utf-8", errors="ignore")
+        err = stderr.read().decode("utf-8", errors="ignore")
+        return out, err
+    finally:
+        client.close()
+
+
+def _parse_node_exporter_metrics(text: str) -> Dict[str, Any]:
+    """Parse key telemetry metrics from Prometheus node_exporter text format."""
+    import re
+    data: Dict[str, Any] = {"cpu": 0.0, "mem": 0.0, "disk": 0.0, "load1": 0.0, "uptime": 0, "rx_sec": 0, "tx_sec": 0}
+    m_load = re.search(r"^node_load1\s+([0-9.]+)", text, re.M)
+    if m_load:
+        try:
+            data["load1"] = float(m_load.group(1))
+        except Exception:
+            pass
+
+    m_tot = re.search(r"^node_memory_MemTotal_bytes\s+([0-9.]+)", text, re.M)
+    m_avail = re.search(r"^node_memory_MemAvailable_bytes\s+([0-9.]+)", text, re.M)
+    if not m_avail:
+        m_avail = re.search(r"^node_memory_MemFree_bytes\s+([0-9.]+)", text, re.M)
+    if m_tot and m_avail:
+        try:
+            tot = float(m_tot.group(1))
+            avail = float(m_avail.group(1))
+            if tot > 0:
+                data["mem"] = round(((tot - avail) / tot) * 100.0, 1)
+        except Exception:
+            pass
+
+    m_fs_sz = re.search(r'^node_filesystem_size_bytes\{[^}]*mountpoint="/"[^}]*\}\s+([0-9.]+)', text, re.M)
+    m_fs_av = re.search(r'^node_filesystem_avail_bytes\{[^}]*mountpoint="/"[^}]*\}\s+([0-9.]+)', text, re.M)
+    if not m_fs_sz:
+        m_fs_sz = re.search(r'^node_filesystem_size_bytes\{[^}]*\}\s+([0-9.]+)', text, re.M)
+        m_fs_av = re.search(r'^node_filesystem_avail_bytes\{[^}]*\}\s+([0-9.]+)', text, re.M)
+    if m_fs_sz and m_fs_av:
+        try:
+            sz = float(m_fs_sz.group(1))
+            av = float(m_fs_av.group(1))
+            if sz > 0:
+                data["disk"] = round(((sz - av) / sz) * 100.0, 1)
+        except Exception:
+            pass
+
+    m_boot = re.search(r"^node_boot_time_seconds\s+([0-9.]+)", text, re.M)
+    if m_boot:
+        try:
+            data["uptime"] = max(0, int(time.time() - float(m_boot.group(1))))
+        except Exception:
+            pass
+
+    if data["load1"] > 0:
+        data["cpu"] = min(100.0, round(data["load1"] * 25.0, 1))
+
+    return data
+
+
+async def test_server_connection(
+    driver_type: str,
+    host_ip: str,
+    port: int,
+    config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Test connectivity to a server or device with the specified driver."""
+    config = config or {}
+    driver_type = (driver_type or "agent").lower().strip()
+    host_ip = (host_ip or "").strip()
+
+    if not host_ip:
+        return {"success": False, "error": "Host IP or hostname is required"}
+
+    t0 = time.perf_counter()
+
+    try:
+        if driver_type == "agent":
+            import aiohttp
+            agent_port = port or 3500
+            url = f"http://{host_ip}:{agent_port}/api/telemetry/snapshot"
+            headers = {}
+            if config.get("agent_token"):
+                headers["X-Agent-Token"] = config["agent_token"]
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=4.0)) as resp:
+                    latency = round((time.perf_counter() - t0) * 1000, 1)
+                    if resp.status == 200:
+                        data = await resp.json()
+                        sys_info = data.get("sysInfo", {})
+                        return {
+                            "success": True,
+                            "driver": "agent",
+                            "latency_ms": latency,
+                            "message": f"PulseOps agent responded successfully in {latency}ms",
+                            "details": {
+                                "hostname": sys_info.get("hostname") or data.get("hostname", "Unknown"),
+                                "os": sys_info.get("osName") or data.get("os_info", "Linux"),
+                                "arch": sys_info.get("arch") or data.get("arch", "Unknown"),
+                                "cpu_percent": data.get("cpu", 0),
+                            }
+                        }
+                    else:
+                        return {"success": False, "driver": "agent", "latency_ms": latency, "error": f"Agent responded with HTTP status {resp.status}"}
+
+        elif driver_type == "snmp":
+            import warnings
+            warnings.filterwarnings("ignore", category=RuntimeWarning, module="pysnmp.*")
+            from pysnmp.hlapi.asyncio import Slim, ObjectType, ObjectIdentity
+            community = config.get("community", "public") or "public"
+            snmp_version = int(config.get("version", 2) or 2)
+            snmp_port = port or 161
+
+            with Slim(version=snmp_version) as slim:
+                err_ind, err_stat, err_idx, var_binds = await slim.get(
+                    community, host_ip, snmp_port,
+                    ObjectType(ObjectIdentity('1.3.6.1.2.1.1.1.0')),
+                    ObjectType(ObjectIdentity('1.3.6.1.2.1.1.3.0')),
+                    ObjectType(ObjectIdentity('1.3.6.1.2.1.1.5.0')),
+                    timeout=3,
+                    retries=1
+                )
+            latency = round((time.perf_counter() - t0) * 1000, 1)
+            if err_ind:
+                return {"success": False, "driver": "snmp", "latency_ms": latency, "error": f"SNMP Error: {err_ind}"}
+            if err_stat:
+                return {"success": False, "driver": "snmp", "latency_ms": latency, "error": f"SNMP Error: {err_stat.prettyPrint()} at index {err_idx}"}
+
+            sys_descr = str(var_binds[0][1]) if len(var_binds) > 0 else ""
+            sys_uptime = 0
+            try:
+                sys_uptime = int(var_binds[1][1]) // 100
+            except Exception:
+                pass
+            sys_name = str(var_binds[2][1]) if len(var_binds) > 2 else host_ip
+
+            return {
+                "success": True,
+                "driver": "snmp",
+                "latency_ms": latency,
+                "message": f"SNMP agent responded in {latency}ms",
+                "details": {
+                    "sysName": sys_name,
+                    "sysDescr": sys_descr[:160],
+                    "uptime_seconds": sys_uptime,
+                    "version": f"v{snmp_version}",
+                    "community": community,
+                }
+            }
+
+        elif driver_type == "ssh":
+            ssh_port = port or 22
+            username = config.get("username", "root") or "root"
+            auth_method = config.get("auth_method", "password")
+            password = config.get("password", "")
+            private_key = config.get("private_key", "")
+            passphrase = config.get("passphrase", "")
+
+            out, err = await asyncio.to_thread(
+                _exec_ssh_sync, host_ip, ssh_port, username, auth_method, password, private_key, passphrase, "uname -srm; hostname", 4.0
+            )
+            latency = round((time.perf_counter() - t0) * 1000, 1)
+            lines = [l.strip() for l in out.strip().splitlines() if l.strip()]
+            uname_val = lines[0] if lines else "Unknown Linux"
+            remote_hostname = lines[1] if len(lines) > 1 else host_ip
+
+            return {
+                "success": True,
+                "driver": "ssh",
+                "latency_ms": latency,
+                "message": f"SSH connection established as {username} in {latency}ms",
+                "details": {
+                    "hostname": remote_hostname,
+                    "kernel": uname_val,
+                    "user": username,
+                    "port": ssh_port,
+                }
+            }
+
+        elif driver_type == "probe":
+            probe_port = port or 80
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host_ip, probe_port),
+                timeout=3.0
+            )
+            latency = round((time.perf_counter() - t0) * 1000, 1)
+            writer.close()
+            await writer.wait_closed()
+            return {
+                "success": True,
+                "driver": "probe",
+                "latency_ms": latency,
+                "message": f"TCP port {probe_port} reachable in {latency}ms",
+                "details": {
+                    "host": host_ip,
+                    "port": probe_port,
+                    "type": "TCP Port Probe",
+                }
+            }
+
+        elif driver_type == "prometheus":
+            import aiohttp
+            prom_port = port or 9100
+            path = config.get("path", "/metrics") or "/metrics"
+            if not path.startswith("/"):
+                path = "/" + path
+            scheme = "https" if config.get("tls") else "http"
+            url = f"{scheme}://{host_ip}:{prom_port}{path}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=4.0)) as resp:
+                    latency = round((time.perf_counter() - t0) * 1000, 1)
+                    if resp.status == 200:
+                        text = await resp.text()
+                        line_count = len(text.splitlines())
+                        has_node = "node_" in text
+                        return {
+                            "success": True,
+                            "driver": "prometheus",
+                            "latency_ms": latency,
+                            "message": f"Prometheus endpoint responding ({line_count} metric lines) in {latency}ms",
+                            "details": {
+                                "url": url,
+                                "metric_lines": line_count,
+                                "node_exporter_detected": has_node,
+                            }
+                        }
+                    else:
+                        return {"success": False, "driver": "prometheus", "latency_ms": latency, "error": f"Endpoint returned HTTP {resp.status}"}
+
+        else:
+            return {"success": False, "error": f"Unknown driver type '{driver_type}'"}
+
+    except asyncio.TimeoutError:
+        latency = round((time.perf_counter() - t0) * 1000, 1)
+        return {"success": False, "latency_ms": latency, "error": f"Connection timed out after {latency}ms"}
+    except Exception as e:
+        latency = round((time.perf_counter() - t0) * 1000, 1)
+        return {"success": False, "latency_ms": latency, "error": str(e)}
+
+
+async def _poll_server(server: Dict[str, Any]) -> None:
+    """Route polling for a single server to its configured driver."""
+    driver = (server.get("driver_type") or "agent").lower().strip()
+    if driver == "snmp":
+        await _poll_snmp_server(server)
+    elif driver == "ssh":
+        await _poll_ssh_server(server)
+    elif driver == "probe":
+        await _poll_probe_server(server)
+    elif driver == "prometheus":
+        await _poll_prometheus_server(server)
+    else:
+        await _poll_agent_server(server)
+
+
+async def _poll_agent_server(server: Dict[str, Any]) -> None:
+    """Poll a PulseOps agent node via HTTP."""
     server_id = server["id"]
     hostname = server["hostname"]
     host_ip = server["host_ip"]
@@ -577,12 +885,251 @@ async def _poll_server(server: Dict[str, Any]) -> None:
                 else:
                     await _handle_poll_failure(server_id, hostname)
     except ImportError:
-        # aiohttp not available — mark as unreachable
         pass
     except asyncio.TimeoutError:
         await _handle_poll_failure(server_id, hostname)
     except Exception as e:
         logger.debug("[Fleet] Poll failed for %s (%s): %s", hostname, host_ip, e)
+        await _handle_poll_failure(server_id, hostname)
+
+
+async def _poll_snmp_server(server: Dict[str, Any]) -> None:
+    """Poll an SNMP device via SNMP v1/v2c."""
+    server_id = server["id"]
+    hostname = server["hostname"]
+    host_ip = server["host_ip"]
+    port = server.get("agent_port", 161) or 161
+    cfg = server.get("driver_config") or {}
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except Exception:
+            cfg = {}
+    community = cfg.get("community", "public") or "public"
+    version = int(cfg.get("version", 2) or 2)
+
+    try:
+        import warnings
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="pysnmp.*")
+        from pysnmp.hlapi.asyncio import Slim, ObjectType, ObjectIdentity
+
+        t0 = time.perf_counter()
+        with Slim(version=version) as slim:
+            err_ind, err_stat, err_idx, var_binds = await slim.get(
+                community, host_ip, port,
+                ObjectType(ObjectIdentity('1.3.6.1.2.1.1.1.0')),
+                ObjectType(ObjectIdentity('1.3.6.1.2.1.1.3.0')),
+                ObjectType(ObjectIdentity('1.3.6.1.2.1.1.5.0')),
+                timeout=AGENT_TIMEOUT_SECS,
+                retries=1
+            )
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        if err_ind or err_stat:
+            await _handle_poll_failure(server_id, hostname)
+            return
+
+        sys_descr = str(var_binds[0][1]) if len(var_binds) > 0 else ""
+        sys_uptime = 0
+        try:
+            sys_uptime = int(var_binds[1][1]) // 100
+        except Exception:
+            pass
+        sys_name = str(var_binds[2][1]) if len(var_binds) > 2 else hostname
+
+        snapshot = {
+            "cpu": 0.0,
+            "mem": 0.0,
+            "disk": 0.0,
+            "rx_sec": 0,
+            "tx_sec": 0,
+            "load1": latency_ms,
+            "uptime": sys_uptime,
+            "hostname": sys_name,
+            "os_info": sys_descr[:120] if sys_descr else "SNMP Device",
+            "arch": f"snmp-v{version}",
+        }
+        await process_heartbeat(server.get("agent_token", ""), snapshot)
+        _failure_counts[server_id] = 0
+    except Exception as e:
+        logger.debug("[Fleet] SNMP poll failed for %s (%s): %s", hostname, host_ip, e)
+        await _handle_poll_failure(server_id, hostname)
+
+
+async def _poll_ssh_server(server: Dict[str, Any]) -> None:
+    """Poll a remote Linux machine agentlessly via SSH."""
+    server_id = server["id"]
+    hostname = server["hostname"]
+    host_ip = server["host_ip"]
+    port = server.get("agent_port", 22) or 22
+    cfg = server.get("driver_config") or {}
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except Exception:
+            cfg = {}
+    username = cfg.get("username", "root") or "root"
+    auth_method = cfg.get("auth_method", "password")
+    password = cfg.get("password", "")
+    private_key = cfg.get("private_key", "")
+    passphrase = cfg.get("passphrase", "")
+
+    cmd = "cat /proc/loadavg 2>/dev/null; echo '---SEP---'; free -m 2>/dev/null; echo '---SEP---'; df -m / 2>/dev/null; echo '---SEP---'; cat /proc/uptime 2>/dev/null; echo '---SEP---'; uname -srm 2>/dev/null"
+    try:
+        out, _ = await asyncio.to_thread(
+            _exec_ssh_sync, host_ip, port, username, auth_method, password, private_key, passphrase, cmd, AGENT_TIMEOUT_SECS
+        )
+        parts = out.split('---SEP---')
+        load1 = 0.0
+        mem_pct = 0.0
+        disk_pct = 0.0
+        uptime = 0
+        os_info = "Linux (SSH)"
+        arch = ""
+
+        if len(parts) >= 1 and parts[0].strip():
+            load_fields = parts[0].strip().split()
+            if load_fields:
+                try:
+                    load1 = float(load_fields[0])
+                except Exception:
+                    pass
+
+        if len(parts) >= 2 and parts[1].strip():
+            for line in parts[1].strip().splitlines():
+                if line.startswith("Mem:"):
+                    f = line.split()
+                    if len(f) >= 3:
+                        try:
+                            tot = float(f[1])
+                            used = float(f[2])
+                            if tot > 0:
+                                mem_pct = round((used / tot) * 100.0, 1)
+                        except Exception:
+                            pass
+
+        if len(parts) >= 3 and parts[2].strip():
+            lines = parts[2].strip().splitlines()
+            if len(lines) >= 2:
+                cols = lines[1].split()
+                for c in cols:
+                    if c.endswith('%'):
+                        try:
+                            disk_pct = float(c.replace('%', ''))
+                        except Exception:
+                            pass
+                        break
+
+        if len(parts) >= 4 and parts[3].strip():
+            up_fields = parts[3].strip().split()
+            if up_fields:
+                try:
+                    uptime = int(float(up_fields[0]))
+                except Exception:
+                    pass
+
+        if len(parts) >= 5 and parts[4].strip():
+            u = parts[4].strip().split()
+            if len(u) >= 2:
+                os_info = f"{u[0]} {u[1]}"
+            if len(u) >= 3:
+                arch = u[2]
+
+        snapshot = {
+            "cpu": min(100.0, round(load1 * 25.0, 1)),
+            "mem": mem_pct,
+            "disk": disk_pct,
+            "rx_sec": 0,
+            "tx_sec": 0,
+            "load1": load1,
+            "uptime": uptime,
+            "hostname": hostname,
+            "os_info": os_info,
+            "arch": arch,
+        }
+        await process_heartbeat(server.get("agent_token", ""), snapshot)
+        _failure_counts[server_id] = 0
+    except Exception as e:
+        logger.debug("[Fleet] SSH poll failed for %s (%s): %s", hostname, host_ip, e)
+        await _handle_poll_failure(server_id, hostname)
+
+
+async def _poll_probe_server(server: Dict[str, Any]) -> None:
+    """Poll a target via lightweight TCP probe."""
+    server_id = server["id"]
+    hostname = server["hostname"]
+    host_ip = server["host_ip"]
+    port = server.get("agent_port", 80) or 80
+    try:
+        t0 = time.perf_counter()
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host_ip, port),
+            timeout=AGENT_TIMEOUT_SECS
+        )
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        writer.close()
+        await writer.wait_closed()
+
+        snapshot = {
+            "cpu": 0.0,
+            "mem": 0.0,
+            "disk": 0.0,
+            "rx_sec": 0,
+            "tx_sec": 0,
+            "load1": latency_ms,
+            "uptime": 0,
+            "hostname": hostname,
+            "os_info": f"TCP Port {port} Probe",
+            "arch": "probe",
+        }
+        await process_heartbeat(server.get("agent_token", ""), snapshot)
+        _failure_counts[server_id] = 0
+    except Exception as e:
+        logger.debug("[Fleet] TCP probe failed for %s (%s:%d): %s", hostname, host_ip, port, e)
+        await _handle_poll_failure(server_id, hostname)
+
+
+async def _poll_prometheus_server(server: Dict[str, Any]) -> None:
+    """Poll a target exposing Prometheus node_exporter metrics."""
+    server_id = server["id"]
+    hostname = server["hostname"]
+    host_ip = server["host_ip"]
+    port = server.get("agent_port", 9100) or 9100
+    cfg = server.get("driver_config") or {}
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except Exception:
+            cfg = {}
+    path = cfg.get("path", "/metrics") or "/metrics"
+    if not path.startswith("/"):
+        path = "/" + path
+    scheme = "https" if cfg.get("tls") else "http"
+    url = f"{scheme}://{host_ip}:{port}{path}"
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=AGENT_TIMEOUT_SECS)) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    parsed = _parse_node_exporter_metrics(text)
+                    snapshot = {
+                        "cpu": parsed.get("cpu", 0.0),
+                        "mem": parsed.get("mem", 0.0),
+                        "disk": parsed.get("disk", 0.0),
+                        "rx_sec": parsed.get("rx_sec", 0),
+                        "tx_sec": parsed.get("tx_sec", 0),
+                        "load1": parsed.get("load1", 0.0),
+                        "uptime": parsed.get("uptime", 0),
+                        "hostname": hostname,
+                        "os_info": "Prometheus Node Exporter",
+                        "arch": "exporter",
+                    }
+                    await process_heartbeat(server.get("agent_token", ""), snapshot)
+                    _failure_counts[server_id] = 0
+                else:
+                    await _handle_poll_failure(server_id, hostname)
+    except Exception as e:
+        logger.debug("[Fleet] Prometheus poll failed for %s (%s): %s", hostname, host_ip, e)
         await _handle_poll_failure(server_id, hostname)
 
 

@@ -1288,10 +1288,24 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     tags=json_body.get('tags', []),
                     notes=json_body.get('notes'),
                     added_by=user['id'],
+                    driver_type=json_body.get('driver_type', 'agent'),
+                    driver_config=json_body.get('driver_config', {}),
                 )
                 if not result['success']:
                     return await send_json_response(writer, {'detail': result['error']}, 400)
-                await audit.log_action('fleet.server.add', user_id=user['id'], user_email=user['email'], resource_type='server', details={'hostname': json_body.get('hostname')})
+                await audit.log_action('fleet.server.add', user_id=user['id'], user_email=user['email'], resource_type='server', details={'hostname': json_body.get('hostname'), 'driver_type': json_body.get('driver_type', 'agent')})
+                return await send_json_response(writer, result)
+
+            if path == '/api/fleet/test-connection' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                result = await fleet_module.test_server_connection(
+                    driver_type=json_body.get('driver_type', 'agent'),
+                    host_ip=json_body.get('host_ip', ''),
+                    port=int(json_body.get('port') or json_body.get('agent_port') or 0),
+                    config=json_body.get('driver_config') or json_body.get('config') or {},
+                )
                 return await send_json_response(writer, result)
 
             if path.startswith('/api/fleet/servers/') and method == 'GET' and len(path.split('/')) == 5:

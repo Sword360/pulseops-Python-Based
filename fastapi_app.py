@@ -533,6 +533,8 @@ async def api_register_server(
         tags=payload.get("tags", []),
         notes=payload.get("notes"),
         added_by=current_user["id"],
+        driver_type=payload.get("driver_type", "agent"),
+        driver_config=payload.get("driver_config", {}),
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -540,9 +542,26 @@ async def api_register_server(
         "fleet.server.add", user_id=current_user["id"], user_email=current_user["email"],
         resource_type="server", resource_id=result.get("server_id"),
         ip_address=get_client_ip(request),
-        details={"hostname": payload.get("hostname"), "host_ip": payload.get("host_ip")},
+        details={"hostname": payload.get("hostname"), "host_ip": payload.get("host_ip"), "driver_type": payload.get("driver_type", "agent")},
     )
     return result
+
+
+@app.post("/api/fleet/test-connection")
+async def api_test_connection(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(require_admin),
+):
+    """Test connectivity to a remote server or enterprise device."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await fleet_module.test_server_connection(
+        driver_type=payload.get("driver_type", "agent"),
+        host_ip=payload.get("host_ip", ""),
+        port=int(payload.get("port") or payload.get("agent_port") or 0),
+        config=payload.get("driver_config") or payload.get("config") or {},
+    )
 
 
 @app.put("/api/fleet/servers/{server_id}")

@@ -77,7 +77,9 @@ CREATE TABLE IF NOT EXISTS servers (
     added_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_seen TEXT,
     notes TEXT,
-    maintenance_until TEXT
+    maintenance_until TEXT,
+    driver_type TEXT DEFAULT 'agent',
+    driver_config TEXT DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS invite_tokens (
@@ -318,6 +320,20 @@ async def init_db() -> None:
             (key, value, dtype)
         )
     await db.commit()
+
+    # Ensure servers table has enterprise driver columns
+    try:
+        cursor = await db.execute("PRAGMA table_info(servers)")
+        rows = await cursor.fetchall()
+        cols = [r["name"] for r in rows]
+        if "driver_type" not in cols:
+            await db.execute("ALTER TABLE servers ADD COLUMN driver_type TEXT DEFAULT 'agent'")
+        if "driver_config" not in cols:
+            await db.execute("ALTER TABLE servers ADD COLUMN driver_config TEXT DEFAULT '{}'")
+        await db.commit()
+    except Exception as e:
+        logger.warning("[DB] Servers table driver columns migration check: %s", e)
+
     logger.info("[DB] Schema initialized at %s", DB_PATH)
 
 
