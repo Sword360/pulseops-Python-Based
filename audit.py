@@ -7,7 +7,6 @@ filtered, paginated read access for the admin audit viewer.
 
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("pulseops.audit")
@@ -94,10 +93,10 @@ async def get_audit_log(
         where_clauses.append("result = ?")
         params.append(result_filter)
     if date_from:
-        where_clauses.append("timestamp >= ?")
+        where_clauses.append("datetime(timestamp) >= datetime(?)")
         params.append(date_from)
     if date_to:
-        where_clauses.append("timestamp <= ?")
+        where_clauses.append("datetime(timestamp) <= datetime(?)")
         params.append(date_to)
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""

@@ -319,13 +319,26 @@ async def set_setting(key: str, value: str, user_id: Optional[int] = None) -> No
 async def cleanup_expired_tokens() -> None:
     """Remove expired JWT blacklist entries to keep the table small."""
     await execute(
-        "DELETE FROM token_blacklist WHERE expires_at < datetime('now')"
+        "DELETE FROM token_blacklist WHERE datetime(expires_at) < datetime('now')"
     )
 
 
-async def cleanup_old_snapshots() -> None:
+async def cleanup_old_snapshots(retention_hours: Optional[int] = None) -> None:
     """Delete telemetry snapshots older than the retention window."""
-    retention_hours = int(await get_setting("snapshot_retention_hours", "12"))
+    if retention_hours is None:
+        try:
+            retention_hours = int(await get_setting("snapshot_retention_hours", "12"))
+        except (ValueError, TypeError):
+            retention_hours = 12
     await execute(
-        f"DELETE FROM server_snapshots WHERE timestamp < datetime('now', '-{retention_hours} hours')"
+        "DELETE FROM server_snapshots WHERE timestamp < datetime('now', '-' || ? || ' hours')",
+        (retention_hours,)
     )
+
+
+async def close_db() -> None:
+    """Close the active database connection if open."""
+    global _connection
+    if _connection is not None:
+        await _connection.close()
+        _connection = None

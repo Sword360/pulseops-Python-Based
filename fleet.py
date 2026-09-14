@@ -110,21 +110,23 @@ async def get_server(server_id: str) -> Optional[Dict[str, Any]]:
     """
     from database import fetchone
     srv = await fetchone(
-        "SELECT * FROM servers WHERE id = ?", (server_id,)
+        "SELECT * FROM servers WHERE id = ? OR hostname = ? OR display_name = ? OR host_ip = ?",
+        (server_id, server_id, server_id, server_id)
     )
     if not srv:
         return None
+    actual_id = srv["id"]
     srv["tags"] = json.loads(srv.get("tags") or "[]") if isinstance(srv.get("tags"), str) else []
-    snap = _latest_snapshots.get(server_id)
+    snap = _latest_snapshots.get(actual_id)
     if not snap:
         last_snap = await fetchone(
             "SELECT cpu_percent, mem_percent, disk_percent, net_rx_sec, net_tx_sec, load_avg_1, uptime "
             "FROM server_snapshots WHERE server_id = ? ORDER BY id DESC LIMIT 1",
-            (server_id,)
+            (actual_id,)
         )
         if last_snap:
             snap = dict(last_snap)
-            _latest_snapshots[server_id] = snap
+            _latest_snapshots[actual_id] = snap
         else:
             snap = {}
     srv["latest_snapshot"] = snap
@@ -291,12 +293,12 @@ async def list_invite_tokens(created_by: Optional[int] = None) -> List[Dict[str,
     if created_by:
         return await fetchall(
             "SELECT token, created_at, expires_at, used, used_by_server FROM invite_tokens "
-            "WHERE created_by = ? AND used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC",
+            "WHERE created_by = ? AND used = 0 AND datetime(expires_at) > datetime('now') ORDER BY created_at DESC",
             (created_by,)
         )
     return await fetchall(
         "SELECT token, created_by, created_at, expires_at, used, used_by_server FROM invite_tokens "
-        "WHERE used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC"
+        "WHERE used = 0 AND datetime(expires_at) > datetime('now') ORDER BY created_at DESC"
     )
 
 
@@ -325,7 +327,7 @@ async def consume_invite_token(token: str) -> Optional[Dict[str, Any]]:
     """
     from database import fetchone, execute
     row = await fetchone(
-        "SELECT token, created_by FROM invite_tokens WHERE token = ? AND used = 0 AND expires_at > datetime('now')",
+        "SELECT token, created_by FROM invite_tokens WHERE token = ? AND used = 0 AND datetime(expires_at) > datetime('now')",
         (token,)
     )
     if not row:
@@ -360,9 +362,36 @@ async def process_heartbeat(agent_token: str, payload: Dict[str, Any]) -> Dict[s
     server_id = server["id"]
     was_offline = server["status"] in ("offline", "unreachable")
 
-    # Compute new status
-    cpu = float(payload.get("cpu", 0))
-    mem = float(payload.get("mem", 0))
+    # Compute new status safely
+    try:
+        cpu = float(payload.get("cpu", 0) or 0)
+    except (ValueError, TypeError):
+        cpu = 0.0
+    try:
+        mem = float(payload.get("mem", 0) or 0)
+    except (ValueError, TypeError):
+        mem = 0.0
+    try:
+        disk = float(payload.get("disk", 0) or 0)
+    except (ValueError, TypeError):
+        disk = 0.0
+    try:
+        rx_sec = int(payload.get("rx_sec", 0) or 0)
+    except (ValueError, TypeError):
+        rx_sec = 0
+    try:
+        tx_sec = int(payload.get("tx_sec", 0) or 0)
+    except (ValueError, TypeError):
+        tx_sec = 0
+    try:
+        load1 = float(payload.get("load1", 0) or 0)
+    except (ValueError, TypeError):
+        load1 = 0.0
+    try:
+        uptime = int(payload.get("uptime", 0) or 0)
+    except (ValueError, TypeError):
+        uptime = 0
+
     new_status = "degraded" if (cpu > 85 or mem > 90) else "online"
 
     # Update server record
@@ -376,11 +405,11 @@ async def process_heartbeat(agent_token: str, payload: Dict[str, Any]) -> Dict[s
     snapshot = {
         "cpu_percent": cpu,
         "mem_percent": mem,
-        "disk_percent": float(payload.get("disk", 0)),
-        "net_rx_sec": int(payload.get("rx_sec", 0)),
-        "net_tx_sec": int(payload.get("tx_sec", 0)),
-        "load_avg_1": float(payload.get("load1", 0)),
-        "uptime": int(payload.get("uptime", 0)),
+        "disk_percent": disk,
+        "net_rx_sec": rx_sec,
+        "net_tx_sec": tx_sec,
+        "load_avg_1": load1,
+        "uptime": uptime,
         "os_info": payload.get("os_info") or server.get("os_info"),
         "arch": payload.get("arch") or server.get("arch"),
     }
@@ -452,13 +481,13 @@ async def get_server_metrics_history(
 
     # Bucket by 5-minute intervals
     return await fetchall(
-        f"SELECT strftime('%Y-%m-%dT%H:%M:00', timestamp) as time_bucket, "
+        f"SELECT strftime('%Y-%m-%dT%H:', timestamp) || printf('%02d:00', (CAST(strftime('%M', timestamp) AS INTEGER) / 5) * 5) as time_bucket, "
         f"AVG({metric}) as avg_value, MAX({metric}) as max_value "
         f"FROM server_snapshots "
-        f"WHERE server_id = ? AND timestamp > datetime('now', '-{range_hours} hours') "
-        f"GROUP BY strftime('%Y-%m-%dT%H:%M', timestamp, 'start of minute', '-' || (strftime('%M', timestamp) % 5) || ' minutes') "
+        f"WHERE server_id = ? AND datetime(timestamp) > datetime('now', '-' || ? || ' hours') "
+        f"GROUP BY time_bucket "
         f"ORDER BY time_bucket ASC",
-        (server_id,)
+        (server_id, range_hours)
     )
 
 
@@ -484,7 +513,7 @@ async def fleet_health_poll_loop() -> None:
 
 async def _poll_all_servers() -> None:
     """Poll each registered server for its current telemetry snapshot."""
-    from database import fetchall, execute
+    from database import fetchall
     servers = await fetchall(
         "SELECT id, hostname, host_ip, agent_port, agent_token, status FROM servers"
     )
@@ -505,6 +534,34 @@ async def _poll_server(server: Dict[str, Any]) -> None:
     hostname = server["hostname"]
     host_ip = server["host_ip"]
     port = server.get("agent_port", 3500)
+
+    # For local master, read telemetry directly to avoid fragile loopback HTTP issues
+    if server_id == "local-master" or host_ip == "127.0.0.1":
+        try:
+            import telemetry
+            data = await telemetry.get_full_telemetry()
+            mem = data.get("memory", {})
+            disks = data.get("disks", [])
+            net = data.get("network", {})
+            sys_info = data.get("sysInfo", {})
+            snapshot = {
+                "cpu": data.get("cpu", 0),
+                "mem": mem.get("usagePercent", 0),
+                "disk": disks[0]["usagePercent"] if disks else 0,
+                "rx_sec": net.get("rxSec", 0),
+                "tx_sec": net.get("txSec", 0),
+                "load1": (sys_info.get("loadAvg") or [0])[0],
+                "uptime": sys_info.get("uptime", 0),
+                "hostname": sys_info.get("hostname", ""),
+                "os_info": sys_info.get("osName", ""),
+                "arch": sys_info.get("arch", ""),
+            }
+            await process_heartbeat(server.get("agent_token", ""), snapshot)
+            _failure_counts[server_id] = 0
+            return
+        except Exception as e:
+            logger.debug("[Fleet] Local poll error: %s", e)
+
     url = f"http://{host_ip}:{port}/api/telemetry/snapshot"
 
     try:
@@ -818,6 +875,10 @@ async def ensure_local_server(port: int = 3500) -> str:
     from database import fetchone, execute
     local = await fetchone("SELECT id FROM servers WHERE host_ip = '127.0.0.1' OR tags LIKE '%master%' LIMIT 1")
     if local:
+        await execute(
+            "UPDATE servers SET status = 'online', last_seen = datetime('now'), agent_port = ? WHERE id = ?",
+            (port, local["id"])
+        )
         return local["id"]
 
     import socket

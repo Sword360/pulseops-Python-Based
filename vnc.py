@@ -1,10 +1,8 @@
 import os
-import sys
 import struct
-import socket
 import asyncio
 import subprocess
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 built_in_vnc_server = None
 is_built_in_vnc_running = False
@@ -68,46 +66,102 @@ class EmbeddedVNCProtocol:
             self.writer.write(b"RFB 003.008\n")
             await self.writer.drain()
 
+            buffer = bytearray()
             while not self.reader.at_eof():
-                data = await self.reader.read(1024)
-                if not data:
+                chunk = await self.reader.read(4096)
+                if not chunk:
                     break
+                buffer.extend(chunk)
 
-                if self.state == 0:
-                    # Client version response -> Send Security Types (1 type: 1 None)
-                    self.state = 1
-                    self.writer.write(bytes([1, 1]))
-                    await self.writer.drain()
+                # Drain buffer across all protocol states
+                while True:
+                    if self.state == 0:
+                        # Client version response: 12 bytes
+                        if len(buffer) < 12:
+                            break
+                        buffer = buffer[12:]
+                        self.state = 1
+                        # Send Security Types (1 type: 1 None)
+                        self.writer.write(bytes([1, 1]))
+                        await self.writer.drain()
 
-                elif self.state == 1:
-                    # Security type selection -> Send SecurityResult 0 (OK)
-                    self.state = 2
-                    res = struct.pack(">I", 0)
-                    self.writer.write(res)
-                    await self.writer.drain()
+                    elif self.state == 1:
+                        # Security type selection: 1 byte
+                        if len(buffer) < 1:
+                            break
+                        buffer = buffer[1:]
+                        self.state = 2
+                        # Send SecurityResult 0 (OK)
+                        res = struct.pack(">I", 0)
+                        self.writer.write(res)
+                        await self.writer.drain()
 
-                elif self.state == 2:
-                    # ClientInit -> Send ServerInit
-                    self.state = 3
-                    w, h = 1280, 800
-                    name = b"PulseOps Embedded VNC (Python)"
-                    
-                    # PixelFormat: 16 bytes
-                    pf = struct.pack(
-                        ">BBBBHHHBBB3x",
-                        32, 24, 0, 1, 255, 255, 255, 16, 8, 0
-                    )
-                    server_init = struct.pack(">HH", w, h) + pf + struct.pack(">I", len(name)) + name
-                    self.writer.write(server_init)
-                    await self.writer.drain()
+                    elif self.state == 2:
+                        # ClientInit: 1 byte
+                        if len(buffer) < 1:
+                            break
+                        buffer = buffer[1:]
+                        self.state = 3
+                        w, h = 1280, 800
+                        name = b"PulseOps Embedded VNC (Python)"
 
-                elif self.state == 3:
-                    # FramebufferUpdateRequest (msgType 3)
-                    msg_type = data[0]
-                    if msg_type == 3 and len(data) >= 10:
-                        await self.send_framebuffer_update(1280, 800)
+                        # PixelFormat: 16 bytes
+                        pf = struct.pack(
+                            ">BBBBHHHBBB3x",
+                            32, 24, 0, 1, 255, 255, 255, 16, 8, 0
+                        )
+                        server_init = struct.pack(">HH", w, h) + pf + struct.pack(">I", len(name)) + name
+                        self.writer.write(server_init)
+                        await self.writer.drain()
 
-        except Exception as e:
+                    elif self.state == 3:
+                        # Parse client messages in stream
+                        while len(buffer) > 0:
+                            msg_type = buffer[0]
+                            if msg_type == 0:
+                                # SetPixelFormat: 20 bytes
+                                if len(buffer) < 20:
+                                    break
+                                buffer = buffer[20:]
+                            elif msg_type == 2:
+                                # SetEncodings: 4 + 4*numEncodings bytes
+                                if len(buffer) < 4:
+                                    break
+                                num_enc = struct.unpack(">H", buffer[2:4])[0]
+                                total_len = 4 + 4 * num_enc
+                                if len(buffer) < total_len:
+                                    break
+                                buffer = buffer[total_len:]
+                            elif msg_type == 3:
+                                # FramebufferUpdateRequest: 10 bytes
+                                if len(buffer) < 10:
+                                    break
+                                buffer = buffer[10:]
+                                await self.send_framebuffer_update(1280, 800)
+                            elif msg_type == 4:
+                                # KeyEvent: 8 bytes
+                                if len(buffer) < 8:
+                                    break
+                                buffer = buffer[8:]
+                            elif msg_type == 5:
+                                # PointerEvent: 6 bytes
+                                if len(buffer) < 6:
+                                    break
+                                buffer = buffer[6:]
+                            elif msg_type == 6:
+                                # ClientCutText: 8 + len bytes
+                                if len(buffer) < 8:
+                                    break
+                                txt_len = struct.unpack(">I", buffer[4:8])[0]
+                                total_len = 8 + txt_len
+                                if len(buffer) < total_len:
+                                    break
+                                buffer = buffer[total_len:]
+                            else:
+                                buffer = buffer[1:]
+                        break
+
+        except Exception:
             pass
         finally:
             self.writer.close()
@@ -128,10 +182,10 @@ class EmbeddedVNCProtocol:
         # Pixel data (RGBx)
         pixels = bytearray(rect_w * rect_h * 4)
         for i in range(0, len(pixels), 4):
-            pixels[i] = 16     # Blue
-            pixels[i + 1] = 24 # Green
-            pixels[i + 2] = 43 # Red
-            pixels[i + 3] = 255# Alpha
+            pixels[i] = 16      # Blue
+            pixels[i + 1] = 24  # Green
+            pixels[i + 2] = 43  # Red
+            pixels[i + 3] = 255  # Alpha
 
         self.writer.write(hdr + rect_hdr + bytes(pixels))
         await self.writer.drain()
@@ -170,7 +224,7 @@ async def launch_vnc(display: str = ':0', port: int = 5900, use_native: bool = F
     bin_path = stdout.decode('utf-8').strip()
 
     if proc.returncode != 0 or not bin_path:
-        native_res = await start_built_in_vnc_server(port)
+        await start_built_in_vnc_server(port)
         return {
             "success": True,
             "native": True,
@@ -188,7 +242,7 @@ async def launch_vnc(display: str = ':0', port: int = 5900, use_native: bool = F
     stdout, stderr = await proc.communicate()
 
     if proc.returncode != 0:
-        native_res = await start_built_in_vnc_server(port)
+        await start_built_in_vnc_server(port)
         return {
             "success": True,
             "native": True,

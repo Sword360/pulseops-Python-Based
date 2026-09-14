@@ -290,6 +290,10 @@ class PulseOpsDashboard {
                 if (btn.dataset.tab === 'processes' && window.procMgr)    window.procMgr.loadProcesses();
                 if (btn.dataset.tab === 'vnc'       && window.vncMgr)     window.vncMgr.checkHostVncStatus();
                 if (btn.dataset.tab === 'terminal'  && window.webTerminal) {
+                    const hostBtn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
+                    const hostIp = hostBtn ? hostBtn.dataset.ip : '';
+                    const hostDisplay = window.PulseOpsCurrentServerHostname || (this.currentServerId === 'local-master' ? 'mail.sword.local' : 'Remote Node');
+                    window.webTerminal.setServer(this.currentServerId, hostDisplay, hostIp);
                     if (typeof window.webTerminal.onTabActivated === 'function') {
                         window.webTerminal.onTabActivated();
                     }
@@ -384,12 +388,15 @@ class PulseOpsDashboard {
         });
 
         const btn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
-        const ip = btn ? btn.dataset.ip : '';
-        const port = btn ? btn.dataset.port : '';
-        const os = btn ? btn.dataset.os : '';
+        const fleetServer = (window.PulseOpsFleet && typeof window.PulseOpsFleet.getServers === 'function') 
+            ? window.PulseOpsFleet.getServers().find(s => s.id === this.currentServerId) : null;
+
+        const ip = btn ? btn.dataset.ip : (fleetServer ? fleetServer.host_ip : '');
+        const port = btn ? btn.dataset.port : (fleetServer ? fleetServer.agent_port : '');
+        const os = btn ? btn.dataset.os : (fleetServer ? fleetServer.os_info : '');
 
         const isMaster = !this.currentServerId || this.currentServerId === 'local-master';
-        const displayHost = hostname || (isMaster ? 'mail.sword.local' : (btn?.dataset.hostname || 'Server'));
+        const displayHost = hostname || fleetServer?.display_name || fleetServer?.hostname || (isMaster ? 'mail.sword.local' : (btn?.dataset.hostname || 'Server'));
 
         // Pre-hydrate identity bar immediately with known data to avoid placeholder flicker
         this._setText('server-identity-hostname', isMaster ? `${displayHost} (Master)` : displayHost);
@@ -419,6 +426,9 @@ class PulseOpsDashboard {
         const activeTab = document.querySelector('#section-server-dashboard .nav-tabs .tab-btn.active')?.dataset.tab || 'overview';
         if (activeTab === 'processes' && window.procMgr) window.procMgr.loadProcesses();
         if (activeTab === 'services' && window.systemdMgr) window.systemdMgr.loadServices();
+        if (activeTab === 'terminal' && window.webTerminal && typeof window.webTerminal.onTabActivated === 'function') {
+            window.webTerminal.onTabActivated();
+        }
 
         // Dashboard Remove Server button visibility (Admin only)
         const removeBtn = document.getElementById('btn-dashboard-remove-server');

@@ -75,8 +75,12 @@ class SystemdServiceManager {
     }
 
     async loadServices() {
-        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const sId = window.PulseOpsCurrentServer || (window.PulseOpsApp ? window.PulseOpsApp.currentServerId : 'local-master');
         const hostname = window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'Master' : 'Remote Node');
+
+        if (this.tableBody) {
+            this.tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-dim); padding:2rem;">Loading systemd services from <strong>${hostname}</strong>...</td></tr>`;
+        }
 
         try {
             const res = await _authFetch(`/api/services?server_id=${encodeURIComponent(sId)}`);
@@ -109,13 +113,21 @@ class SystemdServiceManager {
                 this.services = data.services || [];
                 this.updateCounters();
                 this.render();
-            } else if (data.error) {
+            } else {
+                const errMsg = data.error || data.detail || (res.status === 401 ? 'Session expired — please re-login' : 'Failed to load services');
+                this.services = [];
+                this.updateCounters();
                 if (this.tableBody) {
-                    this.tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--accent-red); padding: 2rem;">Error: ${data.error}</td></tr>`;
+                    this.tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--accent-red); padding: 2rem;">Error loading services from ${hostname}: ${errMsg}</td></tr>`;
                 }
             }
         } catch (e) {
             console.error('Failed to load systemd services:', e);
+            this.services = [];
+            this.updateCounters();
+            if (this.tableBody) {
+                this.tableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--accent-red); padding: 2rem;">Network error fetching services from ${hostname}</td></tr>`;
+            }
         }
     }
 
@@ -134,7 +146,7 @@ class SystemdServiceManager {
             window.showToast && window.showToast('Permission denied: Viewer accounts cannot modify systemd services', 'error');
             return;
         }
-        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const sId = window.PulseOpsCurrentServer || (window.PulseOpsApp ? window.PulseOpsApp.currentServerId : 'local-master');
         try {
             window.showToast && window.showToast(`Executing ${action} on ${serviceName}...`, 'info');
             const res = await _authFetch('/api/services/action', {
@@ -156,7 +168,7 @@ class SystemdServiceManager {
 
     async openLogsModal(serviceName) {
         if (!this.modal) return;
-        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const sId = window.PulseOpsCurrentServer || (window.PulseOpsApp ? window.PulseOpsApp.currentServerId : 'local-master');
         this.modalTitle.textContent = `Journalctl Logs: ${serviceName}`;
         this.modalLogsContainer.textContent = 'Loading logs...';
         this.modal.classList.add('active');

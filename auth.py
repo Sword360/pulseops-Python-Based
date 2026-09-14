@@ -137,7 +137,8 @@ def create_access_token(user_id: int, email: str, role: str) -> str:
     if JWT_AVAILABLE:
         return pyjwt.encode(payload, SECRET_KEY, algorithm="HS256")
     # Fallback: base64 JSON (NOT secure — development only)
-    import base64, json
+    import base64
+    import json
     return base64.b64encode(json.dumps(payload, default=str).encode()).decode()
 
 
@@ -162,7 +163,8 @@ def create_refresh_token(user_id: int) -> str:
     }
     if JWT_AVAILABLE:
         return pyjwt.encode(payload, REFRESH_SECRET_KEY, algorithm="HS256")
-    import base64, json
+    import base64
+    import json
     return base64.b64encode(json.dumps(payload, default=str).encode()).decode()
 
 
@@ -184,7 +186,8 @@ def decode_token(token: str, token_type: str = "access") -> Optional[Dict[str, A
                 return None
             return payload
         # Fallback decode
-        import base64, json
+        import base64
+        import json
         payload = json.loads(base64.b64decode(token.encode()).decode())
         if payload.get("exp", 0) < time.time():
             return None
@@ -362,9 +365,15 @@ def require_role(*allowed_roles: str) -> Callable:
     Raises:
         HTTPException: 401 if not authenticated, 403 if wrong role.
     """
-    async def dependency(authorization: str = "") -> Dict[str, Any]:
+    try:
+        from fastapi import Header
+        default_auth = Header(default="")
+    except ImportError:
+        default_auth = ""
+
+    async def dependency(authorization: str = default_auth) -> Dict[str, Any]:
         try:
-            from fastapi import HTTPException, Header
+            from fastapi import HTTPException
         except ImportError:
             return {}
         user = await get_current_user(authorization)
@@ -408,7 +417,7 @@ async def bootstrap_admin() -> None:
         print(f"\n{sep}")
         print("  PulseOps Enterprise -- First Run Setup")
         print(sep)
-        print(f"  Default admin account created:")
+        print("  Default admin account created:")
         print(f"  Email   : {DEFAULT_ADMIN_EMAIL}")
         print(f"  Password: {DEFAULT_ADMIN_PASSWORD}")
         print("  WARNING: Change this password immediately after first login!")
@@ -485,3 +494,41 @@ def get_totp_uri(secret: str, email: str, app_name: str = "PulseOps") -> str:
         return pyotp.TOTP(secret).provisioning_uri(email, issuer_name=app_name)
     except Exception:
         return f"otpauth://totp/{app_name}:{email}?secret={secret}&issuer={app_name}"
+
+
+async def verify_totp_or_backup(user: Dict[str, Any], code: str) -> bool:
+    """Verify a TOTP code or consume a valid backup recovery code.
+
+    Args:
+        user: User dict from database.
+        code: 6-digit TOTP code or alphanumeric backup code.
+
+    Returns:
+        True if the code was valid.
+    """
+    if not code:
+        return False
+    secret = user.get("totp_secret")
+    if secret and verify_totp(secret, code):
+        return True
+
+    # Check backup recovery codes
+    backup_codes_str = user.get("totp_backup_codes")
+    if backup_codes_str:
+        try:
+            import json
+            from database import execute
+            backup_codes = json.loads(backup_codes_str)
+            clean_code = code.strip().upper()
+            if clean_code in backup_codes:
+                backup_codes.remove(clean_code)
+                await execute(
+                    "UPDATE users SET totp_backup_codes = ? WHERE id = ?",
+                    (json.dumps(backup_codes), user["id"])
+                )
+                logger.info("[Auth] User %s authenticated using a backup code", user.get("email"))
+                return True
+        except Exception as e:
+            logger.error("[Auth] Error checking backup code: %s", e)
+
+    return False

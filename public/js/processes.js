@@ -53,14 +53,19 @@ class ProcessManager {
     }
 
     async loadProcesses() {
-        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const sId = window.PulseOpsCurrentServer || (window.PulseOpsApp ? window.PulseOpsApp.currentServerId : 'local-master');
         const hostname = window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'Master' : 'Remote Node');
+
+        if (this.tableBody) {
+            this.tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:2rem;">Loading processes from <strong>${hostname}</strong>...</td></tr>`;
+        }
 
         try {
             const res = await _authProcFetch(`/api/processes?server_id=${encodeURIComponent(sId)}`);
             const data = await res.json();
 
             if (data.need_update) {
+                this.processes = [];
                 if (this.procCountEl) this.procCountEl.textContent = '0';
                 if (this.tableBody) {
                     const upgradeCmd = `curl -sSL ${window.location.origin}/api/fleet/agent-update.sh | sudo bash`;
@@ -96,7 +101,9 @@ class ProcessManager {
                     const mem = typeof p.mem === 'number' ? p.mem : (parseFloat(p.mem) || 0);
                     const rss = p.rss != null ? Number(p.rss) : 0;
                     let rssMb = '0.0';
-                    if (rss > 0) {
+                    if (rss > 1048576) {
+                        rssMb = (rss / 1048576).toFixed(1);
+                    } else if (rss > 0) {
                         rssMb = (rss / 1024).toFixed(1);
                     } else if (mem > 0) {
                         rssMb = (mem * 16).toFixed(1);
@@ -119,15 +126,20 @@ class ProcessManager {
 
                 if (this.procCountEl) this.procCountEl.textContent = this.processes.length;
                 this.render();
-            } else if (data.error) {
+            } else {
+                const errMsg = data.error || data.detail || (res.status === 401 ? 'Session expired — please re-login' : 'Failed to load processes');
+                this.processes = [];
+                if (this.procCountEl) this.procCountEl.textContent = '0';
                 if (this.tableBody) {
-                    this.tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--accent-red); padding: 2rem;">Error loading processes: ${data.error}</td></tr>`;
+                    this.tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--accent-red); padding: 2rem;">Error loading processes from ${hostname}: ${errMsg}</td></tr>`;
                 }
             }
         } catch (e) {
             console.error('Failed to fetch process list:', e);
+            this.processes = [];
+            if (this.procCountEl) this.procCountEl.textContent = '0';
             if (this.tableBody) {
-                this.tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--accent-red); padding: 2rem;">Network error fetching process list</td></tr>`;
+                this.tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--accent-red); padding: 2rem;">Network error fetching process list from ${hostname}</td></tr>`;
             }
         }
     }
@@ -138,7 +150,7 @@ class ProcessManager {
             return;
         }
         if (!confirm(`Are you sure you want to send SIGTERM to PID ${pid} (${comm})?`)) return;
-        const sId = window.PulseOpsCurrentServer || 'local-master';
+        const sId = window.PulseOpsCurrentServer || (window.PulseOpsApp ? window.PulseOpsApp.currentServerId : 'local-master');
 
         try {
             const res = await _authProcFetch('/api/processes/kill', {

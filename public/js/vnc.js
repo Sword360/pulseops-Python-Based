@@ -171,10 +171,22 @@ class PulseOpsVNCManager {
         console.log(`[PulseOps VNC] ${msg}`);
     }
 
+    async authFetch(url, options = {}) {
+        if (window.PulseOpsAuth && window.PulseOpsAuth.apiFetch) {
+            return window.PulseOpsAuth.apiFetch(url, options);
+        }
+        const token = window.PulseOpsAuth ? window.PulseOpsAuth.getAccessToken() : null;
+        const headers = { ...(options.headers || {}) };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return fetch(url, { ...options, headers });
+    }
+
     async checkHostVncStatus() {
         try {
             const host = this.hostInput ? this.hostInput.value : '127.0.0.1';
-            const res = await fetch(`/api/vnc/status?host=${host}`);
+            const res = await this.authFetch(`/api/vnc/status?host=${host}`);
             const data = await res.json();
 
             if (this.serverInfoBox) {
@@ -203,7 +215,7 @@ class PulseOpsVNCManager {
     async launchHostDaemon() {
         this.log('Attempting to start VNC server daemon...');
         try {
-            const res = await fetch('/api/vnc/launch', {
+            const res = await this.authFetch('/api/vnc/launch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

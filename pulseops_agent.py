@@ -12,7 +12,6 @@ Usage:
 """
 
 import argparse
-import asyncio
 import configparser
 import json
 import logging
@@ -185,6 +184,12 @@ def get_os_info() -> str:
 def collect_snapshot() -> Dict[str, Any]:
     """Collect a full telemetry snapshot from this system."""
     net = get_net_rates()
+    host_name = socket.gethostname()
+    try:
+        host_ip = socket.gethostbyname(host_name)
+    except Exception:
+        host_ip = "127.0.0.1"
+
     return {
         "cpu": get_cpu_percent(),
         "mem": get_mem_percent(),
@@ -193,8 +198,8 @@ def collect_snapshot() -> Dict[str, Any]:
         "tx_sec": net["tx_sec"],
         "load1": get_load_avg(),
         "uptime": get_uptime(),
-        "hostname": socket.gethostname(),
-        "host_ip": socket.gethostbyname(socket.gethostname()),
+        "hostname": host_name,
+        "host_ip": host_ip,
         "os_info": get_os_info(),
         "arch": platform.machine(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -350,10 +355,10 @@ def collect_system_logs(lines: int = 50) -> Dict[str, Any]:
     try:
         out = subprocess.check_output(['journalctl', '-n', str(lines), '--no-pager'], text=True, timeout=5)
         logs = []
-        for l in out.splitlines():
-            logs.append({"time": datetime.now(timezone.utc).isoformat(), "line": l})
+        for line_entry in out.splitlines():
+            logs.append({"time": datetime.now(timezone.utc).isoformat(), "line": line_entry})
         return {"success": True, "logs": logs}
-    except Exception as e:
+    except Exception:
         return {"success": False, "logs": []}
 
 
@@ -369,7 +374,11 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
     def _auth(self) -> bool:
         if not _GLOBAL_TOKEN:
             return True
-        token = self.headers.get("X-Agent-Token") or self.headers.get("Authorization", "").replace("Bearer ", "")
+        auth_hdr = self.headers.get("Authorization", "")
+        if auth_hdr.lower().startswith("bearer "):
+            token = auth_hdr[7:].strip()
+        else:
+            token = self.headers.get("X-Agent-Token", "").strip()
         return token == _GLOBAL_TOKEN
 
     def _send_json(self, data: Any, status: int = 200):
@@ -407,11 +416,17 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/services/logs":
             svc = qs.get("service", [""])[0]
-            lines = int(qs.get("lines", [100])[0])
+            try:
+                lines = int(qs.get("lines", [100])[0])
+            except (ValueError, TypeError):
+                lines = 100
             return self._send_json(get_service_logs(svc, lines))
 
         if path == "/api/logs":
-            lines = int(qs.get("lines", [50])[0])
+            try:
+                lines = int(qs.get("lines", [50])[0])
+            except (ValueError, TypeError):
+                lines = 50
             return self._send_json(collect_system_logs(lines))
 
         self._send_json({"detail": "Not found"}, status=404)
@@ -431,8 +446,14 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if path == "/api/processes/kill":
-            pid = int(body.get("pid", 0))
-            sig = int(body.get("signal", 15))
+            try:
+                pid = int(body.get("pid", 0))
+            except (ValueError, TypeError):
+                pid = 0
+            try:
+                sig = int(body.get("signal", 15))
+            except (ValueError, TypeError):
+                sig = 15
             return self._send_json(kill_proc(pid, sig))
 
         if path == "/api/services/action":

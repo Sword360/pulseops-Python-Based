@@ -1,8 +1,8 @@
 import re
 import asyncio
 import subprocess
-from datetime import datetime
-from typing import Dict, Any, List
+from datetime import datetime, timezone
+from typing import Dict, Any
 
 MOCK_SERVICES = [
     {"name": "nginx.service", "load": "loaded", "active": "active", "sub": "running", "description": "A high performance web server and a reverse proxy server"},
@@ -62,14 +62,26 @@ async def action_service(service_name: str, action: str) -> Dict[str, Any]:
             stderr=subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
-        err_msg = stderr.decode('utf-8', errors='ignore').strip()
-        if proc.returncode != 0:
-            return {
-                "success": False,
-                "error": err_msg or f"Command exited with code {proc.returncode}",
-                "message": f"Simulation note: {action} on {clean_name} requires sudo permissions on target system."
-            }
-        return {"success": True, "message": f"Successfully executed {action} on {clean_name}"}
+        if proc.returncode == 0:
+            return {"success": True, "message": f"Successfully executed {action} on {clean_name}"}
+
+        # Try sudo fallback
+        sudo_cmd = f"sudo -n systemctl --no-askpass {action} {clean_name}"
+        proc_sudo = await asyncio.create_subprocess_shell(
+            sudo_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        s_stdout, s_stderr = await proc_sudo.communicate()
+        if proc_sudo.returncode == 0:
+            return {"success": True, "message": f"Successfully executed {action} on {clean_name}"}
+
+        err_msg = s_stderr.decode('utf-8', errors='ignore').strip() or stderr.decode('utf-8', errors='ignore').strip()
+        return {
+            "success": False,
+            "error": err_msg or f"Command exited with code {proc.returncode}",
+            "message": f"Simulation note: {action} on {clean_name} requires sudo permissions on target system."
+        }
     except Exception as e:
         return {
             "success": False,
@@ -96,7 +108,7 @@ async def get_service_logs(service_name: str) -> Dict[str, Any]:
     except Exception:
         pass
 
-    now_str = datetime.utcnow().isoformat() + "Z"
+    now_str = datetime.now(timezone.utc).isoformat()
     mock_logs = [
         f"[{now_str}] INFO: Starting {clean_name}...",
         f"[{now_str}] INFO: Started {clean_name} successfully.",

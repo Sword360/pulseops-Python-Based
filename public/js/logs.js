@@ -206,9 +206,9 @@ class WebTerminal {
     }
 
     setServer(serverId, hostname, hostIp) {
-        this.serverId = serverId || 'local-master';
-        const isMaster = this.serverId === 'local-master';
-        this.hostname = hostname || (isMaster ? 'mail.sword.local' : 'node');
+        this.serverId = serverId || window.PulseOpsCurrentServer || 'local-master';
+        const isMaster = !this.serverId || this.serverId === 'local-master';
+        this.hostname = hostname || window.PulseOpsCurrentServerHostname || (isMaster ? 'mail.sword.local' : 'node');
         if (hostIp) this.hostIp = hostIp;
 
         const targetBadge = document.getElementById('term-target-badge');
@@ -228,7 +228,13 @@ class WebTerminal {
     }
 
     onTabActivated() {
-        this.resetInputMode();
+        const currentSId = window.PulseOpsCurrentServer || (window.PulseOpsApp ? window.PulseOpsApp.currentServerId : this.serverId);
+        const currentHName = window.PulseOpsCurrentServerHostname || this.hostname;
+        if (currentSId && (currentSId !== this.serverId || currentHName !== this.hostname)) {
+            this.setServer(currentSId, currentHName);
+        } else {
+            this.resetInputMode();
+        }
         if (this.input) {
             setTimeout(() => this.input.focus(), 60);
         }
@@ -249,8 +255,9 @@ class WebTerminal {
     }
 
     getTerminalPrompt() {
-        const sId = this.serverId || window.PulseOpsCurrentServer || 'local-master';
-        const hostname = this.hostname || window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'mail.sword.local' : 'node');
+        const sId = window.PulseOpsCurrentServer || this.serverId || 'local-master';
+        const isMaster = !sId || sId === 'local-master';
+        const hostname = window.PulseOpsCurrentServerHostname || this.hostname || (isMaster ? 'mail.sword.local' : 'node');
         return `root@${hostname}:~$`;
     }
 
@@ -302,8 +309,9 @@ class WebTerminal {
             return;
         }
 
-        const sId = this.serverId || window.PulseOpsCurrentServer || 'local-master';
-        const hostname = this.hostname || window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'mail.sword.local' : 'node');
+        const sId = window.PulseOpsCurrentServer || this.serverId || 'local-master';
+        const isMaster = !sId || sId === 'local-master';
+        const hostname = window.PulseOpsCurrentServerHostname || this.hostname || (isMaster ? 'mail.sword.local' : 'node');
         const promptText = this.getTerminalPrompt();
 
         // Print command line

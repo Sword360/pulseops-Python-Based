@@ -71,7 +71,7 @@ async def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
     from database import fetchone
     return await fetchone(
         "SELECT id, email, display_name, role, is_active, last_login, created_at, "
-        "failed_login_count, locked_until, totp_enabled "
+        "failed_login_count, locked_until, totp_enabled, totp_secret, totp_backup_codes "
         "FROM users WHERE id = ?",
         (user_id,)
     )

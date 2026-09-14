@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import asyncio
 import hashlib
@@ -8,7 +7,7 @@ import struct
 import random
 import mimetypes
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Set, Dict, Any, Optional, List
 import subprocess
 import re
@@ -119,7 +118,6 @@ async def parse_ws_frames(ws: WebSocketConnection):
     try:
         while ws.open and not ws.reader.at_eof():
             head = await ws.reader.readexactly(2)
-            fin = (head[0] & 0x80) != 0
             opcode = head[0] & 0x0F
             masked = (head[1] & 0x80) != 0
             length = head[1] & 0x7F
@@ -381,7 +379,11 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
         # REST API Routes
         # -------------------------------------------------------------
         if path == '/api/services' and method == 'GET':
-            target_server = query_params.get('server_id')
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
             if target_server and target_server != 'local-master':
                 res_data, code = await proxy_to_agent(target_server, '/api/services', 'GET')
                 return await send_json_response(writer, res_data, status=code)
@@ -389,31 +391,57 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             return await send_json_response(writer, res_data)
 
         if path == '/api/services/action' and method == 'POST':
-            user = await auth.get_current_user(headers.get('authorization', ''))
-            if not user or user.get('role') not in ('admin', 'operator'):
-                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot perform service actions.'}, 403)
-            target_server = json_body.get('server_id') or query_params.get('server_id')
-            if target_server and target_server != 'local-master':
-                res_data, code = await proxy_to_agent(target_server, '/api/services/action', 'POST', json_body=json_body)
-                return await send_json_response(writer, res_data, status=code)
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot perform service actions.'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
             srv_name = json_body.get('serviceName')
             action = json_body.get('action')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/services/action', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        f"service.{action}", user_id=user['id'], user_email=user['email'],
+                        resource_type="service", resource_id=srv_name,
+                        details={"server_id": target_server},
+                        result="success" if (isinstance(res_data, dict) and res_data.get('success')) else "failure"
+                    )
+                return await send_json_response(writer, res_data, status=code)
             res_data = await services.action_service(srv_name, action)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    f"service.{action}", user_id=user['id'], user_email=user['email'],
+                    resource_type="service", resource_id=srv_name,
+                    result="success" if res_data.get('success') else "failure"
+                )
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
 
-        if path.startswith('/api/services/') and path.endswith('/logs') and method == 'GET':
-            parts_path = path.split('/')
-            if len(parts_path) >= 4:
-                srv_name = parts_path[3]
-                target_server = query_params.get('server_id')
-                if target_server and target_server != 'local-master':
-                    res_data, code = await proxy_to_agent(target_server, '/api/services/logs', 'GET', query_params={'service': srv_name, 'lines': '100'})
-                    return await send_json_response(writer, res_data, status=code)
-                res_data = await services.get_service_logs(srv_name)
-                return await send_json_response(writer, res_data)
+        if (path == '/api/services/logs' or (path.startswith('/api/services/') and path.endswith('/logs'))) and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            if path == '/api/services/logs':
+                srv_name = query_params.get('service', '')
+            else:
+                parts_path = path.split('/')
+                srv_name = parts_path[3] if len(parts_path) >= 4 else ''
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            lines_val = query_params.get('lines', '100')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/services/logs', 'GET', query_params={'service': srv_name, 'lines': lines_val})
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await services.get_service_logs(srv_name)
+            return await send_json_response(writer, res_data)
 
         if path == '/api/processes' and method == 'GET':
-            target_server = query_params.get('server_id')
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
             if target_server and target_server != 'local-master':
                 res_data, code = await proxy_to_agent(target_server, '/api/processes', 'GET')
                 return await send_json_response(writer, res_data, status=code)
@@ -421,33 +449,67 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             return await send_json_response(writer, res_data)
 
         if path == '/api/processes/kill' and method == 'POST':
-            user = await auth.get_current_user(headers.get('authorization', ''))
-            if not user or user.get('role') not in ('admin', 'operator'):
-                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot terminate processes.'}, 403)
-            target_server = json_body.get('server_id') or query_params.get('server_id')
-            if target_server and target_server != 'local-master':
-                res_data, code = await proxy_to_agent(target_server, '/api/processes/kill', 'POST', json_body=json_body)
-                return await send_json_response(writer, res_data, status=code)
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot terminate processes.'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
             pid = json_body.get('pid')
             signal_val = json_body.get('signal', '15')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/processes/kill', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        "process.kill", user_id=user['id'], user_email=user['email'],
+                        resource_type="process", resource_id=str(pid),
+                        details={"signal": signal_val, "server_id": target_server},
+                        result="success" if (isinstance(res_data, dict) and res_data.get('success')) else "failure"
+                    )
+                return await send_json_response(writer, res_data, status=code)
             res_data = await processes.kill_process(pid, signal_val)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    "process.kill", user_id=user['id'], user_email=user['email'],
+                    resource_type="process", resource_id=str(pid),
+                    details={"signal": signal_val},
+                    result="success" if res_data.get('success') else "failure"
+                )
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
 
         if path == '/api/terminal/exec' and method == 'POST':
-            user = await auth.get_current_user(headers.get('authorization', ''))
-            if not user or user.get('role') not in ('admin', 'operator'):
-                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot execute terminal commands.'}, 403)
-            target_server = json_body.get('server_id') or query_params.get('server_id')
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot execute terminal commands.'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
             command = json_body.get('command')
             sudo_pass = json_body.get('sudoPassword')
             if target_server and target_server != 'local-master':
-                res_data, code = await proxy_to_agent(target_server, '/api/terminal/exec', 'POST', json_body={'command': command})
+                res_data, code = await proxy_to_agent(target_server, '/api/terminal/exec', 'POST', json_body={'command': command, 'sudoPassword': sudo_pass})
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        "terminal.exec", user_id=user['id'], user_email=user['email'],
+                        resource_type="terminal",
+                        details={"command": command[:200] if command else "", "server_id": target_server}
+                    )
                 return await send_json_response(writer, res_data, status=code)
             res_data = await terminal.exec_terminal_command(command, sudo_pass)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    "terminal.exec", user_id=user['id'], user_email=user['email'],
+                    resource_type="terminal",
+                    details={"command": command[:200] if command else ""}
+                )
             return await send_json_response(writer, res_data)
 
         if path == '/api/logs' and method == 'GET':
-            target_server = query_params.get('server_id')
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
             lines_val = query_params.get('lines', '50')
             if target_server and target_server != 'local-master':
                 res_data, code = await proxy_to_agent(target_server, '/api/logs', 'GET', query_params={'lines': lines_val})
@@ -455,14 +517,19 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             return await send_json_response(writer, {'success': True, 'logs': []})
 
         if path == '/api/vnc/status' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
             target_host = query_params.get('host', '127.0.0.1')
             res_data = await vnc.get_vnc_status(target_host)
             return await send_json_response(writer, res_data)
 
         if path == '/api/vnc/launch' and method == 'POST':
-            user = await auth.get_current_user(headers.get('authorization', ''))
-            if not user or user.get('role') not in ('admin', 'operator'):
-                return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot launch VNC sessions.'}, 403)
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot launch VNC sessions.'}, 403)
             display = json_body.get('display', ':0')
             vnc_port = int(json_body.get('port', 5900))
             use_native = bool(json_body.get('useNative', False))
@@ -503,19 +570,40 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 if not await auth.check_rate_limit(ip):
                     return await send_json_response(writer, {'detail': 'Too many attempts'}, 429)
 
-                user = await users_module.authenticate_user(email, password)
-                if not user:
-                    await audit.log_action('auth.login', user_email=email, ip_address=ip, result='failure')
+                db_user = await users_module.get_user_by_email(email)
+                if not db_user or not db_user.get('is_active'):
+                    await audit.log_action('auth.login', user_email=email, ip_address=ip, result='failure',
+                                           details={'reason': 'invalid_credentials'})
                     return await send_json_response(writer, {'detail': 'Invalid email or password'}, 401)
 
-                if user.get('locked'):
-                    return await send_json_response(writer, {'detail': f"Account locked until {user.get('locked_until')}"}, 423)
+                if db_user.get('locked_until'):
+                    try:
+                        lock_dt = datetime.fromisoformat(db_user['locked_until'])
+                        if lock_dt.tzinfo is None:
+                            lock_dt = lock_dt.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) < lock_dt:
+                            await audit.log_action('auth.login', user_email=email, ip_address=ip, result='failure',
+                                                   details={'reason': 'account_locked', 'locked_until': db_user.get('locked_until')})
+                            return await send_json_response(writer, {'detail': f"Account locked until {db_user.get('locked_until')}"}, 423)
+                    except Exception:
+                        pass
+
+                if not users_module.verify_password(password, db_user['password_hash']):
+                    await auth.record_failed_login(db_user['id'], email, ip)
+                    await audit.log_action('auth.login', user_email=email, ip_address=ip, result='failure',
+                                           details={'reason': 'invalid_credentials'})
+                    return await send_json_response(writer, {'detail': 'Invalid email or password'}, 401)
+
+                user = db_user
 
                 if user.get('totp_enabled') and not totp_code:
                     return await send_json_response(writer, {'totp_required': True})
 
                 if user.get('totp_enabled') and totp_code:
-                    if not auth.verify_totp(user['totp_secret'], totp_code):
+                    if not await auth.verify_totp_or_backup(user, totp_code):
+                        await auth.record_failed_login(user['id'], email, ip)
+                        await audit.log_action('auth.login', user_id=user['id'], user_email=email, ip_address=ip,
+                                               result='failure', details={'reason': 'invalid_totp'})
                         return await send_json_response(writer, {'detail': 'Invalid 2FA code'}, 401)
 
                 await auth.reset_failed_login(user['id'])
@@ -529,6 +617,14 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 })
 
             if path == '/api/auth/logout' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if user:
+                    jti = user.get('jti')
+                    exp = user.get('exp')
+                    if jti and exp:
+                        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+                        await auth.blacklist_token(jti, expires_at)
+                    await audit.log_action('auth.logout', user_id=user['id'], user_email=user['email'])
                 return await send_json_response(writer, {'success': True})
 
             if path == '/api/auth/refresh' and method == 'POST':
@@ -548,6 +644,70 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
                 u = await users_module.get_user_by_id(user['id'])
                 return await send_json_response(writer, u or user)
+
+            if path == '/api/auth/2fa/setup' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                import pyotp
+                import io
+                import qrcode
+
+                secret = pyotp.random_base32()
+                await database.execute(
+                    "UPDATE users SET totp_secret = ? WHERE id = ?",
+                    (secret, user['id'])
+                )
+                otpauth_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+                    name=user['email'],
+                    issuer_name="PulseOps"
+                )
+                qr_img = qrcode.make(otpauth_uri)
+                buf = io.BytesIO()
+                qr_img.save(buf, format="PNG")
+                qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+                return await send_json_response(writer, {
+                    'success': True,
+                    'secret': secret,
+                    'otpauth_uri': otpauth_uri,
+                    'qr_data_url': qr_data_url,
+                })
+
+            if path == '/api/auth/2fa/verify' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                import secrets
+                import pyotp
+
+                code = json_body.get('code', '').strip()
+                if not code or len(code) != 6:
+                    return await send_json_response(writer, {'detail': 'A valid 6-digit code is required'}, 400)
+
+                u = await users_module.get_user_by_id(user['id'])
+                secret = u.get('totp_secret') if u else None
+                if not secret:
+                    return await send_json_response(writer, {'detail': '2FA setup not initiated'}, 400)
+
+                totp = pyotp.TOTP(secret)
+                if not totp.verify(code):
+                    return await send_json_response(writer, {'detail': 'Invalid 2FA code'}, 400)
+
+                backup_codes = [f"{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}" for _ in range(8)]
+                await users_module.update_user_totp(
+                    user_id=user['id'],
+                    secret=secret,
+                    enabled=True,
+                    backup_codes=json.dumps(backup_codes)
+                )
+                ip = headers.get('x-forwarded-for', 'unknown').split(',')[0].strip()
+                await audit.log_action(
+                    'auth.2fa.enable',
+                    user_id=user['id'],
+                    user_email=user['email'],
+                    ip_address=ip
+                )
+                return await send_json_response(writer, {'success': True, 'backup_codes': backup_codes})
 
             # ── User Management (admin only) ──────────────────────────────────
             if path == '/api/admin/users' and method == 'GET':
@@ -809,7 +969,41 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     if key in allowed:
                         await database.set_setting(key, str(value), user['id'])
                         count += 1
+                await audit.log_action(
+                    'settings.update', user_id=user['id'], user_email=user['email'],
+                    details={'keys': [k for k in json_body if k in allowed]}
+                )
                 return await send_json_response(writer, {'success': True, 'updated_count': count})
+
+            if path == '/api/admin/settings/test-smtp' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                result = await alerts_module.send_test_email()
+                code = 200 if result.get('success') else 400
+                return await send_json_response(writer, result, code)
+
+            if path == '/api/admin/backup' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                db_path = database.DB_PATH if hasattr(database, "DB_PATH") else os.path.join(os.path.dirname(__file__), "pulseops.db")
+                if not os.path.exists(db_path):
+                    return await send_json_response(writer, {'detail': 'Database file not found'}, 404)
+                with open(db_path, 'rb') as f:
+                    db_bytes = f.read()
+                today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                filename = f"pulseops-backup-{today}.db"
+                res_hdr = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: application/octet-stream\r\n"
+                    f"Content-Disposition: attachment; filename={filename}\r\n"
+                    f"Content-Length: {len(db_bytes)}\r\n\r\n"
+                )
+                writer.write(res_hdr.encode() + db_bytes)
+                await writer.drain()
+                writer.close()
+                return
 
             # Agent script download
             if path == '/api/fleet/agent-download' and method == 'GET':
@@ -1034,7 +1228,7 @@ async def main():
             print(f"[Warning] Enterprise init error: {e}")
 
     server = await asyncio.start_server(handle_http_request, HOST, PORT)
-    print(f"\n⚡ PulseOps Enterprise Server running:")
+    print("\n⚡ PulseOps Enterprise Server running:")
     print(f"   ➜ Local:    http://localhost:{PORT}")
     print(f"   ➜ Login:    http://localhost:{PORT}/login")
     print(f"   ➜ API Docs: http://localhost:{PORT}/api/")

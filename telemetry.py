@@ -122,8 +122,8 @@ async def get_disk_usage() -> List[Dict[str, Any]]:
         if proc.returncode == 0 and stdout:
             lines = stdout.decode('utf-8', errors='ignore').strip().split('\n')[1:]
             disks = []
-            for l in lines:
-                parts = l.strip().split()
+            for line in lines:
+                parts = line.strip().split()
                 if len(parts) >= 6 and (parts[0].startswith('/dev/') or parts[5] == '/'):
                     try:
                         total = int(parts[1])
@@ -132,23 +132,41 @@ async def get_disk_usage() -> List[Dict[str, Any]]:
                         usage_str = parts[4].replace('%', '')
                         disks.append({
                             "fs": parts[0],
+                            "filesystem": parts[0],
                             "mount": parts[5],
-                            "total": total,
-                            "used": used,
-                            "free": free,
+                            "total": total * 1024,
+                            "totalBytes": total * 1024,
+                            "used": used * 1024,
+                            "usedBytes": used * 1024,
+                            "free": free * 1024,
+                            "freeBytes": free * 1024,
                             "usagePercent": float(usage_str) if usage_str else 0.0
                         })
-                    except ValueError:
+                    except Exception:
                         continue
             if disks:
                 return disks
     except Exception:
         pass
 
-    return [
-        {"fs": "/dev/sda1", "mount": "/", "total": 107374182400, "used": 42949672960, "free": 64424509440, "usagePercent": 40.0},
-        {"fs": "/dev/sda2", "mount": "/var", "total": 53687091200, "used": 16106127360, "free": 37580963840, "usagePercent": 30.0}
-    ]
+    # Fallback to single root disk info via psutil
+    try:
+        import psutil
+        usage = psutil.disk_usage('/')
+        return [{
+            "fs": "/dev/root",
+            "filesystem": "/dev/root",
+            "mount": "/",
+            "total": usage.total,
+            "totalBytes": usage.total,
+            "used": usage.used,
+            "usedBytes": usage.used,
+            "free": usage.free,
+            "freeBytes": usage.free,
+            "usagePercent": usage.percent
+        }]
+    except Exception:
+        return []
 
 
 def get_network_stats() -> Dict[str, Any]:
@@ -160,9 +178,9 @@ def get_network_stats() -> Dict[str, Any]:
             total_rx = 0
             total_tx = 0
             now = time.time()
-            for l in lines:
-                if ':' in l:
-                    iface, rest = l.split(':', 1)
+            for line in lines:
+                if ':' in line:
+                    iface, rest = line.split(':', 1)
                     if iface.strip() != 'lo':
                         parts = rest.strip().split()
                         if len(parts) >= 9:
@@ -249,7 +267,7 @@ def get_system_info() -> Dict[str, Any]:
         "uptime": uptime_secs,
         "cpuModel": cpu_model,
         "coreCount": core_count,
-        "loadAvg": [round(l, 2) for l in load_avg]
+        "loadAvg": [round(val, 2) for val in load_avg]
     }
 
 

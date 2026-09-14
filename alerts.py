@@ -213,15 +213,15 @@ async def evaluate_alerts_for_server(server_id: str, snapshot: Dict[str, Any]) -
     Returns:
         List of newly fired alert dicts.
     """
-    from database import fetchall, fetchone, execute
+    from database import fetchone
 
     rules = await list_alert_rules(server_id)
     newly_fired = []
 
     metric_map = {
-        "cpu_percent": snapshot.get("cpu_percent", 0),
-        "mem_percent": snapshot.get("mem_percent", 0),
-        "disk_percent": snapshot.get("disk_percent", 0),
+        "cpu_percent": float(snapshot.get("cpu_percent") or 0),
+        "mem_percent": float(snapshot.get("mem_percent") or 0),
+        "disk_percent": float(snapshot.get("disk_percent") or 0),
     }
 
     for rule in rules:
@@ -230,7 +230,10 @@ async def evaluate_alerts_for_server(server_id: str, snapshot: Dict[str, Any]) -
             continue  # agent_offline / service_down handled separately
 
         current_value = metric_map[metric]
-        threshold = rule.get("threshold") or 0
+        try:
+            threshold = float(rule.get("threshold") or 0)
+        except (ValueError, TypeError):
+            threshold = 0.0
         operator = rule["operator"]
         condition_met = _evaluate_condition(current_value, operator, threshold)
 
@@ -280,7 +283,7 @@ async def evaluate_agent_offline(server_id: str, hostname: str) -> None:
         server_id: Server UUID.
         hostname: Server hostname for details.
     """
-    from database import fetchone, execute
+    from database import fetchone
     # Find global or server-specific agent_offline rules
     rules = await list_alert_rules(server_id)
     offline_rules = [r for r in rules if r["metric"] == "agent_offline"]
@@ -302,7 +305,7 @@ async def resolve_agent_offline(server_id: str) -> None:
     Args:
         server_id: Server UUID.
     """
-    from database import fetchall, execute
+    from database import fetchall
     active = await fetchall(
         "SELECT aa.id FROM active_alerts aa JOIN alert_rules ar ON aa.rule_id = ar.id "
         "WHERE aa.server_id = ? AND ar.metric = 'agent_offline' AND aa.resolved_at IS NULL",
@@ -367,7 +370,7 @@ async def _send_email_alert(alert_info: Dict[str, Any]) -> None:
         alert_info: Alert data to include in the email body.
     """
     try:
-        from database import get_setting
+        from database import get_setting, fetchone
         smtp_host = await get_setting("smtp_host")
         if not smtp_host:
             return
@@ -376,11 +379,21 @@ async def _send_email_alert(alert_info: Dict[str, Any]) -> None:
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
 
-        smtp_port = int(await get_setting("smtp_port", "587"))
+        try:
+            smtp_port = int(await get_setting("smtp_port", "587"))
+        except (ValueError, TypeError):
+            smtp_port = 587
         smtp_user = await get_setting("smtp_username")
         smtp_pass = await get_setting("smtp_password")
         smtp_from = await get_setting("smtp_from", "PulseOps Alerts <noreply@pulseops.local>")
-        admin_email = smtp_user  # Send to the configured SMTP user as fallback
+        admin_email = smtp_user
+        if not admin_email:
+            row = await fetchone("SELECT email FROM users WHERE role = 'admin' LIMIT 1")
+            if row:
+                admin_email = row["email"]
+
+        if not admin_email:
+            return
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"[PulseOps] {alert_info['severity'].upper()}: {alert_info['rule_name']}"
@@ -399,16 +412,83 @@ async def _send_email_alert(alert_info: Dict[str, Any]) -> None:
         )
         msg.attach(MIMEText(body, "plain"))
 
+        use_tls = (smtp_port == 465)
+        start_tls = (smtp_port == 587)
+
         await aiosmtplib.send(
             msg,
             hostname=smtp_host,
             port=smtp_port,
             username=smtp_user or None,
             password=smtp_pass or None,
-            start_tls=True,
+            start_tls=start_tls,
+            use_tls=use_tls,
+            timeout=10,
         )
         logger.info("[Alerts] Email alert sent for rule '%s'", alert_info["rule_name"])
     except ImportError:
         logger.debug("[Alerts] aiosmtplib not available — email alert skipped")
     except Exception as e:
         logger.error("[Alerts] Email delivery failed: %s", e)
+
+
+async def send_test_email() -> Dict[str, Any]:
+    """Send a test email using configured SMTP settings."""
+    try:
+        from database import get_setting, fetchone
+        smtp_host = await get_setting("smtp_host")
+        if not smtp_host:
+            return {"success": False, "error": "SMTP Host is not configured in Settings"}
+
+        import aiosmtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        try:
+            smtp_port = int(await get_setting("smtp_port", "587"))
+        except (ValueError, TypeError):
+            smtp_port = 587
+        smtp_user = await get_setting("smtp_username")
+        smtp_pass = await get_setting("smtp_password")
+        smtp_from = await get_setting("smtp_from", "PulseOps Alerts <noreply@pulseops.local>")
+
+        to_email = smtp_user
+        if not to_email:
+            row = await fetchone("SELECT email FROM users WHERE role = 'admin' LIMIT 1")
+            if row:
+                to_email = row["email"]
+
+        if not to_email:
+            return {"success": False, "error": "No recipient email configured for SMTP test"}
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "[PulseOps] SMTP Test Message"
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+
+        body = (
+            "This is a test email sent from PulseOps Enterprise to verify that your "
+            "SMTP notification settings are properly configured.\n\n"
+            f"Timestamp: {datetime.now(timezone.utc).isoformat()}\n"
+        )
+        msg.attach(MIMEText(body, "plain"))
+
+        use_tls = (smtp_port == 465)
+        start_tls = (smtp_port == 587)
+
+        await aiosmtplib.send(
+            msg,
+            hostname=smtp_host,
+            port=smtp_port,
+            username=smtp_user or None,
+            password=smtp_pass or None,
+            start_tls=start_tls,
+            use_tls=use_tls,
+            timeout=10,
+        )
+        return {"success": True, "message": f"Test email sent to {to_email}"}
+    except ImportError:
+        return {"success": False, "error": "aiosmtplib is not installed on server"}
+    except Exception as e:
+        logger.error("[Alerts] SMTP test failed: %s", e)
+        return {"success": False, "error": str(e)}

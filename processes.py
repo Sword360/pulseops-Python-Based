@@ -2,7 +2,7 @@ import os
 import signal
 import asyncio
 import subprocess
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 MOCK_PROCESSES = [
     {"pid": 1240, "user": "root", "cpu": 14.5, "mem": 4.2, "vsz": 142000, "rss": 35000, "stat": "S", "start": "10:00", "time": "01:15", "comm": "python3", "args": "python3 server.py"},
@@ -23,8 +23,8 @@ async def get_processes() -> Dict[str, Any]:
         if proc.returncode == 0 and stdout:
             lines = stdout.decode('utf-8', errors='ignore').strip().split('\n')[1:]
             processes = []
-            for l in lines[:150]:
-                parts = l.strip().split()
+            for line in lines[:150]:
+                parts = line.strip().split()
                 if len(parts) >= 10:
                     try:
                         processes.append({
@@ -63,7 +63,7 @@ async def kill_process(pid: Any, sig: str = '15') -> Dict[str, Any]:
         return {"success": True, "message": f"Sent {sig_name} to PID {clean_pid}"}
     except PermissionError:
         # Try sudo kill via command
-        cmd = f"kill -{9 if str(sig) == '9' else 15} {clean_pid}"
+        cmd = f"sudo -n kill -{9 if str(sig) == '9' else 15} {clean_pid}"
         proc = await asyncio.create_subprocess_shell(
             cmd,
             stdout=subprocess.PIPE,
