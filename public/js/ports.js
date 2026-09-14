@@ -135,9 +135,31 @@ class PortsManager {
                 this.ports = [];
                 this.updateCounters();
                 if (this.tableBody) {
-                    this.tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent-red); padding:2rem;">
-                        ❌ Failed to inspect listening ports: ${data.error || 'Unknown error'}
-                    </td></tr>`;
+                    const errStr = data.error || data.detail || 'Unknown error';
+                    if (errStr.includes('Cannot connect to agent') || errStr.includes('Connection refused')) {
+                        this.tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2.5rem 1.5rem;">
+                            <div style="max-width: 620px; margin: 0 auto; background: var(--bg-card); border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; padding: 1.5rem; text-align: left;">
+                                <div style="font-size: 1.05rem; font-weight: 700; color: var(--accent-red); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                                    ⚠️ PulseOps Agent Offline on ${hostname}
+                                </div>
+                                <p style="color: var(--text-secondary); font-size: 0.88rem; line-height: 1.5; margin-bottom: 1rem;">
+                                    The remote machine is reachable, but the PulseOps agent daemon (port 3501) is currently stopped or connection was refused. Run this command on <strong>${hostname}</strong> to start the agent:
+                                </p>
+                                <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-green); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <span style="word-break: break-all;">sudo systemctl restart pulseops-agent</span>
+                                    <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="navigator.clipboard.writeText('sudo systemctl restart pulseops-agent'); window.showToast && window.showToast('Copied start command to clipboard!', 'success');">Copy Command</button>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                                    <span style="font-size:0.78rem; color:var(--text-dim);">Or reinstall: <code style="color:var(--accent-cyan);">curl -sSL ${window.location.origin}/api/fleet/agent-update.sh | sudo bash</code></span>
+                                    <button class="btn btn-sm btn-secondary" onclick="window.portsMgr && window.portsMgr.loadPorts(true)">🔄 Retry Connection</button>
+                                </div>
+                            </div>
+                        </td></tr>`;
+                    } else {
+                        this.tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent-red); padding:2rem;">
+                            ❌ Failed to inspect listening ports: ${errStr}
+                        </td></tr>`;
+                    }
                 }
             }
         } catch (err) {
