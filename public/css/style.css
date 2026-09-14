@@ -582,6 +582,11 @@ canvas {
     color: var(--accent-red);
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
+.badge-paused {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
 
 .btn-action {
     background: rgba(255, 255, 255, 0.05);
@@ -1794,3 +1799,111 @@ input:checked + .toggle-slider::before { transform:translateX(18px); }
 [data-role="operator"] .admin-only {
     display: none !important;
 }
+
+/* ── Docker & Container Manager Styles ────────────────────────────────────── */
+.docker-engine-header {
+    background: rgba(0, 242, 254, 0.03);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.inspect-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 680px) {
+    .inspect-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.inspect-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.2rem;
+}
+
+.inspect-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-cyan);
+    margin: 0 0 0.85rem 0;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.inspect-kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.84rem;
+}
+
+.inspect-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.inspect-kv .k {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.inspect-kv .v {
+    color: var(--text-main);
+    text-align: right;
+    word-break: break-all;
+}
+
+.inspect-tag {
+    background: rgba(0, 242, 254, 0.1);
+    border: 1px solid rgba(0, 242, 254, 0.25);
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+}
+
+.inspect-row-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+.inspect-env-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #04070d;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+}
+
+.inspect-env-item {
+    font-size: 0.78rem;
+    color: var(--accent-green);
+    word-break: break-all;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.25rem;
+}
+.inspect-env-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+

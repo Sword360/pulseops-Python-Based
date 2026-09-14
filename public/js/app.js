@@ -286,6 +286,8 @@ class PulseOpsDashboard {
                     this.resizeCharts();
                     this.loadServerHistory(this.currentServerId);
                 }
+                if (btn.dataset.tab === 'docker'    && window.dockerMgr)  window.dockerMgr.loadContainers();
+                if (btn.dataset.tab === 'ports'     && window.portsMgr)   window.portsMgr.loadPorts();
                 if (btn.dataset.tab === 'services'  && window.systemdMgr) window.systemdMgr.loadServices();
                 if (btn.dataset.tab === 'processes' && window.procMgr)    window.procMgr.loadProcesses();
                 if (btn.dataset.tab === 'vnc'       && window.vncMgr)     window.vncMgr.checkHostVncStatus();
@@ -424,6 +426,8 @@ class PulseOpsDashboard {
 
         // Refresh currently active subtab (processes/services/etc.) for newly selected server
         const activeTab = document.querySelector('#section-server-dashboard .nav-tabs .tab-btn.active')?.dataset.tab || 'overview';
+        if (activeTab === 'docker' && window.dockerMgr) window.dockerMgr.loadContainers();
+        if (activeTab === 'ports' && window.portsMgr) window.portsMgr.loadPorts();
         if (activeTab === 'processes' && window.procMgr) window.procMgr.loadProcesses();
         if (activeTab === 'services' && window.systemdMgr) window.systemdMgr.loadServices();
         if (activeTab === 'terminal' && window.webTerminal && typeof window.webTerminal.onTabActivated === 'function') {
@@ -863,6 +867,9 @@ class PulseOpsDashboard {
             const totalStr = this._fmtBytes(d.total || 0);
             const pct = d.usagePercent || 0;
             const color = pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : 'var(--accent-amber)';
+            const inodeText = (d.inodesPercent !== undefined && d.inodesTotal > 0) 
+                ? ` • Inodes: ${d.inodesPercent}%` 
+                : '';
             return `
             <div style="margin-bottom:1rem;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
@@ -873,7 +880,7 @@ class PulseOpsDashboard {
                     <div class="progress-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99);"></div>
                 </div>
                 <div style="display:flex;justify-content:space-between;margin-top:0.2rem;font-size:0.75rem;color:var(--text-dim);">
-                    <span>${usedStr} used</span>
+                    <span>${usedStr} used${inodeText}</span>
                     <span>${totalStr} total (${pct.toFixed(0)}%)</span>
                 </div>
             </div>`;

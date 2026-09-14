@@ -17,6 +17,10 @@ import services
 import processes
 import terminal
 import vnc
+import docker_manager
+import ports_manager
+import commands_manager
+import maintenance_manager
 
 # Enterprise modules (optional — degrade gracefully if dependencies missing)
 try:
@@ -476,6 +480,254 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     result="success" if res_data.get('success') else "failure"
                 )
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
+
+        # ─── Docker Container Management Endpoints ──────────────────
+        if path == '/api/docker/status' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/docker/status', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await docker_manager.is_docker_available()
+            return await send_json_response(writer, res_data)
+
+        if path == '/api/docker/containers' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/docker/containers', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            all_param = query_params.get('all', 'true').lower() in ('true', '1', 'yes')
+            res_data = await docker_manager.get_containers(all_containers=all_param)
+            return await send_json_response(writer, res_data)
+
+        if path == '/api/docker/action' and method == 'POST':
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot manage containers.'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
+            cid = json_body.get('container_id') or json_body.get('container') or ''
+            action = json_body.get('action') or ''
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/docker/action', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        f"docker.{action}", user_id=user['id'], user_email=user['email'],
+                        resource_type="container", resource_id=str(cid),
+                        details={"server_id": target_server, "action": action},
+                        result="success" if (isinstance(res_data, dict) and res_data.get('success')) else "failure"
+                    )
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await docker_manager.action_container(cid, action)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    f"docker.{action}", user_id=user['id'], user_email=user['email'],
+                    resource_type="container", resource_id=str(cid),
+                    details={"action": action},
+                    result="success" if res_data.get('success') else "failure"
+                )
+            return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
+
+        if path == '/api/docker/logs' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            cid = query_params.get('container_id') or query_params.get('container') or ''
+            try:
+                lines_val = int(query_params.get('lines', '100'))
+            except (ValueError, TypeError):
+                lines_val = 100
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/docker/logs', 'GET', query_params={'container': cid, 'lines': str(lines_val)})
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await docker_manager.get_container_logs(cid, lines=lines_val)
+            return await send_json_response(writer, res_data)
+
+        if path == '/api/docker/inspect' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            cid = query_params.get('container_id') or query_params.get('container') or ''
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/docker/inspect', 'GET', query_params={'container': cid})
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await docker_manager.inspect_container(cid)
+            return await send_json_response(writer, res_data)
+
+        # ─── Network Listening Ports Endpoints ──────────────────────
+        if path == '/api/network/ports' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/network/ports', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await ports_manager.get_listening_ports()
+            return await send_json_response(writer, res_data)
+
+        # ─── Saved Commands & Runbooks Endpoints ─────────────────────
+        if path == '/api/commands' and method == 'GET':
+            user_role = 'viewer'
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                user_role = user.get('role', 'viewer')
+            cmds = await commands_manager.list_commands(user_role)
+            return await send_json_response(writer, {'success': True, 'commands': cmds})
+
+        if path == '/api/commands' and method == 'POST':
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            name = json_body.get('name', '')
+            desc = json_body.get('description', '')
+            cmd_text = json_body.get('command', '')
+            req_sudo = bool(json_body.get('requires_sudo', False))
+            roles = json_body.get('allowed_roles', ['admin', 'operator'])
+            uid = user['id'] if user else 1
+            res = await commands_manager.create_command(name, desc, cmd_text, req_sudo, roles, created_by=uid)
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+        if path.startswith('/api/commands/') and not path.endswith('/execute') and method == 'PUT':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            try:
+                cmd_id = int(path.split('/')[-1])
+                res = await commands_manager.update_command(
+                    cmd_id, json_body.get('name', ''), json_body.get('description', ''),
+                    json_body.get('command', ''), bool(json_body.get('requires_sudo', False)),
+                    json_body.get('allowed_roles', ['admin', 'operator'])
+                )
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+            except ValueError:
+                return await send_json_response(writer, {'detail': 'Invalid command ID'}, 400)
+
+        if path.startswith('/api/commands/') and not path.endswith('/execute') and method == 'DELETE':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            try:
+                cmd_id = int(path.split('/')[-1])
+                res = await commands_manager.delete_command(cmd_id)
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+            except ValueError:
+                return await send_json_response(writer, {'detail': 'Invalid command ID'}, 400)
+
+        if path.startswith('/api/commands/') and path.endswith('/execute') and method == 'POST':
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            try:
+                cmd_id = int(path.split('/')[-2])
+                cmd_obj = await commands_manager.get_command(cmd_id)
+                if not cmd_obj:
+                    return await send_json_response(writer, {'detail': 'Command not found'}, 404)
+                user_role = user.get('role', 'viewer') if user else 'admin'
+                if user_role not in cmd_obj.get('allowed_roles', []) and user_role != 'admin':
+                    return await send_json_response(writer, {'detail': 'Role not authorized to run this runbook'}, 403)
+
+                target_server = json_body.get('server_id') or json_body.get('serverId')
+                sudo_pass = json_body.get('sudoPassword', '')
+                cmd_text = cmd_obj['command']
+
+                # Substitute custom params if provided: {{PARAM_NAME}}
+                custom_params = json_body.get('params') or {}
+                for k, v in custom_params.items():
+                    cmd_text = cmd_text.replace(f"{{{{{k}}}}}", str(v))
+
+                if target_server and target_server != 'local-master':
+                    res_data, code = await proxy_to_agent(target_server, '/api/terminal/exec', 'POST', json_body={'command': cmd_text, 'sudoPassword': sudo_pass})
+                    if ENTERPRISE_AVAILABLE and user:
+                        await audit.log_action("runbook.exec", user_id=user['id'], user_email=user['email'], resource_type="command", resource_id=str(cmd_id), details={"command": cmd_obj['name'], "server_id": target_server})
+                    return await send_json_response(writer, res_data, status=code)
+
+                res_data = await terminal.exec_terminal_command(cmd_text, sudo_pass)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action("runbook.exec", user_id=user['id'], user_email=user['email'], resource_type="command", resource_id=str(cmd_id), details={"command": cmd_obj['name']})
+                return await send_json_response(writer, res_data)
+            except ValueError:
+                return await send_json_response(writer, {'detail': 'Invalid command ID'}, 400)
+
+        # ─── Maintenance Windows & Groups Endpoints ──────────────────
+        if path == '/api/maintenance/windows' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            sid = query_params.get('server_id')
+            windows = await maintenance_manager.list_maintenance_windows(sid)
+            return await send_json_response(writer, {'success': True, 'windows': windows})
+
+        if path == '/api/maintenance/windows' and method == 'POST':
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            res = await maintenance_manager.create_maintenance_window(
+                json_body.get('server_id', ''), json_body.get('start_time', ''),
+                json_body.get('end_time', ''), json_body.get('reason', ''),
+                created_by=user['id'] if user else 1
+            )
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+        if path.startswith('/api/maintenance/windows/') and method == 'DELETE':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            try:
+                wid = int(path.split('/')[-1])
+                res = await maintenance_manager.delete_maintenance_window(wid)
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+            except ValueError:
+                return await send_json_response(writer, {'detail': 'Invalid window ID'}, 400)
+
+        if path == '/api/maintenance/groups' and method == 'GET':
+            groups = await maintenance_manager.list_server_groups()
+            return await send_json_response(writer, {'success': True, 'groups': groups})
+
+        if path == '/api/maintenance/groups' and method == 'POST':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin permission required'}, 403)
+            res = await maintenance_manager.create_server_group(
+                json_body.get('id', ''), json_body.get('name', ''),
+                json_body.get('color', ''), json_body.get('description', '')
+            )
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+        if path.startswith('/api/maintenance/groups/') and method == 'DELETE':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin permission required'}, 403)
+            gid = path.split('/')[-1]
+            res = await maintenance_manager.delete_server_group(gid)
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
 
         if path == '/api/terminal/exec' and method == 'POST':
             user = None

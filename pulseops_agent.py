@@ -26,9 +26,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from typing import Any, Dict, Optional
 import subprocess
+import shutil
+import re
 import urllib.request
 import urllib.error
 import urllib.parse
+import ports_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -362,6 +365,151 @@ def collect_system_logs(lines: int = 50) -> Dict[str, Any]:
         return {"success": False, "logs": []}
 
 
+# ─── Docker Container Helpers ────────────────────────────────────────────────
+
+def _get_agent_runtime_cmd() -> Optional[str]:
+    return shutil.which("docker") or shutil.which("podman")
+
+
+def get_docker_status() -> Dict[str, Any]:
+    runtime = _get_agent_runtime_cmd()
+    if not runtime:
+        return {"available": False, "installed": False, "running": False, "engine": None, "error": "Docker or Podman not installed"}
+    try:
+        ver_out = subprocess.check_output([runtime, "version", "--format", "{{.Server.Version}}"], text=True, timeout=5).strip().strip("'\"")
+        return {"available": True, "installed": True, "running": True, "engine": runtime, "version": ver_out or "Active"}
+    except Exception as e:
+        return {"available": False, "installed": True, "running": False, "engine": runtime, "error": str(e)}
+
+
+def collect_docker_containers() -> Dict[str, Any]:
+    runtime = _get_agent_runtime_cmd()
+    if not runtime:
+        return {"success": False, "available": False, "error": "Docker not installed", "containers": []}
+    try:
+        out = subprocess.check_output([runtime, "ps", "-a", "--no-trunc", "--format", "{{json .}}"], text=True, timeout=8)
+        containers = []
+        for line in out.splitlines():
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+                cid = raw.get("ID", "")[:12]
+                names = raw.get("Names", "")
+                clean_name = names.split(",")[0].lstrip("/") if names else cid
+                state_val = raw.get("State", "").lower() or ("running" if "up" in raw.get("Status", "").lower() else "exited")
+                containers.append({
+                    "id": cid,
+                    "full_id": raw.get("ID", ""),
+                    "name": clean_name,
+                    "image": raw.get("Image", "unknown"),
+                    "status": raw.get("Status", ""),
+                    "state": state_val,
+                    "created": raw.get("CreatedAt", raw.get("RunningFor", "")),
+                    "ports": raw.get("Ports", ""),
+                    "command": raw.get("Command", ""),
+                    "size": raw.get("Size", "")
+                })
+            except Exception:
+                continue
+        return {"success": True, "available": True, "engine": runtime, "containers": containers, "total": len(containers)}
+    except Exception as e:
+        return {"success": False, "available": True, "error": str(e), "containers": []}
+
+
+def exec_docker_action(container_id: str, action: str) -> Dict[str, Any]:
+    allowed = {"start", "stop", "restart", "pause", "unpause", "remove"}
+    if action not in allowed:
+        return {"success": False, "error": f"Invalid action {action}"}
+    if not container_id or not re.match(r"^[a-zA-Z0-9_.-]+$", container_id):
+        return {"success": False, "error": "Invalid container identifier"}
+    runtime = _get_agent_runtime_cmd()
+    if not runtime:
+        return {"success": False, "error": "Docker not installed"}
+    docker_act = ["rm", "-f"] if action == "remove" else [action]
+    try:
+        subprocess.check_output([runtime] + docker_act + [container_id], stderr=subprocess.STDOUT, timeout=15)
+        return {"success": True, "message": f"Container {container_id} {action}ed successfully"}
+    except subprocess.CalledProcessError as e:
+        err = e.output.decode("utf-8", errors="ignore") if isinstance(e.output, bytes) else str(e.output)
+        return {"success": False, "error": err}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def get_docker_logs(container_id: str, lines: int = 100) -> Dict[str, Any]:
+    if not container_id or not re.match(r"^[a-zA-Z0-9_.-]+$", container_id):
+        return {"success": False, "error": "Invalid container identifier"}
+    runtime = _get_agent_runtime_cmd()
+    if not runtime:
+        return {"success": False, "error": "Docker not installed"}
+    safe_lines = max(10, min(lines, 1000))
+    try:
+        out = subprocess.check_output([runtime, "logs", "--tail", str(safe_lines), "--timestamps", container_id], stderr=subprocess.STDOUT, text=True, timeout=8)
+        return {"success": True, "logs": out}
+    except subprocess.CalledProcessError as e:
+        err = e.output if isinstance(e.output, str) else e.output.decode("utf-8", errors="ignore")
+        return {"success": False, "error": err}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def inspect_docker_container(container_id: str) -> Dict[str, Any]:
+    if not container_id or not re.match(r"^[a-zA-Z0-9_.-]+$", container_id):
+        return {"success": False, "error": "Invalid container identifier"}
+    runtime = _get_agent_runtime_cmd()
+    if not runtime:
+        return {"success": False, "error": "Docker not installed"}
+    try:
+        out = subprocess.check_output([runtime, "inspect", container_id], text=True, timeout=6)
+        data = json.loads(out)
+        if isinstance(data, list) and data:
+            raw = data[0]
+            config = raw.get("Config", {})
+            state = raw.get("State", {})
+            net = raw.get("NetworkSettings", {})
+            mounts = raw.get("Mounts", [])
+            ports_formatted = []
+            for p, bindings in (net.get("Ports") or {}).items():
+                if bindings:
+                    for b in bindings:
+                        ports_formatted.append(f"{b.get('HostIp', '0.0.0.0')}:{b.get('HostPort', '')}->{p}")
+                else:
+                    ports_formatted.append(p)
+            mounts_formatted = [{"source": m.get("Source", ""), "destination": m.get("Destination", ""), "mode": m.get("Mode", ""), "rw": m.get("RW", True)} for m in mounts]
+            ip_addr = net.get("IPAddress", "")
+            if not ip_addr and net.get("Networks"):
+                first_net = next(iter(net["Networks"].values()), {})
+                ip_addr = first_net.get("IPAddress", "")
+            return {
+                "success": True,
+                "details": {
+                    "id": raw.get("Id", "")[:12],
+                    "full_id": raw.get("Id", ""),
+                    "name": raw.get("Name", "").lstrip("/"),
+                    "image": config.get("Image", ""),
+                    "state": state.get("Status", ""),
+                    "running": state.get("Running", False),
+                    "paused": state.get("Paused", False),
+                    "pid": state.get("Pid", 0),
+                    "started_at": state.get("StartedAt", ""),
+                    "finished_at": state.get("FinishedAt", ""),
+                    "restart_policy": raw.get("HostConfig", {}).get("RestartPolicy", {}).get("Name", "no"),
+                    "ip_address": ip_addr,
+                    "gateway": net.get("Gateway", ""),
+                    "mac_address": net.get("MacAddress", ""),
+                    "ports": ports_formatted,
+                    "mounts": mounts_formatted,
+                    "env": config.get("Env", []),
+                    "command": " ".join(config.get("Cmd") or []) if isinstance(config.get("Cmd"), list) else str(config.get("Cmd") or ""),
+                    "working_dir": config.get("WorkingDir", "")
+                }
+            }
+        return {"success": False, "error": "Empty inspect response"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ─── HTTP Server (Operations & Telemetry Endpoint) ──────────────────────────
 
 class AgentHTTPHandler(BaseHTTPRequestHandler):
@@ -429,6 +577,27 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
                 lines = 50
             return self._send_json(collect_system_logs(lines))
 
+        if path == "/api/docker/status":
+            return self._send_json(get_docker_status())
+
+        if path == "/api/docker/containers":
+            return self._send_json(collect_docker_containers())
+
+        if path == "/api/docker/logs":
+            cid = qs.get("container", [""])[0] or qs.get("container_id", [""])[0]
+            try:
+                lines = int(qs.get("lines", [100])[0])
+            except (ValueError, TypeError):
+                lines = 100
+            return self._send_json(get_docker_logs(cid, lines))
+
+        if path == "/api/docker/inspect":
+            cid = qs.get("container", [""])[0] or qs.get("container_id", [""])[0]
+            return self._send_json(inspect_docker_container(cid))
+
+        if path == "/api/network/ports":
+            return self._send_json(ports_manager.get_listening_ports_sync())
+
         self._send_json({"detail": "Not found"}, status=404)
 
     def do_POST(self):
@@ -464,6 +633,11 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
         if path == "/api/terminal/exec":
             cmd = body.get("command", "")
             return self._send_json(exec_terminal_cmd(cmd))
+
+        if path == "/api/docker/action":
+            cid = body.get("container_id", "") or body.get("container", "")
+            act = body.get("action", "")
+            return self._send_json(exec_docker_action(cid, act))
 
         self._send_json({"detail": "Not found"}, status=404)
 

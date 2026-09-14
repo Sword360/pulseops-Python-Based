@@ -130,6 +130,16 @@ async def get_disk_usage() -> List[Dict[str, Any]]:
                         used = int(parts[2])
                         free = int(parts[3])
                         usage_str = parts[4].replace('%', '')
+                        inodes_total, inodes_used, inodes_free, inode_pct = 0, 0, 0, 0.0
+                        try:
+                            st = os.statvfs(parts[5])
+                            inodes_total = st.f_files
+                            inodes_free = st.f_ffree
+                            inodes_used = inodes_total - inodes_free
+                            inode_pct = round((inodes_used / inodes_total * 100), 1) if inodes_total > 0 else 0.0
+                        except Exception:
+                            pass
+
                         disks.append({
                             "fs": parts[0],
                             "filesystem": parts[0],
@@ -140,7 +150,11 @@ async def get_disk_usage() -> List[Dict[str, Any]]:
                             "usedBytes": used * 1024,
                             "free": free * 1024,
                             "freeBytes": free * 1024,
-                            "usagePercent": float(usage_str) if usage_str else 0.0
+                            "usagePercent": float(usage_str) if usage_str else 0.0,
+                            "inodesTotal": inodes_total,
+                            "inodesUsed": inodes_used,
+                            "inodesFree": inodes_free,
+                            "inodesPercent": inode_pct
                         })
                     except Exception:
                         continue

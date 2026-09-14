@@ -32,6 +32,10 @@ import services
 import processes
 import terminal
 import vnc
+import docker_manager
+import ports_manager
+import commands_manager
+import maintenance_manager
 
 # Enterprise modules (gracefully degrade if DB not initialized)
 try:
@@ -1075,6 +1079,273 @@ async def api_kill_process(
                 details={"signal": signal_val},
                 result="success" if (isinstance(res, dict) and res.get("success")) else "failure",
             )
+    return JSONResponse(status_code=code, content=res)
+
+
+# ─── Docker Container Management Endpoints ──────────────────────────────────
+
+@app.get("/api/docker/status")
+async def api_docker_status(
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/docker/status", "GET")
+        return JSONResponse(status_code=code, content=data)
+    return await docker_manager.is_docker_available()
+
+
+@app.get("/api/docker/containers")
+async def api_get_containers(
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    all: bool = Query(True),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/docker/containers", "GET")
+        return JSONResponse(status_code=code, content=data)
+    return await docker_manager.get_containers(all_containers=all)
+
+
+@app.post("/api/docker/action")
+async def api_action_container(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(require_operator),
+):
+    target_server = payload.get("server_id") or payload.get("serverId") or server_id or serverId
+    cid = payload.get("container_id") or payload.get("container") or ""
+    action = payload.get("action") or ""
+    if target_server and target_server != "local-master":
+        res, code = await proxy_to_agent(target_server, "/api/docker/action", "POST", json_body=payload)
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                f"docker.{action}", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="container", resource_id=str(cid), ip_address=get_client_ip(request),
+                details={"server_id": target_server, "action": action},
+                result="success" if (isinstance(res, dict) and res.get("success")) else "failure",
+            )
+    else:
+        res = await docker_manager.action_container(cid, action)
+        code = 200 if res.get("success") else 400
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                f"docker.{action}", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="container", resource_id=str(cid), ip_address=get_client_ip(request),
+                details={"action": action},
+                result="success" if res.get("success") else "failure",
+            )
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.get("/api/docker/logs")
+async def api_container_logs(
+    container: Optional[str] = Query(None),
+    container_id: Optional[str] = Query(None),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    lines: int = Query(100),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    cid = container or container_id or ""
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/docker/logs", "GET", query_params={"container": cid, "lines": str(lines)})
+        return JSONResponse(status_code=code, content=data)
+    return await docker_manager.get_container_logs(cid, lines=lines)
+
+
+@app.get("/api/docker/inspect")
+async def api_inspect_container(
+    container: Optional[str] = Query(None),
+    container_id: Optional[str] = Query(None),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    cid = container or container_id or ""
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/docker/inspect", "GET", query_params={"container": cid})
+        return JSONResponse(status_code=code, content=data)
+    return await docker_manager.inspect_container(cid)
+
+
+# ─── Network Listening Ports Endpoints ──────────────────────────────────────
+
+@app.get("/api/network/ports")
+async def api_network_ports(
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/network/ports", "GET")
+        return JSONResponse(status_code=code, content=data)
+    return await ports_manager.get_listening_ports()
+
+
+# ─── Saved Commands & Runbooks Endpoints ────────────────────────────────────
+
+@app.get("/api/commands")
+async def api_list_commands(
+    current_user: Dict = Depends(get_auth_user),
+):
+    user_role = current_user.get("role", "viewer")
+    cmds = await commands_manager.list_commands(user_role)
+    return {"success": True, "commands": cmds}
+
+
+@app.post("/api/commands")
+async def api_create_command(
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(require_operator),
+):
+    res = await commands_manager.create_command(
+        payload.get("name", ""), payload.get("description", ""),
+        payload.get("command", ""), bool(payload.get("requires_sudo", False)),
+        payload.get("allowed_roles", ["admin", "operator"]),
+        created_by=current_user.get("id", 1)
+    )
+    code = 200 if res.get("success") else 400
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.put("/api/commands/{command_id}")
+async def api_update_command(
+    command_id: int,
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(require_operator),
+):
+    res = await commands_manager.update_command(
+        command_id, payload.get("name", ""), payload.get("description", ""),
+        payload.get("command", ""), bool(payload.get("requires_sudo", False)),
+        payload.get("allowed_roles", ["admin", "operator"])
+    )
+    code = 200 if res.get("success") else 400
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.delete("/api/commands/{command_id}")
+async def api_delete_command(
+    command_id: int,
+    current_user: Dict = Depends(require_operator),
+):
+    res = await commands_manager.delete_command(command_id)
+    code = 200 if res.get("success") else 400
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.post("/api/commands/{command_id}/execute")
+async def api_execute_command(
+    request: Request,
+    command_id: int,
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(get_auth_user),
+):
+    cmd_obj = await commands_manager.get_command(command_id)
+    if not cmd_obj:
+        return JSONResponse(status_code=404, content={"detail": "Command not found"})
+
+    user_role = current_user.get("role", "viewer")
+    if user_role not in cmd_obj.get("allowed_roles", []) and user_role != "admin":
+        return JSONResponse(status_code=403, content={"detail": "Role not authorized to run this runbook"})
+
+    target_server = payload.get("server_id") or payload.get("serverId")
+    sudo_pass = payload.get("sudoPassword", "")
+    cmd_text = cmd_obj["command"]
+
+    for k, v in (payload.get("params") or {}).items():
+        cmd_text = cmd_text.replace(f"{{{{{k}}}}}", str(v))
+
+    if target_server and target_server != "local-master":
+        res_data, code = await proxy_to_agent(target_server, "/api/terminal/exec", "POST", json_body={"command": cmd_text, "sudoPassword": sudo_pass})
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                "runbook.exec", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="command", resource_id=str(command_id), ip_address=get_client_ip(request),
+                details={"command": cmd_obj["name"], "server_id": target_server}
+            )
+        return JSONResponse(status_code=code, content=res_data)
+
+    res_data = await terminal.exec_terminal_command(cmd_text, sudo_pass)
+    if ENTERPRISE_AVAILABLE:
+        await audit.log_action(
+            "runbook.exec", user_id=current_user["id"], user_email=current_user["email"],
+            resource_type="command", resource_id=str(command_id), ip_address=get_client_ip(request),
+            details={"command": cmd_obj["name"]}
+        )
+    return JSONResponse(status_code=200 if res_data.get("exit_code") == 0 else 400, content=res_data)
+
+
+# ─── Maintenance Windows & Groups Endpoints ─────────────────────────────────
+
+@app.get("/api/maintenance/windows")
+async def api_list_maintenance_windows(
+    server_id: Optional[str] = Query(None),
+    current_user: Dict = Depends(get_auth_user),
+):
+    windows = await maintenance_manager.list_maintenance_windows(server_id)
+    return {"success": True, "windows": windows}
+
+
+@app.post("/api/maintenance/windows")
+async def api_create_maintenance_window(
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(require_operator),
+):
+    res = await maintenance_manager.create_maintenance_window(
+        payload.get("server_id", ""), payload.get("start_time", ""),
+        payload.get("end_time", ""), payload.get("reason", ""),
+        created_by=current_user.get("id", 1)
+    )
+    code = 200 if res.get("success") else 400
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.delete("/api/maintenance/windows/{window_id}")
+async def api_delete_maintenance_window(
+    window_id: int,
+    current_user: Dict = Depends(require_operator),
+):
+    res = await maintenance_manager.delete_maintenance_window(window_id)
+    code = 200 if res.get("success") else 400
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.get("/api/maintenance/groups")
+async def api_list_server_groups():
+    groups = await maintenance_manager.list_server_groups()
+    return {"success": True, "groups": groups}
+
+
+@app.post("/api/maintenance/groups")
+async def api_create_server_group(
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(require_admin),
+):
+    res = await maintenance_manager.create_server_group(
+        payload.get("id", ""), payload.get("name", ""),
+        payload.get("color", ""), payload.get("description", "")
+    )
+    code = 200 if res.get("success") else 400
+    return JSONResponse(status_code=code, content=res)
+
+
+@app.delete("/api/maintenance/groups/{group_id}")
+async def api_delete_server_group(
+    group_id: str,
+    current_user: Dict = Depends(require_admin),
+):
+    res = await maintenance_manager.delete_server_group(group_id)
+    code = 200 if res.get("success") else 400
     return JSONResponse(status_code=code, content=res)
 
 

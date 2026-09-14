@@ -324,6 +324,15 @@ async def _send_notifications(rule: Dict[str, Any], alert_info: Dict[str, Any]) 
         rule: Alert rule dict (contains notification config).
         alert_info: Alert details to include in the notification.
     """
+    server_id = alert_info.get("server_id", "")
+    try:
+        import maintenance_manager
+        if server_id and await maintenance_manager.is_server_in_maintenance(server_id):
+            logger.info("[Alerts] Suppressed alert notification for server %s (active maintenance window).", server_id)
+            return
+    except Exception as e:
+        logger.debug("[Alerts] Maintenance check error: %s", e)
+
     if rule.get("notify_webhook") and rule.get("webhook_url"):
         await _send_webhook(rule["webhook_url"], alert_info)
     if rule.get("notify_email"):
@@ -333,7 +342,7 @@ async def _send_notifications(rule: Dict[str, Any], alert_info: Dict[str, Any]) 
 async def _send_webhook(url: str, alert_info: Dict[str, Any]) -> None:
     """POST alert payload to a webhook URL.
 
-    Compatible with Slack, Discord, Teams incoming webhooks.
+    Compatible with Slack, Discord, Telegram, and standard JSON webhooks.
 
     Args:
         url: Target webhook URL.
@@ -341,18 +350,53 @@ async def _send_webhook(url: str, alert_info: Dict[str, Any]) -> None:
     """
     try:
         import aiohttp
-        payload = {
-            "text": f"🚨 PulseOps Alert: [{alert_info['severity'].upper()}] {alert_info['rule_name']}",
-            "attachments": [{
-                "color": "#ef4444" if alert_info["severity"] == "critical" else "#f59e0b",
-                "fields": [
-                    {"title": "Server", "value": alert_info.get("server_id", "unknown"), "short": True},
-                    {"title": "Metric", "value": alert_info.get("metric", ""), "short": True},
-                    {"title": "Value", "value": str(alert_info.get("value", "")), "short": True},
-                    {"title": "Threshold", "value": str(alert_info.get("threshold", "")), "short": True},
-                ]
-            }]
-        }
+        severity = alert_info.get("severity", "warning").upper()
+        color_hex = 0xEF4444 if severity == "CRITICAL" else 0xF59E0B
+        color_str = "#ef4444" if severity == "CRITICAL" else "#f59e0b"
+
+        # ── Discord Webhooks ──
+        if "discord.com/api/webhooks" in url:
+            payload = {
+                "username": "PulseOps Sentinel",
+                "avatar_url": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/bolt/materialicons/48dp/2x/baseline_bolt_black_48dp.png",
+                "embeds": [{
+                    "title": f"🚨 PulseOps Alert: [{severity}] {alert_info.get('rule_name')}",
+                    "description": f"Threshold violated on monitored server `{alert_info.get('server_id', 'unknown')}`.",
+                    "color": color_hex,
+                    "fields": [
+                        {"name": "Server", "value": str(alert_info.get("server_id", "unknown")), "inline": True},
+                        {"name": "Metric", "value": str(alert_info.get("metric", "")), "inline": True},
+                        {"name": "Current Value", "value": f"**{alert_info.get('value', '')}**", "inline": True},
+                        {"name": "Threshold", "value": str(alert_info.get("threshold", "")), "inline": True},
+                    ],
+                    "footer": {"text": "PulseOps Enterprise Observability"}
+                }]
+            }
+        # ── Telegram Bot API ──
+        elif "api.telegram.org/bot" in url:
+            msg_text = (
+                f"🚨 *PulseOps Alert: [{severity}]*\n"
+                f"*Rule:* {alert_info.get('rule_name')}\n"
+                f"*Server:* `{alert_info.get('server_id', 'unknown')}`\n"
+                f"*Metric:* `{alert_info.get('metric', '')}`\n"
+                f"*Value:* `{alert_info.get('value', '')}` (threshold: `{alert_info.get('threshold', '')}`)"
+            )
+            payload = {"text": msg_text, "parse_mode": "Markdown"}
+        # ── Slack / Teams / Standard Incoming Webhooks ──
+        else:
+            payload = {
+                "text": f"🚨 PulseOps Alert: [{severity}] {alert_info.get('rule_name')}",
+                "attachments": [{
+                    "color": color_str,
+                    "fields": [
+                        {"title": "Server", "value": str(alert_info.get("server_id", "unknown")), "short": True},
+                        {"title": "Metric", "value": str(alert_info.get("metric", "")), "short": True},
+                        {"title": "Value", "value": str(alert_info.get("value", "")), "short": True},
+                        {"title": "Threshold", "value": str(alert_info.get("threshold", "")), "short": True},
+                    ]
+                }]
+            }
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status not in (200, 204):
