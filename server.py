@@ -902,8 +902,9 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
             command = json_body.get('command')
             sudo_pass = json_body.get('sudoPassword')
+            cwd = json_body.get('cwd')
             if target_server and target_server != 'local-master':
-                res_data, code = await proxy_to_agent(target_server, '/api/terminal/exec', 'POST', json_body={'command': command, 'sudoPassword': sudo_pass})
+                res_data, code = await proxy_to_agent(target_server, '/api/terminal/exec', 'POST', json_body={'command': command, 'sudoPassword': sudo_pass, 'cwd': cwd})
                 if ENTERPRISE_AVAILABLE and user:
                     await audit.log_action(
                         "terminal.exec", user_id=user['id'], user_email=user['email'],
@@ -911,7 +912,7 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                         details={"command": command[:200] if command else "", "server_id": target_server}
                     )
                 return await send_json_response(writer, res_data, status=code)
-            res_data = await terminal.exec_terminal_command(command, sudo_pass)
+            res_data = await terminal.exec_terminal_command(command, sudo_pass, cwd=cwd)
             if ENTERPRISE_AVAILABLE and user:
                 await audit.log_action(
                     "terminal.exec", user_id=user['id'], user_email=user['email'],

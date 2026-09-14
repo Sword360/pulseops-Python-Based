@@ -852,8 +852,24 @@ canvas {
     display: flex;
     flex-direction: column;
     min-height: 520px;
-    height: 600px;
+    height: calc(100vh - 280px);
+    max-height: 850px;
     box-shadow: var(--shadow-soft), 0 0 30px rgba(0, 0, 0, 0.6);
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.terminal-window.is-fullscreen {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    height: auto !important;
+    max-height: none !important;
+    z-index: 99999;
+    border: 1px solid rgba(0, 242, 254, 0.4);
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(0, 242, 254, 0.25);
 }
 
 .terminal-header {
@@ -902,6 +918,8 @@ canvas {
 
 .term-output {
     white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
     color: #e2e8f0;
     line-height: 1.45;
 }

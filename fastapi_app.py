@@ -1548,8 +1548,9 @@ async def api_exec_terminal(
     target_server = payload.get("server_id") or payload.get("serverId") or server_id or serverId
     command = payload.get("command")
     sudo_pass = payload.get("sudoPassword")
+    cwd = payload.get("cwd")
     if target_server and target_server != "local-master":
-        res, code = await proxy_to_agent(target_server, "/api/terminal/exec", "POST", json_body={"command": command, "sudoPassword": sudo_pass})
+        res, code = await proxy_to_agent(target_server, "/api/terminal/exec", "POST", json_body={"command": command, "sudoPassword": sudo_pass, "cwd": cwd})
         if ENTERPRISE_AVAILABLE:
             await audit.log_action(
                 "terminal.exec", user_id=current_user["id"], user_email=current_user["email"],
@@ -1557,7 +1558,7 @@ async def api_exec_terminal(
                 details={"command": command[:200] if command else "", "server_id": target_server},
             )
         return JSONResponse(status_code=code, content=res)
-    res = await terminal.exec_terminal_command(command, sudo_pass)
+    res = await terminal.exec_terminal_command(command, sudo_pass, cwd=cwd)
     if ENTERPRISE_AVAILABLE:
         await audit.log_action(
             "terminal.exec", user_id=current_user["id"], user_email=current_user["email"],

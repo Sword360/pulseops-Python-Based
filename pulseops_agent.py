@@ -340,30 +340,107 @@ def get_service_logs(service_name: str, lines: int = 100) -> Dict[str, Any]:
         return {"success": False, "error": str(e), "logs": f"Error fetching logs: {e}"}
 
 
-def exec_terminal_cmd(command: str) -> Dict[str, Any]:
-    """Execute a bash command on the host."""
+def exec_terminal_cmd(command: str, sudo_password: Optional[str] = None, cwd: Optional[str] = None) -> Dict[str, Any]:
+    """Execute a bash command on the host with cwd tracking and safety checks."""
+    if not command or not isinstance(command, str) or not command.strip():
+        safe_home = os.path.expanduser('~')
+        return {"success": True, "stdout": "", "stderr": "", "error": None, "exit_code": 0, "cwd": safe_home}
+
+    clean_cmd = command.strip()
+    # Resolve safe cwd
+    current_cwd = cwd if cwd and os.path.isdir(cwd) else os.path.expanduser('~')
+    if not os.path.isdir(current_cwd):
+        current_cwd = '/'
+
+    if clean_cmd in ('exit', 'logout'):
+        return {"success": True, "stdout": "[PulseOps] Terminal session active. Use 'clear' to clear console buffer.\n", "stderr": "", "error": None, "exit_code": 0, "cwd": current_cwd}
+
+    # Safety checks
     forbidden = ['rm -rf /', 'mkfs', 'dd if=/dev/zero', ':(){ :|:& };:']
     for fb in forbidden:
-        if fb in command:
-            return {"success": False, "error": "Command blocked by PulseOps safety policy."}
+        if fb in clean_cmd:
+            return {"success": False, "stdout": "", "stderr": "Command blocked by PulseOps safety policy.", "error": "Command blocked by PulseOps safety policy.", "exit_code": 1, "cwd": current_cwd}
+
+    # Normalize ping
+    if re.match(r'^ping\s+', clean_cmd) and not re.search(r'\s-c\s+\d+', clean_cmd):
+        clean_cmd = re.sub(r'^ping\s+', 'ping -c 4 ', clean_cmd)
+
+    # Pure cd command
+    if not re.search(r'[;&|<>]', clean_cmd):
+        cd_m = re.match(r'^cd(\s+.*)?$', clean_cmd)
+        if cd_m:
+            target = cd_m.group(1).strip() if cd_m.group(1) else '~'
+            if not target or target == '~':
+                dest = os.path.expanduser('~')
+            elif target.startswith('~/'):
+                dest = os.path.expanduser(target)
+            elif target == '-':
+                dest = current_cwd
+            elif os.path.isabs(target):
+                dest = os.path.abspath(target)
+            else:
+                dest = os.path.abspath(os.path.join(current_cwd, target))
+
+            if not os.path.exists(dest):
+                err = f"bash: cd: {target}: No such file or directory\n"
+                return {"success": False, "stdout": "", "stderr": err, "error": err.strip(), "exit_code": 1, "cwd": current_cwd}
+            if not os.path.isdir(dest):
+                err = f"bash: cd: {target}: Not a directory\n"
+                return {"success": False, "stdout": "", "stderr": err, "error": err.strip(), "exit_code": 1, "cwd": current_cwd}
+            return {"success": True, "stdout": "", "stderr": "", "error": None, "exit_code": 0, "cwd": dest}
+
+    if clean_cmd == 'pwd':
+        return {"success": True, "stdout": f"{current_cwd}\n", "stderr": "", "error": None, "exit_code": 0, "cwd": current_cwd}
+
+    wrapped = f"{clean_cmd}\n__PULSE_RET__=$?\nprintf '\\n__PULSE_CWD__%s\\n' \"$(pwd -P)\"\nexit $__PULSE_RET__"
+    env = os.environ.copy()
+    env['PAGER'] = 'cat'
+    env['TERM'] = 'xterm-256color'
+
+    proc = None
     try:
         proc = subprocess.Popen(
-            command, shell=True, executable='/bin/bash',
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            wrapped, shell=True, executable='/bin/bash',
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=current_cwd, env=env
         )
         stdout, stderr = proc.communicate(timeout=15)
-        out_str = stdout.decode('utf-8', errors='ignore')
-        err_str = stderr.decode('utf-8', errors='ignore')
-        return {
-            "success": proc.returncode == 0,
-            "stdout": out_str,
-            "stderr": err_str,
-            "error": None if proc.returncode == 0 else f"Exited with code {proc.returncode}"
-        }
     except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Command timed out after 15s"}
+        if proc:
+            proc.kill()
+            proc.communicate()
+        return {
+            "success": False, "stdout": "",
+            "stderr": "Command timed out after 15s. Process terminated.",
+            "error": "Command timed out after 15s", "exit_code": 124, "cwd": current_cwd
+        }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "stdout": "", "stderr": str(e), "error": str(e), "exit_code": 1, "cwd": current_cwd}
+
+    out_raw = stdout.decode('utf-8', errors='ignore')
+    err_raw = stderr.decode('utf-8', errors='ignore')
+
+    new_cwd = current_cwd
+    clean_lines = []
+    for line in out_raw.splitlines():
+        if line.startswith('__PULSE_CWD__'):
+            det = line[len('__PULSE_CWD__'):].strip()
+            if det and os.path.isdir(det):
+                new_cwd = det
+        else:
+            clean_lines.append(line)
+    clean_stdout = '\n'.join(clean_lines)
+    if out_raw.endswith('\n') and not clean_stdout.endswith('\n') and clean_stdout:
+        clean_stdout += '\n'
+
+    return {
+        "success": (proc.returncode == 0),
+        "stdout": clean_stdout,
+        "stderr": err_raw.strip(),
+        "error": None if proc.returncode == 0 else (err_raw.strip() or f"Exited with code {proc.returncode}"),
+        "exit_code": proc.returncode,
+        "cwd": new_cwd
+    }
 
 
 def collect_system_logs(lines: int = 50) -> Dict[str, Any]:
@@ -745,7 +822,9 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/terminal/exec":
             cmd = body.get("command", "")
-            return self._send_json(exec_terminal_cmd(cmd))
+            sudo_pwd = body.get("sudoPassword")
+            cwd = body.get("cwd")
+            return self._send_json(exec_terminal_cmd(cmd, sudo_password=sudo_pwd, cwd=cwd))
 
         if path == "/api/docker/action":
             cid = body.get("container_id", "") or body.get("container", "")
