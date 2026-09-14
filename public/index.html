@@ -218,6 +218,7 @@
                     <button class="tab-btn" data-tab="docker">🐳 Containers</button>
                     <button class="tab-btn" data-tab="ports">🔌 Ports</button>
                     <button class="tab-btn" data-tab="firewall">🛡️ Firewall</button>
+                    <button class="tab-btn" data-tab="security">🚨 Security</button>
                     <button class="tab-btn" data-tab="services">⚙️ Services</button>
                     <button class="tab-btn" data-tab="processes">⚡ Processes</button>
                     <button class="tab-btn" data-tab="logs">📜 Live Logs</button>
@@ -495,6 +496,128 @@
                                 </thead>
                                 <tbody id="firewall-table-body">
                                     <tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:2.5rem;">Inspecting firewall configuration...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: Security & Threat Intelligence -->
+                <section id="security-tab" class="tab-content">
+                    <!-- Top Metric Cards -->
+                    <div class="metrics-grid" style="margin-bottom: 1.25rem;">
+                        <div class="metric-card metric-card-disk">
+                            <div class="metric-header">
+                                <span class="metric-title">Failed SSH Logins</span>
+                                <div class="metric-icon" style="color:var(--accent-red);">❌</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="security-stat-failed" style="color:#f87171;">0</div>
+                                <div class="metric-sub">Brute-Force Attempts (24h)</div>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:100%; background:#ef4444;"></div></div>
+                        </div>
+
+                        <div class="metric-card metric-card-net">
+                            <div class="metric-header">
+                                <span class="metric-title">Attacking IPs</span>
+                                <div class="metric-icon" style="color:var(--accent-amber);">🚨</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="security-stat-attackers" style="color:#fbbf24;">0</div>
+                                <div class="metric-sub">Unique Suspicious Hosts</div>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:100%; background:#f59e0b;"></div></div>
+                        </div>
+
+                        <div class="metric-card metric-card-mem">
+                            <div class="metric-header">
+                                <span class="metric-title">Active Banned IPs</span>
+                                <div class="metric-icon" style="color:var(--accent-purple);">🔒</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="security-stat-banned" style="color:#c084fc;">0</div>
+                                <div class="metric-sub">Blocked in Firewall</div>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:100%; background:#a855f7;"></div></div>
+                        </div>
+
+                        <div class="metric-card metric-card-cpu">
+                            <div class="metric-header">
+                                <span class="metric-title">Authorized Logins</span>
+                                <div class="metric-icon" style="color:var(--accent-green);">✅</div>
+                            </div>
+                            <div class="metric-body">
+                                <div class="metric-value" id="security-stat-accepted" style="color:#34d399;">0</div>
+                                <div class="metric-sub">Successful Sessions</div>
+                            </div>
+                            <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:100%; background:#10b981;"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- Split Row: Attacker IPs & Targeted Accounts -->
+                    <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem;">
+                        <!-- Attacker IPs Table -->
+                        <div class="card">
+                            <div class="card-header-flex" style="margin-bottom: 0.75rem;">
+                                <div class="card-title"><span class="card-title-icon" style="color:var(--accent-red);">🚨</span> Top Attacking IPs &amp; Threat Triage</div>
+                                <button class="btn btn-sm btn-secondary" id="security-refresh-btn" style="padding:0.3rem 0.7rem; font-size:0.8rem;">🔄 Rescan</button>
+                            </div>
+                            <div class="data-table-wrapper" style="max-height: 320px; overflow-y: auto;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Source IP</th>
+                                            <th>Hits</th>
+                                            <th>Targeted Users</th>
+                                            <th>Last Seen</th>
+                                            <th style="text-align:right;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="security-attackers-table-body">
+                                        <tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:2rem;">Analyzing auth logs...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Targeted Users Breakdown -->
+                        <div class="card">
+                            <div class="card-title" style="margin-bottom: 1rem;"><span class="card-title-icon" style="color:var(--accent-amber);">🎯</span> Top Targeted Accounts</div>
+                            <div id="security-targeted-users-list" style="overflow-y: auto; max-height: 280px; padding-right: 4px;">
+                                <div style="text-align:center; color:var(--text-dim); padding:2rem;">Loading account statistics...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Event Stream Table -->
+                    <div class="card">
+                        <div class="table-toolbar">
+                            <div class="search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="security-search" class="search-input" placeholder="Search auth events by IP, username, timestamp...">
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn-filter active" data-security-filter="all">All Events</button>
+                                <button class="btn-filter" data-security-filter="failed">Failed Only</button>
+                                <button class="btn-filter" data-security-filter="accepted">Accepted Only</button>
+                            </div>
+                        </div>
+
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:110px;">Status</th>
+                                        <th style="width:150px;">Timestamp</th>
+                                        <th>Target User</th>
+                                        <th>Source IP</th>
+                                        <th style="width:90px;">Port</th>
+                                        <th style="text-align:right; width:110px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="security-events-table-body">
+                                    <tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:2rem;">Streaming authentication events...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1319,6 +1442,33 @@
         </div>
     </div>
 
+    <!-- Ban Offending IP Modal -->
+    <div id="ban-ip-modal" class="modal-overlay" role="dialog" aria-modal="true" style="display:none;">
+        <div class="modal-card" style="max-width: 480px; width: 95%;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="color:var(--accent-red); font-family:var(--font-mono); font-size:1.1rem; margin:0;">🚫 Ban Threat IP Address</h3>
+                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:3px;">Enforce kernel-level DROP rule via Firewall</div>
+                </div>
+                <button class="modal-close" id="cancel-ban-ip-btn">×</button>
+            </div>
+            <div style="padding:1rem 0;">
+                <div style="margin-bottom:1rem;">
+                    <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Attacker IP Address</label>
+                    <input type="text" id="ban-target-ip" class="search-input" style="font-family:var(--font-mono); color:#f87171; font-weight:700;" readonly>
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Ban Reason / Audit Note</label>
+                    <input type="text" id="ban-target-reason" class="search-input" value="SSH Brute-Force Abuse" placeholder="Reason for blocking...">
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                    <button type="button" class="btn btn-secondary" onclick="window.securityMgr && window.securityMgr.closeBanModal()">Cancel</button>
+                    <button type="button" class="btn btn-danger-action" id="confirm-ban-ip-btn">Confirm &amp; Ban IP</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -1330,6 +1480,7 @@
     <script src="js/docker.js"></script>
     <script src="js/ports.js"></script>
     <script src="js/firewall.js"></script>
+    <script src="js/security.js"></script>
     <script src="js/commands.js"></script>
     <script src="js/services.js"></script>
     <script src="js/processes.js"></script>

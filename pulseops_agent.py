@@ -41,6 +41,11 @@ try:
 except ImportError:
     firewall_manager = None
 
+try:
+    import security_manager
+except ImportError:
+    security_manager = None
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -588,6 +593,30 @@ def _agent_reload_firewall() -> Dict[str, Any]:
     return {"success": False, "error": "Firewall manager module not found on agent"}
 
 
+def _agent_get_security_threats() -> Dict[str, Any]:
+    if security_manager:
+        try:
+            return security_manager.parse_ssh_logs()
+        except Exception as e:
+            logger.warning("security_manager error: %s", e)
+    return {"success": True, "engine": "none", "stats": {"total_failed": 0, "total_accepted": 0, "unique_attackers": 0, "banned_count": 0}, "attackers": [], "targeted_users": [], "events": []}
+
+
+def _agent_ban_ip(spec: Dict[str, Any]) -> Dict[str, Any]:
+    ip = spec.get("ip", "")
+    reason = spec.get("reason", "SSH Brute-Force")
+    if security_manager:
+        return security_manager.ban_ip_sync(ip, reason)
+    return {"success": False, "error": "Security manager not available on agent"}
+
+
+def _agent_unban_ip(spec: Dict[str, Any]) -> Dict[str, Any]:
+    ip = spec.get("ip", "")
+    if security_manager:
+        return security_manager.unban_ip_sync(ip)
+    return {"success": False, "error": "Security manager not available on agent"}
+
+
 # ─── HTTP Server (Operations & Telemetry Endpoint) ──────────────────────────
 
 class AgentHTTPHandler(BaseHTTPRequestHandler):
@@ -679,6 +708,9 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
         if path in ("/api/firewall/status", "/api/firewall/rules"):
             return self._send_json(_agent_get_firewall_status())
 
+        if path in ("/api/security/threats", "/api/security/ssh"):
+            return self._send_json(_agent_get_security_threats())
+
         self._send_json({"detail": "Not found"}, status=404)
 
     def do_POST(self):
@@ -728,6 +760,12 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/firewall/reload":
             return self._send_json(_agent_reload_firewall())
+
+        if path == "/api/security/ban":
+            return self._send_json(_agent_ban_ip(body))
+
+        if path == "/api/security/unban":
+            return self._send_json(_agent_unban_ip(body))
 
         self._send_json({"detail": "Not found"}, status=404)
 

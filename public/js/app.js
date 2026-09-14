@@ -289,6 +289,7 @@ class PulseOpsDashboard {
                 if (btn.dataset.tab === 'docker'    && window.dockerMgr)   window.dockerMgr.loadContainers();
                 if (btn.dataset.tab === 'ports'     && window.portsMgr)    window.portsMgr.loadPorts();
                 if (btn.dataset.tab === 'firewall'  && window.firewallMgr) window.firewallMgr.loadFirewall();
+                if (btn.dataset.tab === 'security'  && window.securityMgr) window.securityMgr.loadSecurity();
                 if (btn.dataset.tab === 'services'  && window.systemdMgr)  window.systemdMgr.loadServices();
                 if (btn.dataset.tab === 'processes' && window.procMgr)    window.procMgr.loadProcesses();
                 if (btn.dataset.tab === 'vnc'       && window.vncMgr)     window.vncMgr.checkHostVncStatus();
@@ -430,6 +431,7 @@ class PulseOpsDashboard {
         if (activeTab === 'docker' && window.dockerMgr) window.dockerMgr.loadContainers();
         if (activeTab === 'ports' && window.portsMgr) window.portsMgr.loadPorts();
         if (activeTab === 'firewall' && window.firewallMgr) window.firewallMgr.loadFirewall();
+        if (activeTab === 'security' && window.securityMgr) window.securityMgr.loadSecurity();
         if (activeTab === 'processes' && window.procMgr) window.procMgr.loadProcesses();
         if (activeTab === 'services' && window.systemdMgr) window.systemdMgr.loadServices();
         if (activeTab === 'terminal' && window.webTerminal && typeof window.webTerminal.onTabActivated === 'function') {

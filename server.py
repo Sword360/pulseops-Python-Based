@@ -20,6 +20,7 @@ import vnc
 import docker_manager
 import ports_manager
 import firewall_manager
+import security_manager
 import commands_manager
 import maintenance_manager
 
@@ -666,6 +667,78 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     'firewall.reload', user_id=user['id'], user_email=user['email'],
                     resource_type='firewall', resource_id='reload', ip_address=client_ip,
                     details={'server_id': 'local-master'},
+                    result='success' if res_data.get('success') else 'failure'
+                )
+            return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
+
+        # ─── Security & Threat Intelligence Endpoints ───────────────
+        if path in ('/api/security/threats', '/api/security/ssh') and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/security/threats', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await security_manager.get_ssh_threats()
+            return await send_json_response(writer, res_data)
+
+        if path == '/api/security/ban' and method == 'POST':
+            client_ip = headers.get('x-forwarded-for', '127.0.0.1').split(',')[0].strip()
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
+            ip_to_ban = str(json_body.get('ip', '')).strip()
+            reason = str(json_body.get('reason', 'SSH Brute-Force'))
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/security/ban', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        'security.ban_ip', user_id=user['id'], user_email=user['email'],
+                        resource_type='security', resource_id=ip_to_ban, ip_address=client_ip,
+                        details={'server_id': target_server, 'ip': ip_to_ban, 'reason': reason},
+                        result='success' if (isinstance(res_data, dict) and res_data.get('success')) else 'failure'
+                    )
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await security_manager.ban_ip(ip_to_ban, reason)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    'security.ban_ip', user_id=user['id'], user_email=user['email'],
+                    resource_type='security', resource_id=ip_to_ban, ip_address=client_ip,
+                    details={'server_id': 'local-master', 'ip': ip_to_ban, 'reason': reason},
+                    result='success' if res_data.get('success') else 'failure'
+                )
+            return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
+
+        if path == '/api/security/unban' and method == 'POST':
+            client_ip = headers.get('x-forwarded-for', '127.0.0.1').split(',')[0].strip()
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            target_server = json_body.get('server_id') or json_body.get('serverId') or query_params.get('server_id') or query_params.get('serverId')
+            ip_to_unban = str(json_body.get('ip', '')).strip()
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/security/unban', 'POST', json_body=json_body)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action(
+                        'security.unban_ip', user_id=user['id'], user_email=user['email'],
+                        resource_type='security', resource_id=ip_to_unban, ip_address=client_ip,
+                        details={'server_id': target_server, 'ip': ip_to_unban},
+                        result='success' if (isinstance(res_data, dict) and res_data.get('success')) else 'failure'
+                    )
+                return await send_json_response(writer, res_data, status=code)
+            res_data = await security_manager.unban_ip(ip_to_unban)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action(
+                    'security.unban_ip', user_id=user['id'], user_email=user['email'],
+                    resource_type='security', resource_id=ip_to_unban, ip_address=client_ip,
+                    details={'server_id': 'local-master', 'ip': ip_to_unban},
                     result='success' if res_data.get('success') else 'failure'
                 )
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)

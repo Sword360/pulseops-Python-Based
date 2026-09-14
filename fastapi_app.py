@@ -35,6 +35,7 @@ import vnc
 import docker_manager
 import ports_manager
 import firewall_manager
+import security_manager
 import commands_manager
 import maintenance_manager
 
@@ -1293,6 +1294,87 @@ async def api_firewall_reload(
             "firewall.reload", user_id=current_user["id"], user_email=current_user["email"],
             resource_type="firewall", resource_id="reload", ip_address=get_client_ip(request),
             details={"server_id": "local-master"},
+            result="success" if res.get("success") else "failure"
+        )
+    return JSONResponse(status_code=200 if res.get("success") else 400, content=res)
+
+
+# ─── Security & Threat Intelligence Endpoints ───────────────────────────────
+
+@app.get("/api/security/threats")
+@app.get("/api/security/ssh")
+async def api_security_threats(
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(get_auth_user),
+):
+    target = server_id or serverId
+    if target and target != "local-master":
+        data, code = await proxy_to_agent(target, "/api/security/threats", "GET")
+        return JSONResponse(status_code=code, content=data)
+    return await security_manager.get_ssh_threats()
+
+
+@app.post("/api/security/ban")
+async def api_security_ban(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(require_operator),
+):
+    target = payload.get("server_id") or payload.get("serverId") or server_id or serverId
+    ip_to_ban = str(payload.get("ip", "")).strip()
+    reason = str(payload.get("reason", "SSH Brute-Force"))
+    if target and target != "local-master":
+        res, code = await proxy_to_agent(target, "/api/security/ban", "POST", json_body=payload)
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                "security.ban_ip", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="security", resource_id=ip_to_ban, ip_address=get_client_ip(request),
+                details={"server_id": target, "ip": ip_to_ban, "reason": reason},
+                result="success" if (isinstance(res, dict) and res.get("success")) else "failure"
+            )
+        return JSONResponse(status_code=code, content=res)
+
+    res = await security_manager.ban_ip(ip_to_ban, reason)
+    if ENTERPRISE_AVAILABLE:
+        await audit.log_action(
+            "security.ban_ip", user_id=current_user["id"], user_email=current_user["email"],
+            resource_type="security", resource_id=ip_to_ban, ip_address=get_client_ip(request),
+            details={"server_id": "local-master", "ip": ip_to_ban, "reason": reason},
+            result="success" if res.get("success") else "failure"
+        )
+    return JSONResponse(status_code=200 if res.get("success") else 400, content=res)
+
+
+@app.post("/api/security/unban")
+async def api_security_unban(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    server_id: Optional[str] = Query(None),
+    serverId: Optional[str] = Query(None),
+    current_user: Dict = Depends(require_operator),
+):
+    target = payload.get("server_id") or payload.get("serverId") or server_id or serverId
+    ip_to_unban = str(payload.get("ip", "")).strip()
+    if target and target != "local-master":
+        res, code = await proxy_to_agent(target, "/api/security/unban", "POST", json_body=payload)
+        if ENTERPRISE_AVAILABLE:
+            await audit.log_action(
+                "security.unban_ip", user_id=current_user["id"], user_email=current_user["email"],
+                resource_type="security", resource_id=ip_to_unban, ip_address=get_client_ip(request),
+                details={"server_id": target, "ip": ip_to_unban},
+                result="success" if (isinstance(res, dict) and res.get("success")) else "failure"
+            )
+        return JSONResponse(status_code=code, content=res)
+
+    res = await security_manager.unban_ip(ip_to_unban)
+    if ENTERPRISE_AVAILABLE:
+        await audit.log_action(
+            "security.unban_ip", user_id=current_user["id"], user_email=current_user["email"],
+            resource_type="security", resource_id=ip_to_unban, ip_address=get_client_ip(request),
+            details={"server_id": "local-master", "ip": ip_to_unban},
             result="success" if res.get("success") else "failure"
         )
     return JSONResponse(status_code=200 if res.get("success") else 400, content=res)
