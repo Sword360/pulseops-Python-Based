@@ -788,6 +788,20 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
         if path in ("/api/security/threats", "/api/security/ssh"):
             return self._send_json(_agent_get_security_threats())
 
+        if path == "/api/ssl/certificates":
+            try:
+                import ssl_manager
+                return self._send_json({"success": True, "certificates": ssl_manager.scan_host_certificates()})
+            except Exception as e:
+                return self._send_json({"success": False, "error": str(e), "certificates": []})
+
+        if path == "/api/ssl/certbot":
+            try:
+                import ssl_manager
+                return self._send_json(ssl_manager.check_certbot_status())
+            except Exception as e:
+                return self._send_json({"installed": False, "error": str(e)})
+
         self._send_json({"detail": "Not found"}, status=404)
 
     def do_POST(self):
@@ -845,6 +859,15 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/security/unban":
             return self._send_json(_agent_unban_ip(body))
+
+        if path == "/api/ssl/probe":
+            host = body.get("host", "").strip()
+            port = int(body.get("port", 443))
+            try:
+                import ssl_manager
+                return self._send_json(ssl_manager.probe_tls_endpoint(host, port=port))
+            except Exception as e:
+                return self._send_json({"success": False, "error": str(e)})
 
         self._send_json({"detail": "Not found"}, status=404)
 

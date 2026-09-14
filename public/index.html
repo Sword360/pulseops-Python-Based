@@ -219,6 +219,7 @@
                     <button class="tab-btn" data-tab="ports">🔌 Ports</button>
                     <button class="tab-btn" data-tab="firewall">🛡️ Firewall</button>
                     <button class="tab-btn" data-tab="security">🚨 Security</button>
+                    <button class="tab-btn" data-tab="ssl">🔒 SSL / TLS</button>
                     <button class="tab-btn" data-tab="services">⚙️ Services</button>
                     <button class="tab-btn" data-tab="processes">⚡ Processes</button>
                     <button class="tab-btn" data-tab="logs">📜 Live Logs</button>
@@ -618,6 +619,148 @@
                                 </thead>
                                 <tbody id="security-events-table-body">
                                     <tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:2rem;">Streaming authentication events...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: SSL / TLS Certificates & Domain Intelligence -->
+                <section id="ssl-tab" class="tab-content">
+                    <!-- Top Summary Stats -->
+                    <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.25rem;">
+                        <div class="card metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Tracked Certificates</span>
+                                <div class="metric-icon" style="color:var(--accent-cyan);">🔒</div>
+                            </div>
+                            <div class="metric-value-row">
+                                <span class="metric-num" id="ssl-stat-total">0</span>
+                            </div>
+                            <span class="metric-sub" id="ssl-stat-total-sub">Local & Monitored</span>
+                        </div>
+                        <div class="card metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Healthy (> 30 Days)</span>
+                                <div class="metric-icon" style="color:var(--accent-green);">🟢</div>
+                            </div>
+                            <div class="metric-value-row">
+                                <span class="metric-num" style="color:var(--accent-green);" id="ssl-stat-valid">0</span>
+                            </div>
+                            <span class="metric-sub">Up to date & verified</span>
+                        </div>
+                        <div class="card metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Expiring Soon (≤ 30 Days)</span>
+                                <div class="metric-icon" style="color:#f59e0b;">🟡</div>
+                            </div>
+                            <div class="metric-value-row">
+                                <span class="metric-num" style="color:#f59e0b;" id="ssl-stat-warning">0</span>
+                            </div>
+                            <span class="metric-sub">Renewal recommended</span>
+                        </div>
+                        <div class="card metric-card">
+                            <div class="metric-header">
+                                <span class="metric-title">Critical / Expired</span>
+                                <div class="metric-icon" style="color:var(--accent-red);">🔴</div>
+                            </div>
+                            <div class="metric-value-row">
+                                <span class="metric-num" style="color:var(--accent-red);" id="ssl-stat-critical">0</span>
+                            </div>
+                            <span class="metric-sub">Action required</span>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Live TLS Probe Card -->
+                    <div class="card" style="margin-bottom: 1.25rem;">
+                        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+                            <div>
+                                <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem;">
+                                    <span>⚡</span> Live TLS Probe & Handshake Inspector
+                                </h3>
+                                <p style="margin:0.25rem 0 0; font-size:0.8rem; color:var(--text-dim);">Test any public domain, internal server, IP, or microservice endpoint in real-time.</p>
+                            </div>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <button id="btn-ssl-refresh" class="btn btn-secondary" style="font-size:0.8rem; padding:0.4rem 0.8rem;">🔄 Refresh All</button>
+                            </div>
+                        </div>
+                        <div style="padding: 1rem 0 0.25rem;">
+                            <form id="form-ssl-probe" style="display:flex; flex-wrap:wrap; gap:0.65rem; align-items:center;">
+                                <div style="flex:1; min-width:240px; position:relative;">
+                                    <input type="text" id="ssl-probe-host" class="input-field" placeholder="Hostname or IP (e.g. google.com, mail.sword.local, api.domain.com)" required style="width:100%; font-family:var(--font-mono); font-size:0.85rem;">
+                                </div>
+                                <div style="width:110px;">
+                                    <input type="number" id="ssl-probe-port" class="input-field" placeholder="Port" value="443" min="1" max="65535" style="width:100%; font-family:var(--font-mono); font-size:0.85rem;">
+                                </div>
+                                <button type="submit" id="btn-ssl-probe-submit" class="btn btn-primary" style="display:flex; align-items:center; gap:0.4rem; white-space:nowrap;">
+                                    <span>🔍</span> Test Handshake
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Probe Result Container -->
+                        <div id="ssl-probe-result" style="display:none; margin-top:1rem; padding:1rem; border-radius:var(--radius-sm); background:rgba(0,0,0,0.3); border:1px solid var(--border-color);">
+                            <!-- Injected dynamically by ssl.js -->
+                        </div>
+                    </div>
+
+                    <!-- Monitored Domains Watchlist Table Card -->
+                    <div class="card" style="margin-bottom: 1.25rem;">
+                        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                            <div>
+                                <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+                                    <span>🌐</span> Monitored Endpoints & Domains
+                                </h3>
+                                <p style="margin:0.25rem 0 0; font-size:0.78rem; color:var(--text-dim);">Actively tracked endpoints with automated expiration countdown.</p>
+                            </div>
+                            <button id="btn-ssl-add-domain" class="btn btn-primary operator-only" style="font-size:0.78rem; padding:0.35rem 0.75rem;">+ Add Endpoint</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table" id="ssl-monitored-table">
+                                <thead>
+                                    <tr>
+                                        <th>Domain / Host</th>
+                                        <th>Port</th>
+                                        <th>TLS / Cipher</th>
+                                        <th>Issuer</th>
+                                        <th>Days Left</th>
+                                        <th>Status</th>
+                                        <th style="text-align:right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ssl-monitored-table-body">
+                                    <tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:1.5rem;">No monitored endpoints yet. Use the Probe box above or click + Add Endpoint.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Local Server Discovered Certificates Card -->
+                    <div class="card">
+                        <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+                            <div>
+                                <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+                                    <span>📁</span> Local Host SSL/TLS Certificates
+                                </h3>
+                                <p style="margin:0.25rem 0 0; font-size:0.78rem; color:var(--text-dim);">Discovered certificates in system stores, web server directories, and Let's Encrypt.</p>
+                            </div>
+                            <span id="ssl-local-count-badge" class="badge" style="background:rgba(0,242,254,0.15); color:var(--accent-cyan);">0 Certificates</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table" id="ssl-local-table">
+                                <thead>
+                                    <tr>
+                                        <th>Certificate File</th>
+                                        <th>Primary Domain (CN)</th>
+                                        <th>Issuer</th>
+                                        <th>Expiry Date</th>
+                                        <th>Days Left</th>
+                                        <th>Status</th>
+                                        <th style="text-align:right;">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ssl-local-table-body">
+                                    <tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:1.5rem;">Scanning local certificates...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1470,6 +1613,58 @@
         </div>
     </div>
 
+    <!-- SSL Certificate Details Modal -->
+    <div id="modal-ssl-details" class="modal-overlay" role="dialog" aria-modal="true" style="display:none;">
+        <div class="modal-card" style="max-width: 680px; width: 95%; max-height: 85vh; display:flex; flex-direction:column;">
+            <div class="modal-header" style="border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                <div>
+                    <h3 id="ssl-modal-title" style="color:var(--accent-cyan); font-family:var(--font-mono); font-size:1.1rem; margin:0;">🔒 SSL Certificate Details</h3>
+                    <div id="ssl-modal-subtitle" style="font-size:0.75rem; color:var(--text-dim); margin-top:3px;">x509 Certificate Metadata &amp; Trust Chain</div>
+                </div>
+                <button class="modal-close" data-close-modal="modal-ssl-details">×</button>
+            </div>
+            <div id="ssl-modal-body" style="overflow-y:auto; padding:1rem 0; flex:1; font-size:0.85rem;">
+                <!-- Populated dynamically -->
+            </div>
+            <div class="modal-footer" style="border-top:1px solid var(--border-color); padding-top:0.75rem;">
+                <button class="btn btn-secondary" data-close-modal="modal-ssl-details">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add SSL Monitored Domain Modal -->
+    <div id="modal-ssl-add-domain" class="modal-overlay" role="dialog" aria-modal="true" style="display:none;">
+        <div class="modal-card" style="max-width: 480px; width: 95%;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="color:var(--accent-cyan); font-family:var(--font-mono); font-size:1.1rem; margin:0;">🌐 Add Monitored Endpoint</h3>
+                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:3px;">Monitor domain or service SSL expiry with alerts</div>
+                </div>
+                <button class="modal-close" data-close-modal="modal-ssl-add-domain">×</button>
+            </div>
+            <form id="form-ssl-add-domain" style="padding-top:1rem;">
+                <div class="form-group" style="margin-bottom:1rem;">
+                    <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Domain / Hostname / IP *</label>
+                    <input type="text" id="ssl-add-host" class="search-input" placeholder="e.g. api.example.com or mail.mydomain.com" required style="font-family:var(--font-mono);">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 2fr; gap:0.75rem; margin-bottom:1rem;">
+                    <div>
+                        <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Port</label>
+                        <input type="number" id="ssl-add-port" class="search-input" value="443" min="1" max="65535" required style="font-family:var(--font-mono);">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.35rem;">Label / Description</label>
+                        <input type="text" id="ssl-add-label" class="search-input" placeholder="e.g. Production API Gateway">
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1rem;">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-ssl-add-domain">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-ssl-add">Save &amp; Probe</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -1492,6 +1687,7 @@
     <script src="js/alerts.js"></script>
     <script src="js/audit.js"></script>
     <script src="js/settings.js"></script>
+    <script src="js/ssl.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

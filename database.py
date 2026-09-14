@@ -171,6 +171,24 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
     jti TEXT PRIMARY KEY,
     expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ssl_monitored_domains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    host TEXT NOT NULL,
+    port INTEGER DEFAULT 443,
+    label TEXT,
+    server_id TEXT DEFAULT 'local-master',
+    auto_check INTEGER DEFAULT 1,
+    last_status TEXT,
+    last_checked TEXT,
+    days_remaining INTEGER,
+    issuer TEXT,
+    subject_cn TEXT,
+    tls_version TEXT,
+    cipher TEXT,
+    latency_ms REAL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 DEFAULT_SETTINGS = [

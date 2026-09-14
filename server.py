@@ -23,6 +23,7 @@ import firewall_manager
 import security_manager
 import commands_manager
 import maintenance_manager
+import ssl_manager
 
 # Enterprise modules (optional — degrade gracefully if dependencies missing)
 try:
@@ -743,6 +744,96 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 )
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
 
+        # ─── SSL / TLS Certificate Manager Endpoints ─────────────────
+        if path == '/api/ssl/certificates' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/ssl/certificates', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            certs = ssl_manager.scan_host_certificates()
+            return await send_json_response(writer, {'success': True, 'certificates': certs})
+
+        if path == '/api/ssl/monitored' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            domains = ssl_manager.list_monitored_domains()
+            return await send_json_response(writer, {'success': True, 'domains': domains})
+
+        if path == '/api/ssl/monitored' and method == 'POST':
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            host = json_body.get('host', '').strip()
+            port = int(json_body.get('port', 443))
+            label = json_body.get('label', '').strip()
+            server_id = json_body.get('server_id', 'local-master')
+            res = ssl_manager.add_monitored_domain(host, port=port, label=label, server_id=server_id)
+            if ENTERPRISE_AVAILABLE and user:
+                await audit.log_action('ssl.domain_add', user_id=user['id'], user_email=user['email'],
+                                       resource_type='ssl', details={'host': host, 'port': port})
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+        if path.startswith('/api/ssl/monitored/') and path.endswith('/refresh') and method == 'POST':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            try:
+                dom_id = int(path.split('/')[4])
+                res = ssl_manager.refresh_monitored_domain(dom_id)
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+            except Exception as e:
+                return await send_json_response(writer, {'detail': str(e)}, 400)
+
+        if path.startswith('/api/ssl/monitored/') and method == 'DELETE':
+            user = None
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied'}, 403)
+            try:
+                dom_id = int(path.split('/')[-1])
+                ok = ssl_manager.delete_monitored_domain(dom_id)
+                if ENTERPRISE_AVAILABLE and user:
+                    await audit.log_action('ssl.domain_delete', user_id=user['id'], user_email=user['email'],
+                                           resource_type='ssl', resource_id=str(dom_id))
+                return await send_json_response(writer, {'success': ok}, status=200 if ok else 404)
+            except Exception as e:
+                return await send_json_response(writer, {'detail': str(e)}, 400)
+
+        if path == '/api/ssl/probe' and method == 'POST':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = json_body.get('server_id') or json_body.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/ssl/probe', 'POST', json_body=json_body)
+                return await send_json_response(writer, res_data, status=code)
+            host = json_body.get('host', '').strip()
+            port = int(json_body.get('port', 443))
+            res = ssl_manager.probe_tls_endpoint(host, port=port)
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+        if path == '/api/ssl/certbot' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/ssl/certbot', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            return await send_json_response(writer, ssl_manager.check_certbot_status())
+
         # ─── Saved Commands & Runbooks Endpoints ─────────────────────
         if path == '/api/commands' and method == 'GET':
             user_role = 'viewer'
@@ -982,7 +1073,9 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 email = json_body.get('email', '').strip().lower()
                 password = json_body.get('password', '')
                 totp_code = json_body.get('totp_code')
-                ip = headers.get('x-forwarded-for', 'unknown').split(',')[0].strip()
+                peer = writer.get_extra_info('peername')
+                peer_ip = peer[0] if peer else '127.0.0.1'
+                ip = headers.get('x-forwarded-for', '').split(',')[0].strip() or peer_ip
 
                 if not await auth.check_rate_limit(ip):
                     return await send_json_response(writer, {'detail': 'Too many attempts'}, 429)

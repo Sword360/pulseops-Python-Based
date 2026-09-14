@@ -292,6 +292,7 @@ class PulseOpsDashboard {
                 if (btn.dataset.tab === 'security'  && window.securityMgr) window.securityMgr.loadSecurity();
                 if (btn.dataset.tab === 'services'  && window.systemdMgr)  window.systemdMgr.loadServices();
                 if (btn.dataset.tab === 'processes' && window.procMgr)    window.procMgr.loadProcesses();
+                if (btn.dataset.tab === 'ssl'       && window.sslMgr)     window.sslMgr.loadSSLData();
                 if (btn.dataset.tab === 'vnc'       && window.vncMgr)     window.vncMgr.checkHostVncStatus();
                 if (btn.dataset.tab === 'terminal'  && window.webTerminal) {
                     const hostBtn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
@@ -437,6 +438,7 @@ class PulseOpsDashboard {
         if (activeTab === 'firewall' && window.firewallMgr) window.firewallMgr.loadFirewall();
         if (activeTab === 'security' && window.securityMgr) window.securityMgr.loadSecurity();
         if (activeTab === 'processes' && window.procMgr) window.procMgr.loadProcesses();
+        if (activeTab === 'ssl' && window.sslMgr) window.sslMgr.loadSSLData();
         if (activeTab === 'services' && window.systemdMgr) window.systemdMgr.loadServices();
         if (activeTab === 'terminal' && window.webTerminal && typeof window.webTerminal.onTabActivated === 'function') {
             window.webTerminal.onTabActivated();
