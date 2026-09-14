@@ -201,7 +201,7 @@ async def handle_vnc_proxy(ws: WebSocketConnection):
         async def forward_tcp_to_ws():
             try:
                 while ws.open and not reader.at_eof():
-                    chunk = await reader.read(4096)
+                    chunk = await reader.read(65536)
                     if not chunk:
                         break
                     await ws.send_bytes(chunk)
@@ -1044,7 +1044,7 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot launch VNC sessions.'}, 403)
             display = json_body.get('display', ':0')
             vnc_port = int(json_body.get('port', 5900))
-            use_native = bool(json_body.get('useNative', False))
+            use_native = bool(json_body.get('use_native', json_body.get('useNative', False)))
             res_data = await vnc.launch_vnc(display, vnc_port, use_native)
             return await send_json_response(writer, res_data)
 
@@ -2028,6 +2028,13 @@ async def main():
 
     asyncio.create_task(telemetry_broadcast_loop())
     asyncio.create_task(log_stream_broadcast_loop())
+
+    # ── Auto-start native Python RFB VNC server ──────────────────────────────
+    try:
+        vnc_result = await vnc.start_built_in_vnc_server(port=5900)
+        print(f"   ➜ VNC:      rfb://0.0.0.0:5900  ({vnc_result.get('message', 'started')})")
+    except Exception as e:
+        print(f"[Warning] VNC auto-start error: {e}")
 
     async with server:
         await server.serve_forever()

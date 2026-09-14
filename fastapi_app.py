@@ -1889,7 +1889,7 @@ async def websocket_vnc_proxy(websocket: WebSocket, host: str = "127.0.0.1", por
         async def forward_tcp():
             try:
                 while not reader.at_eof():
-                    data = await reader.read(4096)
+                    data = await reader.read(65536)
                     if not data:
                         break
                     await websocket.send_bytes(data)

@@ -18,6 +18,22 @@ class PulseOpsVNCManager {
         this.frameCount = 0;
         this.lastFpsCalc = Date.now();
 
+        // RFB stream reassembly buffer
+        this.rxBuffer = new Uint8Array(0);
+
+        // Server pixel format attributes
+        this.bitsPerPixel = 32;
+        this.depth = 24;
+        this.bigEndian = 0;
+        this.trueColor = 1;
+        this.redMax = 255;
+        this.greenMax = 255;
+        this.blueMax = 255;
+        this.redShift = 0;
+        this.greenShift = 8;
+        this.blueShift = 16;
+        this.nextFrameTimer = null;
+
         // Canvas scaling mode: 'fit', '1:1', 'stretch'
         this.scaleMode = 'fit';
 
@@ -191,17 +207,19 @@ class PulseOpsVNCManager {
 
             if (this.serverInfoBox) {
                 if (data.running) {
+                    const portsStr = data.openPorts && data.openPorts.length > 0 ? data.openPorts.join(', ') : data.defaultPort;
                     this.serverInfoBox.innerHTML = `
                         <span style="color: var(--accent-green);">✓ Active VNC Server listening on ${data.host}:${data.defaultPort}</span><br>
-                        Open ports: <strong>${data.openPorts.join(', ')}</strong> | Display: <code>${data.display}</code>
+                        Open ports: <strong>${portsStr}</strong> | Display: <code>${data.display}</code>
                     `;
                     if (this.portInput) this.portInput.value = data.defaultPort;
                 } else {
-                    const bins = data.installedBinaries.length > 0 ? data.installedBinaries.join(', ') : 'None installed';
+                    const bins = data.installedBinaries && data.installedBinaries.length > 0 ? data.installedBinaries.join(', ') : 'None installed';
+                    const installCmd = data.installCmd || 'sudo dnf install -y tigervnc-server-minimal xorg-x11-server-Xvfb';
                     this.serverInfoBox.innerHTML = `
                         <span style="color: var(--accent-amber);">ℹ Host VNC Status: No daemon running on 5900-5905</span><br>
                         Installed binaries: <code>${bins}</code> | <em>Click "Detect & Start VNC Server" to launch built-in service!</em><br>
-                        <span style="font-size: 0.75rem; color: var(--text-dim);">To mirror physical X11 desktop, run: <code>sudo apt update && sudo apt install -y x11vnc</code></span>
+                        <span style="font-size: 0.75rem; color: var(--text-dim);">To mirror physical X11 desktop, run: <code>${installCmd}</code></span>
                     `;
                 }
             }
@@ -220,7 +238,8 @@ class PulseOpsVNCManager {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     port: parseInt(this.portInput ? this.portInput.value : 5900, 10),
-                    display: ':0'
+                    display: ':0',
+                    use_native: true
                 })
             });
             const data = await res.json();
@@ -245,6 +264,13 @@ class PulseOpsVNCManager {
             this.stopDemoMode();
         }
 
+        if (this.nextFrameTimer) {
+            clearTimeout(this.nextFrameTimer);
+            this.nextFrameTimer = null;
+        }
+        this.rxBuffer = new Uint8Array(0);
+        this.rfbState = 0;
+
         const host = this.hostInput ? this.hostInput.value.trim() : '127.0.0.1';
         const port = this.portInput ? this.portInput.value.trim() : '5900';
 
@@ -268,14 +294,29 @@ class PulseOpsVNCManager {
                     try {
                         const meta = JSON.parse(evt.data);
                         if (meta.type === 'vnc_proxy_meta') {
-                            this.log(`Proxy status: ${meta.status} (${meta.message || ''})`);
+                            this.log(`Proxy status: ${meta.status} (${meta.message || meta.error || ''})`);
+                            if (meta.status === 'error') {
+                                if (window.showToast) window.showToast(`VNC Error: ${meta.error}`, 'error');
+                                this.updateStatus('PROXY ERROR', 'disconnected');
+                            }
                         }
                     } catch (e) {}
                     return;
                 }
 
-                // Handle binary RFB stream
-                this.handleRfbData(new Uint8Array(evt.data));
+                // Append incoming binary chunk to rxBuffer stream accumulator
+                const chunk = new Uint8Array(evt.data);
+                if (this.rxBuffer.length === 0) {
+                    this.rxBuffer = chunk;
+                } else {
+                    const merged = new Uint8Array(this.rxBuffer.length + chunk.length);
+                    merged.set(this.rxBuffer, 0);
+                    merged.set(chunk, this.rxBuffer.length);
+                    this.rxBuffer = merged;
+                }
+
+                // Process all complete protocol messages currently in rxBuffer
+                this.processRxBuffer();
             };
 
             this.ws.onclose = () => {
@@ -295,6 +336,10 @@ class PulseOpsVNCManager {
     }
 
     disconnect() {
+        if (this.nextFrameTimer) {
+            clearTimeout(this.nextFrameTimer);
+            this.nextFrameTimer = null;
+        }
         if (this.ws) {
             this.ws.close();
             this.ws = null;
@@ -302,6 +347,8 @@ class PulseOpsVNCManager {
         if (this.isDemoMode) {
             this.stopDemoMode();
         }
+        this.rxBuffer = new Uint8Array(0);
+        this.rfbState = 0;
         this.onDisconnected();
     }
 
@@ -315,6 +362,10 @@ class PulseOpsVNCManager {
     }
 
     onDisconnected() {
+        if (this.nextFrameTimer) {
+            clearTimeout(this.nextFrameTimer);
+            this.nextFrameTimer = null;
+        }
         this.isConnected = false;
         this.updateStatus('DISCONNECTED', 'disconnected');
         if (this.overlay) this.overlay.classList.remove('hidden');
@@ -350,76 +401,103 @@ class PulseOpsVNCManager {
     // RFB (Remote Frame Buffer) Binary Protocol Engine
     // -------------------------------------------------------------
 
-    handleRfbData(buf) {
-        this.frameCount++;
-        
-        // RFB Protocol Handshake State Machine
-        if (this.rfbState === 0) {
-            // Stage 0: Expect Server Version (e.g. "RFB 003.008\n")
-            const verStr = new TextDecoder().decode(buf.subarray(0, 12));
-            if (verStr.startsWith('RFB')) {
-                this.log(`Received Server RFB Version: ${verStr.trim()}`);
-                // Send response Version string "RFB 003.008\n"
-                const reply = new TextEncoder().encode('RFB 003.008\n');
-                this.ws.send(reply);
-                this.rfbState = 1; // Security negotiation stage
-            }
-            return;
-        }
-
-        if (this.rfbState === 1) {
-            // Stage 1: Security Types (1 byte count, then list of types)
-            const count = buf[0];
-            this.log(`Server offered ${count} security type(s).`);
-            
-            // Select Security Type 1 (None) or 2 (VNC Auth)
-            let chosenType = 1;
-            if (count > 0 && buf.length >= count + 1) {
-                for (let i = 1; i <= count; i++) {
-                    if (buf[i] === 1) { chosenType = 1; break; }
-                    if (buf[i] === 2) { chosenType = 2; break; }
+    processRxBuffer() {
+        while (this.rxBuffer.length > 0) {
+            if (this.rfbState === 0) {
+                // Stage 0: Expect Server Version (12 bytes: e.g. "RFB 003.008\n")
+                if (this.rxBuffer.length < 12) return;
+                const verStr = new TextDecoder().decode(this.rxBuffer.subarray(0, 12));
+                this.rxBuffer = this.rxBuffer.subarray(12);
+                if (verStr.startsWith('RFB')) {
+                    this.log(`Received Server RFB Version: ${verStr.trim()}`);
+                    const reply = new TextEncoder().encode('RFB 003.008\n');
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(reply);
+                    }
+                    this.rfbState = 1; // Security negotiation stage
+                } else {
+                    this.log(`Invalid RFB version string from server: ${verStr}`);
+                    this.disconnect();
+                    return;
                 }
-            }
+            } else if (this.rfbState === 1) {
+                // Stage 1: Security Types (1 byte count, then list of types)
+                if (this.rxBuffer.length < 1) return;
+                const count = this.rxBuffer[0];
+                if (count === 0) {
+                    // Server reported connection error: uint32 reason length, then reason string
+                    if (this.rxBuffer.length < 5) return;
+                    const reasonLen = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset).getUint32(1, false);
+                    if (this.rxBuffer.length < 5 + reasonLen) return;
+                    const reason = new TextDecoder().decode(this.rxBuffer.subarray(5, 5 + reasonLen));
+                    this.log(`RFB Security Error: ${reason}`);
+                    if (window.showToast) window.showToast(`RFB Error: ${reason}`, 'error');
+                    this.disconnect();
+                    return;
+                }
+                if (this.rxBuffer.length < 1 + count) return;
+                let chosenType = 1; // Default to 1 (None)
+                for (let i = 1; i <= count; i++) {
+                    if (this.rxBuffer[i] === 1) { chosenType = 1; break; }
+                    if (this.rxBuffer[i] === 2) { chosenType = 2; }
+                }
+                this.rxBuffer = this.rxBuffer.subarray(1 + count);
+                this.log(`Selected security type: ${chosenType} (None/VNCAuth)`);
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(new Uint8Array([chosenType]));
+                }
+                if (chosenType === 1) {
+                    this.rfbState = 3; // SecurityResult expected
+                } else {
+                    this.rfbState = 2; // Auth challenge expected
+                }
+            } else if (this.rfbState === 3 || this.rfbState === 2) {
+                // Stage 3: SecurityResult (4 bytes uint32: 0 = OK)
+                if (this.rxBuffer.length < 4) return;
+                const res = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset).getUint32(0, false);
+                this.rxBuffer = this.rxBuffer.subarray(4);
+                if (res === 0) {
+                    this.log('Security handshake succeeded. Sending ClientInit (Shared = 1)...');
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(new Uint8Array([1])); // shared-flag = 1
+                    }
+                    this.rfbState = 4; // ServerInit expected
+                } else {
+                    this.log(`VNC Authentication / Security failed (code ${res})`);
+                    if (window.showToast) window.showToast('VNC Authentication Failed', 'error');
+                    this.disconnect();
+                    return;
+                }
+            } else if (this.rfbState === 4) {
+                // Stage 4: ServerInit Message: Width (2 bytes), Height (2 bytes), PixelFormat (16 bytes), NameLength (4 bytes), Name
+                if (this.rxBuffer.length < 24) return;
+                const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset);
+                const nameLen = view.getUint32(20, false);
+                if (this.rxBuffer.length < 24 + nameLen) return;
 
-            // Send 1 byte chosen security type
-            this.ws.send(new Uint8Array([chosenType]));
-            if (chosenType === 1) {
-                this.rfbState = 3; // SecurityResult expected
-            } else {
-                this.rfbState = 2; // Auth expected
-            }
-            return;
-        }
-
-        if (this.rfbState === 3 || this.rfbState === 2) {
-            // SecurityResult (4 bytes uint32: 0 = OK)
-            this.log('Security handshake succeeded. Sending ClientInit (Shared = 1)...');
-            // ClientInit: 1 byte shared flag = 1
-            this.ws.send(new Uint8Array([1]));
-            this.rfbState = 4; // ServerInit expected
-            return;
-        }
-
-        if (this.rfbState === 4) {
-            // ServerInit Message: Width (2 bytes), Height (2 bytes), PixelFormat (16 bytes), NameLength (4 bytes), Name
-            if (buf.length >= 24) {
-                const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
                 this.width = view.getUint16(0, false);
                 this.height = view.getUint16(2, false);
+                this.bitsPerPixel = view.getUint8(4);
+                this.depth = view.getUint8(5);
+                this.bigEndian = view.getUint8(6);
+                this.trueColor = view.getUint8(7);
+                this.redMax = view.getUint16(8, false);
+                this.greenMax = view.getUint16(10, false);
+                this.blueMax = view.getUint16(12, false);
+                this.redShift = view.getUint8(14);
+                this.greenShift = view.getUint8(15);
+                this.blueShift = view.getUint8(16);
 
-                const nameLen = view.getUint32(20, false);
-                if (buf.length >= 24 + nameLen) {
-                    const nameBytes = buf.slice(24, 24 + nameLen);
-                    this.desktopName = new TextDecoder().decode(nameBytes);
-                }
+                const nameBytes = this.rxBuffer.slice(24, 24 + nameLen);
+                this.desktopName = new TextDecoder().decode(nameBytes);
+                this.rxBuffer = this.rxBuffer.subarray(24 + nameLen);
 
-                this.log(`Server Desktop Init: ${this.width}x${this.height} ("${this.desktopName}")`);
-                
+                this.log(`Server Desktop Init: ${this.width}x${this.height} ("${this.desktopName}"), bpp=${this.bitsPerPixel}, redShift=${this.redShift}`);
+
                 if (this.canvas) {
                     this.canvas.width = this.width;
                     this.canvas.height = this.height;
                 }
-
                 if (this.resBadge) {
                     this.resBadge.textContent = `Res: ${this.width}x${this.height}`;
                 }
@@ -429,15 +507,127 @@ class PulseOpsVNCManager {
 
                 // Send SetEncodings (Raw: 0, DesktopSize: -223)
                 this.sendSetEncodings();
-                // Request first full FramebufferUpdate
+                // Request initial FramebufferUpdate
                 this.requestFramebufferUpdate(0, 0, 0, this.width, this.height);
-            }
-            return;
-        }
+            } else if (this.rfbState === 5) {
+                // Stage 5: Connected - Process server messages
+                if (this.rxBuffer.length < 1) return;
+                const msgType = this.rxBuffer[0];
 
-        if (this.rfbState === 5) {
-            // Stage 5: Receiving FramebufferUpdate messages
-            this.parseFramebufferUpdate(buf);
+                if (msgType === 0) {
+                    // FramebufferUpdate message
+                    if (this.rxBuffer.length < 4) return;
+                    const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset, this.rxBuffer.byteLength);
+                    const numRects = view.getUint16(2, false);
+
+                    // Verify that the entire FramebufferUpdate message is buffered
+                    let scanOffset = 4;
+                    let complete = true;
+                    const bytesPerPixel = this.bitsPerPixel ? Math.floor(this.bitsPerPixel / 8) : 4;
+
+                    for (let r = 0; r < numRects; r++) {
+                        if (scanOffset + 12 > this.rxBuffer.length) {
+                            complete = false;
+                            break;
+                        }
+                        const rw = view.getUint16(scanOffset + 4, false);
+                        const rh = view.getUint16(scanOffset + 6, false);
+                        const enc = view.getInt32(scanOffset + 8, false);
+                        scanOffset += 12;
+
+                        if (enc === 0) { // Raw
+                            const pixelBytes = rw * rh * bytesPerPixel;
+                            if (scanOffset + pixelBytes > this.rxBuffer.length) {
+                                complete = false;
+                                break;
+                            }
+                            scanOffset += pixelBytes;
+                        } else if (enc === 1) { // CopyRect
+                            if (scanOffset + 4 > this.rxBuffer.length) {
+                                complete = false;
+                                break;
+                            }
+                            scanOffset += 4;
+                        } else if (enc === -223) { // DesktopSize
+                            // No extra bytes
+                        }
+                    }
+
+                    if (!complete) {
+                        // Incomplete frame; wait for subsequent WebSocket chunks
+                        return;
+                    }
+
+                    // Full frame buffered! Parse and render rectangles
+                    let renderOffset = 4;
+                    for (let r = 0; r < numRects; r++) {
+                        const rx = view.getUint16(renderOffset, false);
+                        const ry = view.getUint16(renderOffset + 2, false);
+                        const rw = view.getUint16(renderOffset + 4, false);
+                        const rh = view.getUint16(renderOffset + 6, false);
+                        const enc = view.getInt32(renderOffset + 8, false);
+                        renderOffset += 12;
+
+                        if (enc === 0) {
+                            const pixelBytes = rw * rh * bytesPerPixel;
+                            const rawPixels = this.rxBuffer.subarray(renderOffset, renderOffset + pixelBytes);
+                            this.renderRawPixels(rx, ry, rw, rh, rawPixels);
+                            renderOffset += pixelBytes;
+                        } else if (enc === -223) {
+                            this.width = rw;
+                            this.height = rh;
+                            if (this.canvas) {
+                                this.canvas.width = rw;
+                                this.canvas.height = rh;
+                            }
+                            if (this.resBadge) {
+                                this.resBadge.textContent = `Res: ${rw}x${rh}`;
+                            }
+                        }
+                    }
+
+                    this.frameCount++;
+                    this.rxBuffer = this.rxBuffer.subarray(renderOffset);
+
+                    // Compact buffer memory if offset is large to avoid fragmentation
+                    if (this.rxBuffer.byteOffset > 1048576) {
+                        this.rxBuffer = new Uint8Array(this.rxBuffer);
+                    }
+
+                    // Request next incremental update
+                    if (this.nextFrameTimer) clearTimeout(this.nextFrameTimer);
+                    this.nextFrameTimer = setTimeout(() => {
+                        if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                            this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+                        }
+                    }, 30);
+
+                } else if (msgType === 1) {
+                    // SetColourMapEntries: 6 + numColours * 6
+                    if (this.rxBuffer.length < 6) return;
+                    const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset);
+                    const numColours = view.getUint16(4, false);
+                    const totalLen = 6 + numColours * 6;
+                    if (this.rxBuffer.length < totalLen) return;
+                    this.rxBuffer = this.rxBuffer.subarray(totalLen);
+                } else if (msgType === 2) {
+                    // Bell: 1 byte
+                    this.rxBuffer = this.rxBuffer.subarray(1);
+                } else if (msgType === 3) {
+                    // ServerCutText: 8 + len bytes
+                    if (this.rxBuffer.length < 8) return;
+                    const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset);
+                    const txtLen = view.getUint32(4, false);
+                    if (this.rxBuffer.length < 8 + txtLen) return;
+                    const textBytes = this.rxBuffer.subarray(8, 8 + txtLen);
+                    const text = new TextDecoder().decode(textBytes);
+                    this.log(`Remote Clipboard: ${text.slice(0, 60)}...`);
+                    this.rxBuffer = this.rxBuffer.subarray(8 + txtLen);
+                } else {
+                    // Unknown message, skip 1 byte
+                    this.rxBuffer = this.rxBuffer.subarray(1);
+                }
+            }
         }
     }
 
@@ -470,60 +660,27 @@ class PulseOpsVNCManager {
         }
     }
 
-    parseFramebufferUpdate(buf) {
-        if (buf.length < 4) return;
-        const msgType = buf[0];
-
-        if (msgType === 0) {
-            // FramebufferUpdate message
-            const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-            const numRects = view.getUint16(2, false);
-
-            let offset = 4;
-            for (let r = 0; r < numRects && offset + 12 <= buf.length; r++) {
-                const rx = view.getUint16(offset, false);
-                const ry = view.getUint16(offset + 2, false);
-                const rw = view.getUint16(offset + 4, false);
-                const rh = view.getUint16(offset + 6, false);
-                const encType = view.getInt32(offset + 8, false);
-                offset += 12;
-
-                if (encType === 0) { // Raw Encoding
-                    const pixelBytes = rw * rh * 4;
-                    if (offset + pixelBytes <= buf.length) {
-                        const rawPixels = buf.subarray(offset, offset + pixelBytes);
-                        this.renderRawPixels(rx, ry, rw, rh, rawPixels);
-                        offset += pixelBytes;
-                    }
-                } else if (encType === -223) { // DesktopSize pseudo-encoding
-                    this.width = rw;
-                    this.height = rh;
-                    if (this.canvas) {
-                        this.canvas.width = rw;
-                        this.canvas.height = rh;
-                    }
-                }
-            }
-
-            // Request next incremental update
-            setTimeout(() => {
-                if (this.isConnected) {
-                    this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
-                }
-            }, 30);
-        }
-    }
-
     renderRawPixels(x, y, w, h, pixelData) {
         if (!this.ctx) return;
         const imgData = this.ctx.createImageData(w, h);
         const data = imgData.data;
 
-        for (let i = 0; i < pixelData.length; i += 4) {
-            data[i] = pixelData[i + 2];     // Red
-            data[i + 1] = pixelData[i + 1]; // Green
-            data[i + 2] = pixelData[i];     // Blue
-            data[i + 3] = 255;              // Alpha
+        if (this.redShift === 0) {
+            // Standard RGBA: byte 0=R, 1=G, 2=B, 3=Pad/A
+            for (let i = 0; i < pixelData.length; i += 4) {
+                data[i]     = pixelData[i];     // Red
+                data[i + 1] = pixelData[i + 1]; // Green
+                data[i + 2] = pixelData[i + 2]; // Blue
+                data[i + 3] = 255;              // Alpha
+            }
+        } else {
+            // BGRx (e.g. x11vnc with redShift=16, blueShift=0)
+            for (let i = 0; i < pixelData.length; i += 4) {
+                data[i]     = pixelData[i + 2]; // Red
+                data[i + 1] = pixelData[i + 1]; // Green
+                data[i + 2] = pixelData[i];     // Blue
+                data[i + 3] = 255;              // Alpha
+            }
         }
         this.ctx.putImageData(imgData, x, y);
     }
@@ -569,6 +726,14 @@ class PulseOpsVNCManager {
             view.setUint16(2, pos.x, false);
             view.setUint16(4, pos.y, false);
             this.ws.send(msg);
+
+            if (type === 'down' || type === 'up') {
+                setTimeout(() => {
+                    if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+                    }
+                }, 15);
+            }
         }
     }
 
@@ -615,6 +780,15 @@ class PulseOpsVNCManager {
             view.setUint8(1, isDown ? 1 : 0);
             view.setUint32(4, keySym, false);
             this.ws.send(msg);
+
+            // Request immediate incremental update for keydown so echoed keystrokes appear immediately
+            if (isDown) {
+                setTimeout(() => {
+                    if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+                    }
+                }, 15);
+            }
         }
     }
 
