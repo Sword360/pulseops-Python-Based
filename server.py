@@ -175,16 +175,27 @@ async def parse_ws_frames(ws: WebSocketConnection):
         ws.open = False
         if ws in connected_ws_clients:
             connected_ws_clients.remove(ws)
+        if ws.is_vnc and ws.tcp_proxy_writer:
+            try:
+                ws.tcp_proxy_writer.close()
+            except Exception:
+                pass
 
 
 async def handle_vnc_proxy(ws: WebSocketConnection):
+    server_id = ws.query.get('server_id')
     target_host = ws.query.get('host', '127.0.0.1')
     try:
         target_port = int(ws.query.get('port', 5900))
     except ValueError:
         target_port = 5900
 
-    print(f"[VNC Proxy] Initiating connection to RFB server at {target_host}:{target_port}")
+    if server_id and server_id != 'local-master':
+        srv = await fleet_module.get_server(server_id)
+        if srv:
+            target_host = srv.get('host_ip', target_host)
+
+    print(f"[VNC Proxy] Initiating connection to RFB server at {target_host}:{target_port} (server_id={server_id})")
     try:
         reader, writer = await asyncio.open_connection(target_host, target_port)
         ws.tcp_proxy_writer = writer
@@ -334,6 +345,27 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
 
         # WebSocket upgrade request check
         if headers.get('upgrade', '').lower() == 'websocket':
+            is_vnc = (path == '/api/vnc/ws' or path == '/vnc')
+
+            if is_vnc and ENTERPRISE_AVAILABLE:
+                tok = query_params.get('token', '')
+                auth_hdr = headers.get('authorization', '')
+                if not auth_hdr and tok:
+                    auth_hdr = f'Bearer {tok}'
+                user = await auth.get_current_user(auth_hdr)
+                if not user:
+                    print(f"[VNC Proxy] Unauthorized WebSocket connection rejected")
+                    resp = (
+                        "HTTP/1.1 401 Unauthorized\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Connection: close\r\n\r\n"
+                        '{"detail":"Unauthorized WebSocket connection"}'
+                    )
+                    writer.write(resp.encode('utf-8'))
+                    await writer.drain()
+                    writer.close()
+                    return
+
             ws_key = headers.get('sec-websocket-key', '')
             accept_val = base64.b64encode(hashlib.sha1((ws_key + GUID_WS).encode('utf-8')).digest()).decode('utf-8')
 
@@ -346,7 +378,6 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             writer.write(response_headers.encode('utf-8'))
             await writer.drain()
 
-            is_vnc = (path == '/api/vnc/ws' or path == '/vnc')
             ws = WebSocketConnection(reader, writer, is_vnc=is_vnc, query=query_params)
 
             if is_vnc:
@@ -1034,7 +1065,8 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 if not user:
                     return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
             target_host = query_params.get('host', '127.0.0.1')
-            res_data = await vnc.get_vnc_status(target_host)
+            server_id = query_params.get('server_id')
+            res_data = await vnc.get_vnc_status(target_host, server_id=server_id)
             return await send_json_response(writer, res_data)
 
         if path == '/api/vnc/launch' and method == 'POST':
@@ -1044,9 +1076,10 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot launch VNC sessions.'}, 403)
             display = json_body.get('display', ':0')
             vnc_port = int(json_body.get('port', 0) or 0)
-            backend = json_body.get('backend', 'auto')
+            backend = json_body.get('backend', 'x11vnc')
             geometry = json_body.get('geometry', '1280x800')
-            res_data = await vnc.launch_vnc(display=display, port=vnc_port, backend=backend, geometry=geometry)
+            server_id = json_body.get('server_id')
+            res_data = await vnc.launch_vnc(display=display, port=vnc_port, backend=backend, geometry=geometry, server_id=server_id)
             return await send_json_response(writer, res_data)
 
         if path == '/api/vnc/stop' and method == 'POST':
@@ -1055,7 +1088,8 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 if not user or user.get('role') not in ('admin', 'operator'):
                     return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot stop VNC sessions.'}, 403)
             backend = json_body.get('backend', '')
-            res_data = await vnc.stop_vnc_backend(backend)
+            server_id = json_body.get('server_id')
+            res_data = await vnc.stop_vnc_backend(backend, server_id=server_id)
             return await send_json_response(writer, res_data)
 
         if path == '/api/vnc/install' and method == 'POST':
@@ -1063,8 +1097,9 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 user = await auth.get_current_user(headers.get('authorization', ''))
                 if not user or user.get('role') not in ('admin', 'operator'):
                     return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot install VNC backends.'}, 403)
-            backend = json_body.get('backend', 'auto')
-            res_data = await vnc.install_backend(backend)
+            backend = json_body.get('backend', 'x11vnc')
+            server_id = json_body.get('server_id')
+            res_data = await vnc.install_backend(backend, server_id=server_id)
             return await send_json_response(writer, res_data)
 
         # Local telemetry snapshot for agent polling

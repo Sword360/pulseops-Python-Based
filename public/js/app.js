@@ -394,7 +394,14 @@ class PulseOpsDashboard {
                 if (btn.dataset.tab === 'services'  && window.systemdMgr)  window.systemdMgr.loadServices();
                 if (btn.dataset.tab === 'processes' && window.procMgr)    window.procMgr.loadProcesses();
                 if (btn.dataset.tab === 'ssl'       && window.sslMgr)     window.sslMgr.loadSSLData();
-                if (btn.dataset.tab === 'vnc'       && window.vncMgr)     window.vncMgr.checkHostVncStatus();
+                if (btn.dataset.tab === 'vnc'       && window.vncMgr) {
+                    const hostBtn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
+                    const hostIp = hostBtn ? hostBtn.dataset.ip : '';
+                    const hostDisplay = window.PulseOpsCurrentServerHostname || (this.currentServerId === 'local-master' ? 'mail.sword.local' : 'Remote Node');
+                    if (typeof window.vncMgr.setServer === 'function') {
+                        window.vncMgr.setServer(this.currentServerId, hostDisplay, hostIp);
+                    }
+                }
                 if (btn.dataset.tab === 'terminal'  && window.webTerminal) {
                     const hostBtn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
                     const hostIp = hostBtn ? hostBtn.dataset.ip : '';
@@ -523,6 +530,10 @@ class PulseOpsDashboard {
             if (window.webTerminal.serverId !== this.currentServerId) {
                 window.webTerminal.setServer(this.currentServerId, displayHost, ip);
             }
+        }
+
+        if (window.vncMgr && typeof window.vncMgr.setServer === 'function') {
+            window.vncMgr.setServer(this.currentServerId, displayHost, ip);
         }
 
         const noticeEl = document.getElementById('remote-node-tab-notice');

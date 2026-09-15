@@ -1341,10 +1341,107 @@ EOF
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now $SERVICE_NAME
 
+# ── Setup x11vnc Remote Desktop Subsystem ─────────────────────────
+echo ""
+echo "🖥️  Installing and configuring x11vnc remote desktop..."
+if command -v apt-get &>/dev/null; then
+    $SUDO apt-get update -qq && $SUDO apt-get install -y -qq x11vnc xvfb xterm 2>/dev/null || true
+elif command -v dnf &>/dev/null; then
+    $SUDO dnf install -y -q x11vnc xorg-x11-server-Xvfb xterm 2>/dev/null || true
+elif command -v yum &>/dev/null; then
+    $SUDO yum install -y -q x11vnc xorg-x11-server-Xvfb xterm 2>/dev/null || true
+elif command -v pacman &>/dev/null; then
+    $SUDO pacman -Sy --noconfirm x11vnc xorg-server-xvfb xterm 2>/dev/null || true
+elif command -v zypper &>/dev/null; then
+    $SUDO zypper install -y x11vnc xorg-x11-server-extra 2>/dev/null || true
+fi
+
+# Create smart x11vnc launch script
+$SUDO tee /usr/local/bin/pulseops-x11vnc-start > /dev/null <<'VNC_EOF'
+#!/bin/bash
+# PulseOps x11vnc Service Launcher
+# Detects real desktop session (:0) with auth cookie or starts virtual display if headless
+
+VNC_PORT=5900
+PW_OPT="-nopw"
+if [ -f /etc/pulseops/vnc.passwd ]; then
+    PW_OPT="-rfbauth /etc/pulseops/vnc.passwd"
+fi
+
+# Helper to find Xauthority for active display
+find_xauth() {{
+    for p in /run/user/*/gdm/Xauthority /var/run/sddm/* /var/run/lightdm/root/:0 /run/lightdm/root/:0 /var/lib/gdm3/:0.Xauth /var/lib/gdm/:0.Xauth /home/*/.Xauthority /root/.Xauthority; do
+        if [ -f "$p" ] && [ -r "$p" ]; then
+            echo "$p"
+            return 0
+        fi
+    done
+    return 1
+}}
+
+AUTH_FILE=$(find_xauth)
+AUTH_FLAG="-auth guess"
+[ -n "$AUTH_FILE" ] && AUTH_FLAG="-auth $AUTH_FILE"
+
+# 1. If an X server / display is already active on :0, attach to it
+if [ -e /tmp/.X11-unix/X0 ] || pgrep -f "Xorg|Xwayland|X :0" >/dev/null 2>&1; then
+    exec /usr/bin/x11vnc -display :0 $AUTH_FLAG -forever -shared -rfbport $VNC_PORT $PW_OPT -noxdamage -repeat -wait 5 -defer 2
+fi
+
+# 2. Headless fallback: Start virtual Xvfb display on :0 and run x11vnc
+if command -v Xvfb >/dev/null 2>&1; then
+    rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null || true
+    Xvfb :0 -screen 0 1280x800x24 -ac +extension GLX +render -noreset &
+    sleep 1
+    DISPLAY=:0 xterm -geometry 120x35+50+50 -fa "Monospace" -fs 10 -title "PulseOps Remote Desktop" 2>/dev/null &
+    exec /usr/bin/x11vnc -display :0 -forever -shared -rfbport $VNC_PORT $PW_OPT -noxdamage -repeat
+fi
+
+# 3. Direct fallback
+exec /usr/bin/x11vnc -display :0 -auth guess -forever -shared -rfbport $VNC_PORT $PW_OPT -noxdamage -repeat
+VNC_EOF
+
+$SUDO chmod +x /usr/local/bin/pulseops-x11vnc-start
+
+# Create x11vnc systemd service
+$SUDO tee /etc/systemd/system/pulseops-x11vnc.service > /dev/null <<EOF
+[Unit]
+Description=PulseOps x11vnc Remote Desktop Daemon
+After=multi-user.target graphical.target systemd-user-sessions.service network.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pulseops-x11vnc-start
+Restart=always
+RestartSec=5
+KillMode=mixed
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Open firewall port 5900 if active
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+    $SUDO ufw allow 5900/tcp comment 'PulseOps x11vnc' 2>/dev/null || true
+fi
+if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
+    $SUDO firewall-cmd --add-port=5900/tcp --permanent --quiet 2>/dev/null || true
+    $SUDO firewall-cmd --reload --quiet 2>/dev/null || true
+fi
+
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable --now pulseops-x11vnc 2>/dev/null || true
+
 echo ""
 echo "✅ PulseOps Agent installed and running!"
 echo "   Service: systemctl status $SERVICE_NAME"
 echo "   Logs:    journalctl -u $SERVICE_NAME -f"
+if systemctl is-active --quiet pulseops-x11vnc 2>/dev/null; then
+    echo "✅ x11vnc remote desktop active on port 5900!"
+    echo "   TightVNC / RealVNC connection: $HOST_IP:5900"
+fi
 echo ""
 echo "🔗 The server should appear in your fleet dashboard within 30 seconds."
 """

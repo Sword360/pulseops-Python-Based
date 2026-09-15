@@ -1,24 +1,28 @@
 /* ==========================================================================
-   PulseOps - VNC Remote Desktop Manager & RFB Client Engine
+   PulseOps - Redesigned x11vnc Remote Desktop Client Engine
    ========================================================================== */
 
 class PulseOpsVNCManager {
     constructor() {
+        this.serverId = 'local-master';
+        this.targetHostname = 'Local Master';
+        this.targetIp = '127.0.0.1';
+        this.targetPort = 5900;
+
         this.ws = null;
         this.canvas = null;
         this.ctx = null;
         this.isConnected = false;
-        this.isDemoMode = false;
-        this.rfbState = 0; // 0: Init, 1: Version, 2: Security, 3: SecurityResult, 4: ServerInit, 5: Connected
-        
+        this.rfbState = 0; // 0: Init, 1: Security, 2: AuthChallenge, 3: SecurityResult, 4: ServerInit, 5: Connected
+
         this.width = 1280;
         this.height = 800;
-        this.desktopName = 'PulseOps Remote Session';
+        this.desktopName = 'PulseOps x11vnc Session';
         this.fps = 0;
         this.frameCount = 0;
         this.lastFpsCalc = Date.now();
 
-        // RFB stream reassembly buffer
+        // RFB stream accumulator buffer
         this.rxBuffer = new Uint8Array(0);
 
         // Server pixel format attributes
@@ -34,15 +38,14 @@ class PulseOpsVNCManager {
         this.blueShift = 16;
         this.nextFrameTimer = null;
 
-        // Canvas scaling mode: 'fit', '1:1', 'stretch'
+        // Display scaling mode: 'fit', '1:1', 'stretch'
         this.scaleMode = 'fit';
 
-        // Mouse button state tracking
+        // Mouse button tracking
         this.buttonMask = 0;
 
-        // Demo desktop simulator state
-        this.demoState = null;
-        this.demoAnimId = null;
+        // Pending auth challenge buffer
+        this.pendingChallenge = null;
 
         this.initElements();
         this.initEvents();
@@ -52,26 +55,40 @@ class PulseOpsVNCManager {
     initElements() {
         this.canvas = document.getElementById('vnc-canvas');
         if (this.canvas) {
-            this.ctx = this.canvas.getContext('2d');
+            this.ctx = this.canvas.getContext('2d', { alpha: false });
         }
 
         this.hostInput = document.getElementById('vnc-host-input');
         this.portInput = document.getElementById('vnc-port-input');
         this.passInput = document.getElementById('vnc-pass-input');
-        this.backendSelect = document.getElementById('vnc-backend-select');
 
         this.connectBtn = document.getElementById('vnc-connect-btn');
         this.disconnectBtn = document.getElementById('vnc-disconnect-btn');
         this.launchBtn = document.getElementById('vnc-launch-btn');
+        this.restartBtn = document.getElementById('vnc-restart-btn');
         this.stopBtn = document.getElementById('vnc-stop-btn');
+
         this.statusDot = document.getElementById('vnc-dot');
         this.statusText = document.getElementById('vnc-status-text');
         this.overlay = document.getElementById('vnc-overlay');
         this.serverInfoBox = document.getElementById('vnc-server-info');
-        this.backendsListBox = document.getElementById('vnc-backends-list');
         this.consoleOut = document.getElementById('vnc-console-output');
         this.fpsIndicator = document.getElementById('vnc-fps-indicator');
         this.resBadge = document.getElementById('vnc-res-badge');
+
+        this.targetHostnameEl = document.getElementById('vnc-target-hostname');
+        this.targetSubEl = document.getElementById('vnc-target-sub');
+        this.tightvncTargetEl = document.getElementById('vnc-tightvnc-target');
+        this.copyTargetBtn = document.getElementById('vnc-copy-target-btn');
+
+        this.diagHostEl = document.getElementById('vnc-diag-host');
+        this.diagPortEl = document.getElementById('vnc-diag-port');
+        this.diagStatusEl = document.getElementById('vnc-diag-status');
+
+        this.authModal = document.getElementById('vnc-auth-modal');
+        this.authModalPass = document.getElementById('vnc-auth-modal-pass');
+        this.authModalSubmit = document.getElementById('vnc-auth-modal-submit');
+        this.authModalCancel = document.getElementById('vnc-auth-modal-cancel');
     }
 
     initEvents() {
@@ -82,25 +99,19 @@ class PulseOpsVNCManager {
         // Overlay buttons
         const ovConnect = document.getElementById('vnc-overlay-connect-btn');
         const ovLaunch = document.getElementById('vnc-overlay-launch-btn');
-        const ovDemo = document.getElementById('vnc-overlay-demo-btn');
+        const ovCopy = document.getElementById('vnc-overlay-copy-btn');
 
         if (ovConnect) ovConnect.addEventListener('click', () => this.connect());
         if (ovLaunch) ovLaunch.addEventListener('click', () => this.launchHostDaemon());
-        if (ovDemo) ovDemo.addEventListener('click', () => this.startDemoMode());
+        if (ovCopy) ovCopy.addEventListener('click', () => this.copyTarget());
 
+        // Management buttons
         if (this.launchBtn) this.launchBtn.addEventListener('click', () => this.launchHostDaemon());
+        if (this.restartBtn) this.restartBtn.addEventListener('click', () => this.launchHostDaemon());
         if (this.stopBtn) this.stopBtn.addEventListener('click', () => this.stopHostDaemon());
+        if (this.copyTargetBtn) this.copyTargetBtn.addEventListener('click', () => this.copyTarget());
 
-        const demoToggle = document.getElementById('vnc-demo-toggle-btn');
-        if (demoToggle) demoToggle.addEventListener('click', () => {
-            if (this.isDemoMode) {
-                this.stopDemoMode();
-            } else {
-                this.startDemoMode();
-            }
-        });
-
-        // Display scaling select
+        // Display scaling
         const scaleSelect = document.getElementById('vnc-scale-select');
         if (scaleSelect) {
             scaleSelect.addEventListener('change', (e) => {
@@ -109,16 +120,14 @@ class PulseOpsVNCManager {
             });
         }
 
-        // Fullscreen button
+        // Fullscreen toggle
         const fsBtn = document.getElementById('vnc-fullscreen-btn');
         if (fsBtn) {
             fsBtn.addEventListener('click', () => {
                 const container = document.getElementById('vnc-viewport-container');
                 if (container) {
                     if (!document.fullscreenElement) {
-                        container.requestFullscreen().catch(err => {
-                            this.log(`Fullscreen error: ${err.message}`);
-                        });
+                        container.requestFullscreen().catch(err => this.log(`Fullscreen error: ${err.message}`));
                     } else {
                         document.exitFullscreen();
                     }
@@ -126,16 +135,20 @@ class PulseOpsVNCManager {
             });
         }
 
-        // Quick Macro buttons
+        // Quick Key Macros
         const cadBtn = document.getElementById('vnc-btn-cad');
         const altTabBtn = document.getElementById('vnc-btn-alttab');
         const superBtn = document.getElementById('vnc-btn-super');
         const escBtn = document.getElementById('vnc-btn-esc');
+        const ctrlCBtn = document.getElementById('vnc-btn-ctrlc');
+        const ctrlVBtn = document.getElementById('vnc-btn-ctrlv');
 
         if (cadBtn) cadBtn.addEventListener('click', () => this.sendMacro('CAD'));
         if (altTabBtn) altTabBtn.addEventListener('click', () => this.sendMacro('ALTTAB'));
         if (superBtn) superBtn.addEventListener('click', () => this.sendMacro('SUPER'));
         if (escBtn) escBtn.addEventListener('click', () => this.sendMacro('ESC'));
+        if (ctrlCBtn) ctrlCBtn.addEventListener('click', () => this.sendMacro('CTRL_C'));
+        if (ctrlVBtn) ctrlVBtn.addEventListener('click', () => this.sendMacro('CTRL_V'));
 
         // Clipboard Text Sender
         const clipSendBtn = document.getElementById('vnc-clip-send-btn');
@@ -159,21 +172,37 @@ class PulseOpsVNCManager {
             });
         }
 
-        // Canvas Mouse & Pointer Event Listeners
+        // Auth Modal handlers
+        if (this.authModalSubmit && this.authModalPass) {
+            this.authModalSubmit.addEventListener('click', () => this.submitAuthModal());
+            this.authModalPass.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') this.submitAuthModal();
+            });
+        }
+        if (this.authModalCancel) {
+            this.authModalCancel.addEventListener('click', () => {
+                if (this.authModal) this.authModal.style.display = 'none';
+                this.disconnect();
+            });
+        }
+
+        // Mouse & Pointer listeners
         if (this.canvas) {
             this.canvas.addEventListener('mousemove', (e) => this.handlePointerEvent(e, 'move'));
-            this.canvas.addEventListener('mousedown', (e) => this.handlePointerEvent(e, 'down'));
+            this.canvas.addEventListener('mousedown', (e) => {
+                this.canvas.focus();
+                this.handlePointerEvent(e, 'down');
+            });
             this.canvas.addEventListener('mouseup', (e) => this.handlePointerEvent(e, 'up'));
             this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-            this.canvas.addEventListener('wheel', (e) => this.handleWheelEvent(e));
+            this.canvas.addEventListener('wheel', (e) => this.handleWheelEvent(e), { passive: false });
 
-            // Keyboard capturing when canvas is focused/clicked
-            this.canvas.setAttribute('tabindex', '0');
+            // Keyboard listeners
             this.canvas.addEventListener('keydown', (e) => this.handleKeyEvent(e, true));
             this.canvas.addEventListener('keyup', (e) => this.handleKeyEvent(e, false));
         }
 
-        // FPS Counter Timer
+        // FPS meter
         setInterval(() => {
             const now = Date.now();
             const elapsed = (now - this.lastFpsCalc) / 1000;
@@ -191,7 +220,7 @@ class PulseOpsVNCManager {
             const time = new Date().toLocaleTimeString();
             this.consoleOut.textContent = `[${time}] ${msg}`;
         }
-        console.log(`[PulseOps VNC] ${msg}`);
+        console.log(`[PulseOps x11vnc] ${msg}`);
     }
 
     async authFetch(url, options = {}) {
@@ -206,142 +235,155 @@ class PulseOpsVNCManager {
         return fetch(url, { ...options, headers });
     }
 
+    // ── Server Context Management ──────────────────────────────────────────
+
+    setServer(serverId, hostname, ip) {
+        const isMaster = (!serverId || serverId === 'local-master');
+        const prevId = this.serverId;
+        this.serverId = serverId || 'local-master';
+        this.targetHostname = hostname || (isMaster ? 'Local Master' : 'Remote Node');
+        this.targetIp = ip || (isMaster ? '127.0.0.1' : (this.hostInput?.value || '127.0.0.1'));
+        this.targetPort = 5900;
+
+        if (this.isConnected && prevId !== this.serverId) {
+            this.disconnect();
+        }
+
+        if (this.targetHostnameEl) this.targetHostnameEl.textContent = this.targetHostname;
+        if (this.targetSubEl) this.targetSubEl.textContent = `${this.targetIp} · x11vnc on port ${this.targetPort}`;
+        if (this.tightvncTargetEl) this.tightvncTargetEl.textContent = `${this.targetIp}:${this.targetPort}`;
+        if (this.hostInput) this.hostInput.value = this.targetIp;
+        if (this.portInput) this.portInput.value = this.targetPort;
+
+        if (this.diagHostEl) this.diagHostEl.textContent = `${this.targetHostname} (${this.targetIp})`;
+        if (this.diagPortEl) this.diagPortEl.textContent = `${this.targetPort}`;
+        if (this.diagStatusEl) this.diagStatusEl.textContent = 'Checking...';
+
+        this.checkHostVncStatus();
+    }
+
+    copyTarget() {
+        const target = `${this.targetIp}:${this.targetPort}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(target).then(() => {
+                if (window.showToast) window.showToast(`Copied ${target} for TightVNC Viewer!`, 'success');
+                this.log(`Copied connection target: ${target}`);
+            }).catch(() => {
+                this._fallbackCopy(target);
+            });
+        } else {
+            this._fallbackCopy(target);
+        }
+    }
+
+    _fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (window.showToast) window.showToast(`Copied ${text} for TightVNC Viewer!`, 'success');
+        this.log(`Copied connection target: ${text}`);
+    }
+
+    // ── Server Status & Actions ────────────────────────────────────────────
+
     async checkHostVncStatus() {
         try {
-            const host = this.hostInput ? this.hostInput.value : '127.0.0.1';
-            const res = await this.authFetch(`/api/vnc/status?host=${host}`);
+            const host = this.targetIp || (this.hostInput ? this.hostInput.value.trim() : '127.0.0.1');
+            const sid = this.serverId || 'local-master';
+            const res = await this.authFetch(`/api/vnc/status?server_id=${encodeURIComponent(sid)}&host=${encodeURIComponent(host)}`);
             const data = await res.json();
 
+            const isRunning = data.running || data.service_active || (data.openPorts && data.openPorts.length > 0);
+            const port = data.defaultPort || 5900;
+            this.targetPort = port;
+            if (this.portInput) this.portInput.value = port;
+            if (this.tightvncTargetEl) this.tightvncTargetEl.textContent = `${this.targetIp}:${port}`;
+
+            if (this.diagStatusEl) {
+                this.diagStatusEl.textContent = isRunning ? 'Active & Listening' : 'Service Stopped';
+                this.diagStatusEl.style.color = isRunning ? 'var(--accent-green)' : 'var(--accent-amber)';
+            }
+
             if (this.serverInfoBox) {
-                if (data.running) {
-                    const portsStr = data.openPorts && data.openPorts.length > 0 ? data.openPorts.join(', ') : data.defaultPort;
-                    const clientHost = window.location.hostname || data.host;
-                    const dispNum = (data.defaultPort >= 5900) ? `:${data.defaultPort - 5900}` : data.display;
+                if (isRunning) {
                     this.serverInfoBox.innerHTML = `
-                        <span style="color: var(--accent-green); font-weight: 600;">✓ Active VNC Server (${data.activeBackend || 'external'}) listening on port ${data.defaultPort}</span><br>
-                        <span>Display: <code>${data.display}</code> | Open ports: <strong>${portsStr}</strong></span><br>
-                        <span style="font-size: 0.82rem; color: var(--accent-cyan); display: inline-block; margin-top: 4px;">🖥️ <strong>TightVNC / RealVNC Viewer Target:</strong> <code>${clientHost}:${data.defaultPort}</code> (or <code>${clientHost}${dispNum}</code>)</span>
+                        <span style="color: var(--accent-green); font-weight: 700;">✓ x11vnc service active and listening on port ${port}</span><br>
+                        <span style="font-size: 0.85rem; color: var(--text-main); display: inline-block; margin-top: 4px;">
+                            Display: <code>${data.display || ':0'}</code> | Target: <strong>${this.targetIp}:${port}</strong>
+                        </span><br>
+                        <span style="font-size: 0.8rem; color: var(--accent-cyan); display: inline-block; margin-top: 4px;">
+                            🖥️ Ready to connect. Click <strong>"Connect to Desktop"</strong> or use TightVNC Viewer pointing to <code>${this.targetIp}:${port}</code>.
+                        </span>
                     `;
-                    if (this.portInput) this.portInput.value = data.defaultPort;
                 } else {
                     this.serverInfoBox.innerHTML = `
-                        <span style="color: var(--accent-amber);">ℹ No VNC server currently running.</span><br>
-                        <span style="font-size: 0.75rem; color: var(--text-dim);">Pick a backend below and click "Start Local VNC Server" — it launches a real Linux desktop you can view in this browser, or connect to using TightVNC Viewer / RealVNC Viewer.</span>
+                        <span style="color: var(--accent-amber); font-weight: 600;">ℹ x11vnc is not currently running on port ${port}.</span><br>
+                        <span style="font-size: 0.8rem; color: var(--text-dim); display: inline-block; margin-top: 4px;">
+                            Click <strong>"Start x11vnc Server"</strong> to start the remote desktop mirror on this node.
+                        </span>
                     `;
                 }
             }
-
-            this.renderBackendsList(data.backends || {});
         } catch (e) {
+            if (this.diagStatusEl) {
+                this.diagStatusEl.textContent = 'Unreachable';
+                this.diagStatusEl.style.color = 'var(--accent-red)';
+            }
             if (this.serverInfoBox) {
-                this.serverInfoBox.textContent = 'Unable to query host VNC server status.';
+                this.serverInfoBox.textContent = 'Could not query x11vnc status on node.';
             }
         }
     }
 
-    renderBackendsList(backends) {
-        if (!this.backendsListBox) return;
-        const keys = Object.keys(backends);
-        if (keys.length === 0) {
-            this.backendsListBox.innerHTML = '';
-            return;
-        }
-        this.backendsListBox.innerHTML = keys.map((key) => {
-            const b = backends[key];
-            const statusColor = b.listening ? 'var(--accent-green)' : (b.installed ? 'var(--accent-amber)' : 'var(--text-dim)');
-            const statusLabel = b.listening ? 'Running' : (b.installed ? 'Installed' : 'Not installed');
-            const actionBtn = b.installed
-                ? `<button class="btn-vnc-tool vnc-start-backend-btn" data-backend="${key}">▶ Start</button>`
-                : `<button class="btn-vnc-tool vnc-install-backend-btn" data-backend="${key}">⬇ Install</button>`;
-            return `
-                <div class="vnc-backend-row ${b.isActive ? 'active' : ''}">
-                    <div>
-                        <div class="vnc-backend-name">${b.label}</div>
-                        <div class="vnc-backend-meta" style="color:${statusColor};">${statusLabel} · port ${b.port}</div>
-                    </div>
-                    ${actionBtn}
-                </div>
-            `;
-        }).join('');
-
-        this.backendsListBox.querySelectorAll('.vnc-start-backend-btn').forEach((btn) => {
-            btn.addEventListener('click', () => this.launchHostDaemon(btn.dataset.backend));
-        });
-        this.backendsListBox.querySelectorAll('.vnc-install-backend-btn').forEach((btn) => {
-            btn.addEventListener('click', () => this.installBackend(btn.dataset.backend));
-        });
-    }
-
-    async installBackend(backend) {
-        this.log(`Installing VNC backend: ${backend}...`);
-        if (window.showToast) window.showToast(`Installing ${backend}... this can take a minute.`, 'info');
-        try {
-            const res = await this.authFetch('/api/vnc/install', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ backend })
-            });
-            const data = await res.json();
-            if (data.success) {
-                if (window.showToast) window.showToast(data.message || 'Installed.', 'success');
-                this.log(data.message || 'Install complete.');
-                this.checkHostVncStatus();
-            } else {
-                if (window.showToast) window.showToast(data.error || 'Install failed.', 'error');
-                this.log(`Install failed: ${data.error || 'unknown error'}`);
-            }
-        } catch (e) {
-            if (window.showToast) window.showToast(`Install failed: ${e.message}`, 'error');
-        }
-    }
-
-    async launchHostDaemon(backendOverride) {
-        const backend = backendOverride || (this.backendSelect ? this.backendSelect.value : 'auto');
-        this.log(`Starting VNC server (backend: ${backend})...`);
+    async launchHostDaemon() {
+        this.log(`Starting x11vnc on ${this.targetHostname} (${this.serverId})...`);
+        if (window.showToast) window.showToast(`Starting x11vnc on ${this.targetHostname}...`, 'info');
         try {
             const res = await this.authFetch('/api/vnc/launch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    backend,
+                    backend: 'x11vnc',
+                    server_id: this.serverId,
+                    port: this.targetPort || 5900,
                     geometry: '1280x800'
                 })
             });
             const data = await res.json();
             if (data.success) {
-                if (window.showToast) window.showToast(data.message, 'success');
-                this.log(data.message);
-                if (data.port && this.portInput) this.portInput.value = data.port;
-                if (this.backendSelect && data.backend) this.backendSelect.value = data.backend;
+                if (window.showToast) window.showToast(data.message || 'x11vnc started successfully.', 'success');
+                this.log(data.message || 'x11vnc started.');
                 setTimeout(() => {
                     this.checkHostVncStatus();
-                    this.connect(); // Auto connect to the newly started VNC server!
-                }, 800);
+                    this.connect(); // Auto connect!
+                }, 1000);
             } else {
-                if (window.showToast) window.showToast(data.error || data.message, 'error');
-                this.log(`Launch info: ${data.error || data.message}`);
-                if (data.installCmd) {
-                    this.log(`Install with: ${data.installCmd}`);
-                }
+                if (window.showToast) window.showToast(data.error || 'Failed to start x11vnc.', 'error');
+                this.log(`Start error: ${data.error}`);
             }
         } catch (e) {
-            if (window.showToast) window.showToast(`Launch failed: ${e.message}`, 'error');
+            if (window.showToast) window.showToast(`Failed: ${e.message}`, 'error');
         }
     }
 
     async stopHostDaemon() {
-        const backend = this.backendSelect ? this.backendSelect.value : '';
-        this.log('Stopping VNC server...');
+        this.log(`Stopping x11vnc on ${this.targetHostname}...`);
         try {
             const res = await this.authFetch('/api/vnc/stop', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ backend: backend === 'auto' ? '' : backend })
+                body: JSON.stringify({
+                    backend: 'x11vnc',
+                    server_id: this.serverId
+                })
             });
             const data = await res.json();
             if (data.success) {
-                if (window.showToast) window.showToast(data.message, 'success');
-                this.log(data.message);
+                if (window.showToast) window.showToast(data.message || 'x11vnc stopped.', 'success');
+                this.log(data.message || 'x11vnc stopped.');
                 this.disconnect();
                 this.checkHostVncStatus();
             } else {
@@ -352,33 +394,37 @@ class PulseOpsVNCManager {
         }
     }
 
-    connect() {
-        if (this.isDemoMode) {
-            this.stopDemoMode();
-        }
+    // ── WebSocket Connection & RFB 3.8 Handshake ──────────────────────────
 
+    connect() {
         if (this.nextFrameTimer) {
             clearTimeout(this.nextFrameTimer);
             this.nextFrameTimer = null;
         }
         this.rxBuffer = new Uint8Array(0);
         this.rfbState = 0;
+        this.pendingChallenge = null;
 
-        const host = this.hostInput ? this.hostInput.value.trim() : '127.0.0.1';
-        const port = this.portInput ? this.portInput.value.trim() : '5900';
+        const host = this.hostInput ? this.hostInput.value.trim() : (this.targetIp || '127.0.0.1');
+        const port = this.portInput ? this.portInput.value.trim() : (this.targetPort || '5900');
+        const sid = this.serverId || 'local-master';
 
-        this.log(`Connecting to VNC WebSocket proxy (Target: ${host}:${port})...`);
+        this.log(`Opening WebSocket RFB tunnel to ${host}:${port} (server_id: ${sid})...`);
         this.updateStatus('CONNECTING', 'warning');
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/api/vnc/ws?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`;
+        const token = (window.PulseOpsAuth && window.PulseOpsAuth.getAccessToken)
+            ? window.PulseOpsAuth.getAccessToken()
+            : (localStorage.getItem('pulseops_access_token') || '');
+        const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+        const wsUrl = `${protocol}//${window.location.host}/api/vnc/ws?server_id=${encodeURIComponent(sid)}&host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}${tokenParam}`;
 
         try {
             this.ws = new WebSocket(wsUrl);
             this.ws.binaryType = 'arraybuffer';
 
             this.ws.onopen = () => {
-                this.log('WebSocket proxy tunnel established. Initiating RFB handshake...');
+                this.log('WebSocket tunnel established. Handshaking RFB 3.8...');
                 this.rfbState = 0;
             };
 
@@ -387,9 +433,9 @@ class PulseOpsVNCManager {
                     try {
                         const meta = JSON.parse(evt.data);
                         if (meta.type === 'vnc_proxy_meta') {
-                            this.log(`Proxy status: ${meta.status} (${meta.message || meta.error || ''})`);
+                            this.log(`Proxy status: ${meta.status} (${meta.error || ''})`);
                             if (meta.status === 'error') {
-                                if (window.showToast) window.showToast(`VNC Error: ${meta.error}`, 'error');
+                                if (window.showToast) window.showToast(`VNC Tunnel Error: ${meta.error}`, 'error');
                                 this.updateStatus('PROXY ERROR', 'disconnected');
                             }
                         }
@@ -397,7 +443,7 @@ class PulseOpsVNCManager {
                     return;
                 }
 
-                // Append incoming binary chunk to rxBuffer stream accumulator
+                // Append incoming binary chunk
                 const chunk = new Uint8Array(evt.data);
                 if (this.rxBuffer.length === 0) {
                     this.rxBuffer = chunk;
@@ -408,7 +454,6 @@ class PulseOpsVNCManager {
                     this.rxBuffer = merged;
                 }
 
-                // Process all complete protocol messages currently in rxBuffer
                 this.processRxBuffer();
             };
 
@@ -418,7 +463,7 @@ class PulseOpsVNCManager {
             };
 
             this.ws.onerror = (err) => {
-                this.log('WebSocket error encountered.');
+                this.log('WebSocket network error.');
                 this.onDisconnected();
             };
 
@@ -437,11 +482,12 @@ class PulseOpsVNCManager {
             this.ws.close();
             this.ws = null;
         }
-        if (this.isDemoMode) {
-            this.stopDemoMode();
+        if (this.authModal) {
+            this.authModal.style.display = 'none';
         }
         this.rxBuffer = new Uint8Array(0);
         this.rfbState = 0;
+        this.pendingChallenge = null;
         this.onDisconnected();
     }
 
@@ -452,6 +498,7 @@ class PulseOpsVNCManager {
         if (this.connectBtn) this.connectBtn.style.display = 'none';
         if (this.disconnectBtn) this.disconnectBtn.style.display = 'inline-flex';
         this.updateCanvasScaling();
+        if (this.canvas) this.canvas.focus();
     }
 
     onDisconnected() {
@@ -490,79 +537,121 @@ class PulseOpsVNCManager {
         }
     }
 
-    // -------------------------------------------------------------
-    // RFB (Remote Frame Buffer) Binary Protocol Engine
-    // -------------------------------------------------------------
+    // ── RFB Protocol State Machine ─────────────────────────────────────────
 
     processRxBuffer() {
         while (this.rxBuffer.length > 0) {
             if (this.rfbState === 0) {
-                // Stage 0: Expect Server Version (12 bytes: e.g. "RFB 003.008\n")
+                // Stage 0: Version negotiation (12 bytes, e.g. "RFB 003.008\n")
                 if (this.rxBuffer.length < 12) return;
                 const verStr = new TextDecoder().decode(this.rxBuffer.subarray(0, 12));
                 this.rxBuffer = this.rxBuffer.subarray(12);
+
                 if (verStr.startsWith('RFB')) {
-                    this.log(`Received Server RFB Version: ${verStr.trim()}`);
+                    this.log(`Server RFB Version: ${verStr.trim()}`);
                     const reply = new TextEncoder().encode('RFB 003.008\n');
                     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                         this.ws.send(reply);
                     }
-                    this.rfbState = 1; // Security negotiation stage
+                    this.rfbState = 1; // Security negotiation
                 } else {
-                    this.log(`Invalid RFB version string from server: ${verStr}`);
+                    this.log(`Unexpected RFB banner: ${verStr}`);
                     this.disconnect();
                     return;
                 }
+
             } else if (this.rfbState === 1) {
-                // Stage 1: Security Types (1 byte count, then list of types)
+                // Stage 1: Security Types (1 byte count, followed by N bytes of types)
                 if (this.rxBuffer.length < 1) return;
                 const count = this.rxBuffer[0];
                 if (count === 0) {
-                    // Server reported connection error: uint32 reason length, then reason string
+                    // Failure reason string
                     if (this.rxBuffer.length < 5) return;
                     const reasonLen = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset).getUint32(1, false);
                     if (this.rxBuffer.length < 5 + reasonLen) return;
                     const reason = new TextDecoder().decode(this.rxBuffer.subarray(5, 5 + reasonLen));
-                    this.log(`RFB Security Error: ${reason}`);
-                    if (window.showToast) window.showToast(`RFB Error: ${reason}`, 'error');
+                    this.log(`RFB Rejected: ${reason}`);
+                    if (window.showToast) window.showToast(`VNC Error: ${reason}`, 'error');
                     this.disconnect();
                     return;
                 }
                 if (this.rxBuffer.length < 1 + count) return;
-                let chosenType = 1; // Default to 1 (None)
+
+                const types = [];
                 for (let i = 1; i <= count; i++) {
-                    if (this.rxBuffer[i] === 1) { chosenType = 1; break; }
-                    if (this.rxBuffer[i] === 2) { chosenType = 2; }
+                    types.push(this.rxBuffer[i]);
                 }
                 this.rxBuffer = this.rxBuffer.subarray(1 + count);
-                this.log(`Selected security type: ${chosenType} (None/VNCAuth)`);
+
+                this.log(`Server security types offered: [${types.join(', ')}]`);
+
+                // Prefer None (1), then VNCAuth (2)
+                let chosenType = 1;
+                if (types.includes(1)) {
+                    chosenType = 1; // No authentication required!
+                } else if (types.includes(2)) {
+                    chosenType = 2; // VNC password auth required
+                } else {
+                    chosenType = types[0];
+                }
+
+                this.log(`Selected security type: ${chosenType} (${chosenType === 1 ? 'None' : 'VNCAuth'})`);
                 if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                     this.ws.send(new Uint8Array([chosenType]));
                 }
+
                 if (chosenType === 1) {
-                    this.rfbState = 3; // SecurityResult expected
+                    this.rfbState = 3; // Expect SecurityResult uint32
+                } else if (chosenType === 2) {
+                    this.rfbState = 2; // Expect 16-byte challenge
                 } else {
-                    this.rfbState = 2; // Auth challenge expected
+                    this.log(`Unsupported security type: ${chosenType}`);
+                    this.disconnect();
+                    return;
                 }
-            } else if (this.rfbState === 3 || this.rfbState === 2) {
+
+            } else if (this.rfbState === 2) {
+                // Stage 2: VNC Authentication Challenge (16 bytes random challenge)
+                if (this.rxBuffer.length < 16) return;
+                this.pendingChallenge = new Uint8Array(this.rxBuffer.subarray(0, 16));
+                this.rxBuffer = this.rxBuffer.subarray(16);
+
+                const currentPass = this.passInput ? this.passInput.value : '';
+                if (currentPass) {
+                    this.sendAuthResponse(currentPass);
+                } else {
+                    // Prompt user with in-canvas modal
+                    if (this.authModal) {
+                        this.authModal.style.display = 'flex';
+                        if (this.authModalPass) {
+                            this.authModalPass.value = '';
+                            this.authModalPass.focus();
+                        }
+                    }
+                }
+                return;
+
+            } else if (this.rfbState === 3) {
                 // Stage 3: SecurityResult (4 bytes uint32: 0 = OK)
                 if (this.rxBuffer.length < 4) return;
                 const res = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset).getUint32(0, false);
                 this.rxBuffer = this.rxBuffer.subarray(4);
+
                 if (res === 0) {
-                    this.log('Security handshake succeeded. Sending ClientInit (Shared = 1)...');
+                    this.log('Security handshake OK. Sending ClientInit (Shared = 1)...');
                     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                         this.ws.send(new Uint8Array([1])); // shared-flag = 1
                     }
-                    this.rfbState = 4; // ServerInit expected
+                    this.rfbState = 4; // Expect ServerInit
                 } else {
-                    this.log(`VNC Authentication / Security failed (code ${res})`);
-                    if (window.showToast) window.showToast('VNC Authentication Failed', 'error');
+                    this.log(`VNC Authentication Failed (Result: ${res})`);
+                    if (window.showToast) window.showToast('VNC Authentication Failed! Check password.', 'error');
                     this.disconnect();
                     return;
                 }
+
             } else if (this.rfbState === 4) {
-                // Stage 4: ServerInit Message: Width (2 bytes), Height (2 bytes), PixelFormat (16 bytes), NameLength (4 bytes), Name
+                // Stage 4: ServerInit message
                 if (this.rxBuffer.length < 24) return;
                 const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset);
                 const nameLen = view.getUint32(20, false);
@@ -585,35 +674,35 @@ class PulseOpsVNCManager {
                 this.desktopName = new TextDecoder().decode(nameBytes);
                 this.rxBuffer = this.rxBuffer.subarray(24 + nameLen);
 
-                this.log(`Server Desktop Init: ${this.width}x${this.height} ("${this.desktopName}"), bpp=${this.bitsPerPixel}, redShift=${this.redShift}`);
+                this.log(`Server Desktop Init: ${this.width}×${this.height} ("${this.desktopName}") bpp=${this.bitsPerPixel} depth=${this.depth}`);
 
                 if (this.canvas) {
                     this.canvas.width = this.width;
                     this.canvas.height = this.height;
                 }
                 if (this.resBadge) {
-                    this.resBadge.textContent = `Res: ${this.width}x${this.height}`;
+                    this.resBadge.textContent = `${this.width}×${this.height}`;
                 }
 
-                this.rfbState = 5; // Connected & Operational
+                this.rfbState = 5; // Connected & streaming
                 this.onConnected();
 
-                // Send SetEncodings (Raw: 0, DesktopSize: -223)
+                // Send encodings: Raw (0), DesktopSize (-223)
                 this.sendSetEncodings();
-                // Request initial FramebufferUpdate
+                // Request initial full framebuffer update
                 this.requestFramebufferUpdate(0, 0, 0, this.width, this.height);
+
             } else if (this.rfbState === 5) {
-                // Stage 5: Connected - Process server messages
+                // Stage 5: Framebuffer Updates and server notifications
                 if (this.rxBuffer.length < 1) return;
                 const msgType = this.rxBuffer[0];
 
                 if (msgType === 0) {
-                    // FramebufferUpdate message
+                    // FramebufferUpdate
                     if (this.rxBuffer.length < 4) return;
                     const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset, this.rxBuffer.byteLength);
                     const numRects = view.getUint16(2, false);
 
-                    // Verify that the entire FramebufferUpdate message is buffered
                     let scanOffset = 4;
                     let complete = true;
                     const bytesPerPixel = this.bitsPerPixel ? Math.floor(this.bitsPerPixel / 8) : 4;
@@ -642,16 +731,16 @@ class PulseOpsVNCManager {
                             }
                             scanOffset += 4;
                         } else if (enc === -223) { // DesktopSize
-                            // No extra bytes
+                            // No pixel payload
                         }
                     }
 
                     if (!complete) {
-                        // Incomplete frame; wait for subsequent WebSocket chunks
+                        // Wait for remaining chunks
                         return;
                     }
 
-                    // Full frame buffered! Parse and render rectangles
+                    // Render all rectangles in complete frame
                     let renderOffset = 4;
                     for (let r = 0; r < numRects; r++) {
                         const rx = view.getUint16(renderOffset, false);
@@ -667,14 +756,13 @@ class PulseOpsVNCManager {
                             this.renderRawPixels(rx, ry, rw, rh, rawPixels);
                             renderOffset += pixelBytes;
                         } else if (enc === 1) {
-                            // CopyRect: 4 bytes (srcX uint16, srcY uint16)
                             const srcX = view.getUint16(renderOffset, false);
                             const srcY = view.getUint16(renderOffset + 2, false);
                             renderOffset += 4;
                             if (this.ctx && rw > 0 && rh > 0) {
                                 try {
-                                    const copyData = this.ctx.getImageData(srcX, srcY, rw, rh);
-                                    this.ctx.putImageData(copyData, rx, ry);
+                                    const copy = this.ctx.getImageData(srcX, srcY, rw, rh);
+                                    this.ctx.putImageData(copy, rx, ry);
                                 } catch (e) {}
                             }
                         } else if (enc === -223) {
@@ -685,7 +773,7 @@ class PulseOpsVNCManager {
                                 this.canvas.height = rh;
                             }
                             if (this.resBadge) {
-                                this.resBadge.textContent = `Res: ${rw}x${rh}`;
+                                this.resBadge.textContent = `${rw}×${rh}`;
                             }
                         }
                     }
@@ -693,67 +781,295 @@ class PulseOpsVNCManager {
                     this.frameCount++;
                     this.rxBuffer = this.rxBuffer.subarray(renderOffset);
 
-                    // Compact buffer memory if offset is large to avoid fragmentation
+                    // Clean buffer fragmentation if offset is large
                     if (this.rxBuffer.byteOffset > 1048576) {
                         this.rxBuffer = new Uint8Array(this.rxBuffer);
                     }
 
-                    // Request next incremental update
+                    // Schedule next incremental update
                     if (this.nextFrameTimer) clearTimeout(this.nextFrameTimer);
                     this.nextFrameTimer = setTimeout(() => {
                         if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
                             this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
                         }
-                    }, 30);
+                    }, 25);
 
                 } else if (msgType === 1) {
                     // SetColourMapEntries: 6 + numColours * 6
                     if (this.rxBuffer.length < 6) return;
                     const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset);
-                    const numColours = view.getUint16(4, false);
-                    const totalLen = 6 + numColours * 6;
-                    if (this.rxBuffer.length < totalLen) return;
-                    this.rxBuffer = this.rxBuffer.subarray(totalLen);
+                    const count = view.getUint16(4, false);
+                    const len = 6 + count * 6;
+                    if (this.rxBuffer.length < len) return;
+                    this.rxBuffer = this.rxBuffer.subarray(len);
                 } else if (msgType === 2) {
                     // Bell: 1 byte
                     this.rxBuffer = this.rxBuffer.subarray(1);
                 } else if (msgType === 3) {
-                    // ServerCutText: 8 + len bytes
+                    // ServerCutText: 8 + len
                     if (this.rxBuffer.length < 8) return;
                     const view = new DataView(this.rxBuffer.buffer, this.rxBuffer.byteOffset);
                     const txtLen = view.getUint32(4, false);
                     if (this.rxBuffer.length < 8 + txtLen) return;
                     const textBytes = this.rxBuffer.subarray(8, 8 + txtLen);
                     const text = new TextDecoder().decode(textBytes);
-                    this.log(`Remote Clipboard: ${text.slice(0, 60)}...`);
+                    this.log(`Remote Clipboard: ${text.slice(0, 80)}`);
                     this.rxBuffer = this.rxBuffer.subarray(8 + txtLen);
                 } else {
-                    // Unknown message, skip 1 byte
+                    // Skip unknown 1 byte
                     this.rxBuffer = this.rxBuffer.subarray(1);
                 }
             }
         }
     }
 
+    // ── VNC Authentication (DES) Implementation ───────────────────────────
+
+    submitAuthModal() {
+        const pass = this.authModalPass ? this.authModalPass.value : '';
+        if (this.authModal) this.authModal.style.display = 'none';
+        if (this.passInput) this.passInput.value = pass;
+        this.sendAuthResponse(pass);
+    }
+
+    sendAuthResponse(password) {
+        if (!this.pendingChallenge || this.pendingChallenge.length !== 16) {
+            this.log('No pending auth challenge.');
+            return;
+        }
+
+        this.log('Encrypting VNC DES authentication challenge...');
+        const response = this.encryptVncChallenge(this.pendingChallenge, password);
+        this.pendingChallenge = null;
+
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(response);
+            this.rfbState = 3; // Expect SecurityResult
+        }
+    }
+
+    encryptVncChallenge(challenge, password) {
+        // Prepare 8-byte key with reversed bit-order per RFB spec
+        const key = new Uint8Array(8);
+        for (let i = 0; i < 8; i++) {
+            if (i < password.length) {
+                const b = password.charCodeAt(i);
+                // Reverse bits in byte
+                key[i] = ((b & 0x01) << 7) |
+                         ((b & 0x02) << 5) |
+                         ((b & 0x04) << 3) |
+                         ((b & 0x08) << 1) |
+                         ((b & 0x10) >> 1) |
+                         ((b & 0x20) >> 3) |
+                         ((b & 0x40) >> 5) |
+                         ((b & 0x80) >> 7);
+            } else {
+                key[i] = 0;
+            }
+        }
+
+        // Encrypt challenge in two 8-byte blocks using single DES
+        const response = new Uint8Array(16);
+        const b1 = this.desEncryptBlock(challenge.subarray(0, 8), key);
+        const b2 = this.desEncryptBlock(challenge.subarray(8, 16), key);
+        response.set(b1, 0);
+        response.set(b2, 8);
+        return response;
+    }
+
+    // Standard Single DES block encryption (8 bytes in, 8 bytes out)
+    desEncryptBlock(block8, key8) {
+        // Permutation tables
+        const IP = [
+            58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4,
+            62, 54, 46, 38, 30, 22, 14, 6, 64, 56, 48, 40, 32, 24, 16, 8,
+            57, 49, 41, 33, 25, 17, 9, 1, 59, 51, 43, 35, 27, 19, 11, 3,
+            61, 53, 45, 37, 29, 21, 13, 5, 63, 55, 47, 39, 31, 23, 15, 7
+        ];
+        const FP = [
+            40, 8, 48, 16, 56, 24, 64, 32, 39, 7, 47, 15, 55, 23, 63, 31,
+            38, 6, 46, 14, 54, 22, 62, 30, 37, 5, 45, 13, 53, 21, 61, 29,
+            36, 4, 44, 12, 52, 20, 60, 28, 35, 3, 43, 11, 51, 19, 59, 27,
+            34, 2, 42, 10, 50, 18, 58, 26, 33, 1, 41, 9, 49, 17, 57, 25
+        ];
+        const PC1 = [
+            57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18,
+            10, 2, 59, 51, 43, 35, 27, 19, 11, 3, 60, 52, 44, 36,
+            63, 55, 47, 39, 31, 23, 15, 7, 62, 54, 46, 38, 30, 22,
+            14, 6, 61, 53, 45, 37, 29, 21, 13, 5, 28, 20, 12, 4
+        ];
+        const PC2 = [
+            14, 17, 11, 24, 1, 5, 3, 28, 15, 6, 21, 10,
+            23, 19, 12, 4, 26, 8, 16, 7, 27, 20, 13, 2,
+            41, 52, 31, 37, 47, 55, 30, 40, 51, 45, 33, 48,
+            44, 49, 39, 56, 34, 53, 46, 42, 50, 36, 29, 32
+        ];
+        const SHIFTS = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1];
+        const E = [
+            32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
+            8, 9, 10, 11, 12, 13, 12, 13, 14, 15, 16, 17,
+            16, 17, 18, 19, 20, 21, 20, 21, 22, 23, 24, 25,
+            24, 25, 26, 27, 28, 29, 28, 29, 30, 31, 32, 1
+        ];
+        const P = [
+            16, 7, 20, 21, 29, 12, 28, 17, 1, 15, 23, 26, 5, 18, 31, 10,
+            2, 8, 24, 14, 32, 27, 3, 9, 19, 13, 30, 6, 22, 11, 4, 25
+        ];
+        const S = [
+            [14,4,13,1,2,15,11,8,3,10,6,12,5,9,0,7,0,15,7,4,14,2,13,1,10,6,12,11,9,5,3,8,4,1,14,8,13,6,2,11,15,12,9,7,3,10,5,0,15,12,8,2,4,9,1,7,5,11,3,14,10,0,6,13],
+            [15,1,8,14,6,11,3,4,9,7,2,13,12,0,5,10,3,13,4,7,15,2,8,14,12,0,1,10,6,9,11,5,0,14,7,11,10,4,13,1,5,8,12,6,9,3,2,15,13,8,10,1,3,15,4,2,11,6,7,12,0,5,14,9],
+            [10,0,9,14,6,3,15,5,1,13,12,7,11,4,2,8,13,7,0,9,3,4,6,10,2,8,5,14,12,11,15,1,13,6,4,9,8,15,3,0,11,1,2,12,5,10,14,7,1,10,13,0,6,9,8,7,4,15,14,3,11,5,2,12],
+            [7,13,14,3,0,6,9,10,1,2,8,5,11,12,4,15,13,8,11,5,6,15,0,3,4,7,2,12,1,10,14,9,10,6,9,0,12,11,7,13,15,1,3,14,5,2,8,4,3,15,0,6,10,1,13,8,9,4,5,11,12,7,2,14],
+            [2,12,4,1,7,10,11,6,8,5,3,15,13,0,14,9,14,11,2,12,4,7,13,1,5,0,15,10,3,9,8,6,4,2,1,11,10,13,7,8,15,9,12,5,6,3,0,14,11,8,12,7,1,14,2,13,6,15,0,9,10,4,5,3],
+            [12,1,10,15,9,2,6,8,0,13,3,4,14,7,5,11,10,15,4,2,7,12,9,5,6,1,13,14,0,11,3,8,9,14,15,5,2,8,12,3,7,0,4,10,1,13,11,6,4,3,2,12,9,5,15,10,11,14,1,7,6,0,8,13],
+            [4,11,2,14,15,0,8,13,3,12,9,7,5,10,6,1,13,0,11,7,4,9,1,10,14,3,5,12,2,15,8,6,1,4,11,13,12,3,7,14,10,15,6,8,0,5,9,2,6,11,13,8,1,4,10,7,9,5,0,15,14,2,3,12],
+            [13,2,8,4,6,15,11,1,10,9,3,14,5,0,12,7,1,15,13,8,10,3,7,4,12,5,6,11,0,14,9,2,7,11,4,1,9,12,14,2,0,6,10,13,15,3,5,8,2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11]
+        ];
+
+        // Helper: get bit from Uint8Array (1-indexed)
+        const getBit = (bytes, n) => {
+            const byteIdx = (n - 1) >> 3;
+            const bitIdx = 7 - ((n - 1) & 7);
+            return (bytes[byteIdx] >> bitIdx) & 1;
+        };
+
+        // Permute bits into a bit-array
+        const permute = (src, table) => {
+            const out = new Uint8Array(table.length);
+            for (let i = 0; i < table.length; i++) {
+                out[i] = getBit(src, table[i]);
+            }
+            return out;
+        };
+
+        // Key Schedule
+        const keyBits = permute(key8, PC1);
+        let C = keyBits.subarray(0, 28);
+        let D = keyBits.subarray(28, 56);
+        const subkeys = [];
+
+        const rotateLeft = (arr, n) => {
+            const res = new Uint8Array(arr.length);
+            for (let i = 0; i < arr.length; i++) {
+                res[i] = arr[(i + n) % arr.length];
+            }
+            return res;
+        };
+
+        for (let r = 0; r < 16; r++) {
+            C = rotateLeft(C, SHIFTS[r]);
+            D = rotateLeft(D, SHIFTS[r]);
+            const CD = new Uint8Array(56);
+            CD.set(C, 0);
+            CD.set(D, 28);
+            const K = new Uint8Array(48);
+            for (let i = 0; i < 48; i++) {
+                K[i] = CD[PC2[i] - 1];
+            }
+            subkeys.push(K);
+        }
+
+        // Encrypt data block
+        const initBits = permute(block8, IP);
+        let L = initBits.subarray(0, 32);
+        let R = initBits.subarray(32, 64);
+
+        for (let r = 0; r < 16; r++) {
+            const nextL = R;
+            // Expansion E
+            const ER = new Uint8Array(48);
+            for (let i = 0; i < 48; i++) {
+                ER[i] = R[E[i] - 1] ^ subkeys[r][i];
+            }
+            // S-boxes
+            const sOut = new Uint8Array(32);
+            for (let b = 0; b < 8; b++) {
+                const off = b * 6;
+                const row = (ER[off] << 1) | ER[off + 5];
+                const col = (ER[off + 1] << 3) | (ER[off + 2] << 2) | (ER[off + 3] << 1) | ER[off + 4];
+                const val = S[b][(row * 16) + col] || 0;
+                sOut[b * 4]     = (val >> 3) & 1;
+                sOut[b * 4 + 1] = (val >> 2) & 1;
+                sOut[b * 4 + 2] = (val >> 1) & 1;
+                sOut[b * 4 + 3] = val & 1;
+            }
+            // Permutation P
+            const fOut = new Uint8Array(32);
+            for (let i = 0; i < 32; i++) {
+                fOut[i] = sOut[P[i] - 1];
+            }
+            // XOR with L
+            const nextR = new Uint8Array(32);
+            for (let i = 0; i < 32; i++) {
+                nextR[i] = L[i] ^ fOut[i];
+            }
+            L = nextL;
+            R = nextR;
+        }
+
+        // Final permutation
+        const preFP = new Uint8Array(64);
+        preFP.set(R, 0);
+        preFP.set(L, 32);
+
+        const outBytes = new Uint8Array(8);
+        for (let i = 0; i < 64; i++) {
+            const bit = preFP[FP[i] - 1];
+            if (bit) {
+                outBytes[i >> 3] |= (1 << (7 - (i & 7)));
+            }
+        }
+        return outBytes;
+    }
+
+    // ── Pixel Rendering ───────────────────────────────────────────────────
+
+    renderRawPixels(x, y, w, h, pixelData) {
+        if (!this.ctx || w <= 0 || h <= 0) return;
+        try {
+            const imgData = this.ctx.createImageData(w, h);
+            const data = imgData.data;
+
+            if (this.redShift === 0) {
+                // RGBA
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    data[i]     = pixelData[i];     // R
+                    data[i + 1] = pixelData[i + 1]; // G
+                    data[i + 2] = pixelData[i + 2]; // B
+                    data[i + 3] = 255;              // A
+                }
+            } else {
+                // BGRx (standard for x11vnc with redShift=16, blueShift=0)
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    data[i]     = pixelData[i + 2]; // R
+                    data[i + 1] = pixelData[i + 1]; // G
+                    data[i + 2] = pixelData[i];     // B
+                    data[i + 3] = 255;              // A
+                }
+            }
+            this.ctx.putImageData(imgData, x, y);
+        } catch (err) {
+            console.error('[VNC Pixel Render Error]', err);
+        }
+    }
+
     sendSetEncodings() {
-        // SetEncodings message: msgType 2 (1 byte), padding (1 byte), count uint16 (2 bytes), encodings (4 bytes each)
         const count = 2;
         const msg = new Uint8Array(4 + count * 4);
         const view = new DataView(msg.buffer);
         view.setUint8(0, 2); // SetEncodings
         view.setUint16(2, count, false);
-        view.setInt32(4, 0, false); // Raw encoding (0)
-        view.setInt32(8, -223, false); // DesktopSize pseudo-encoding (-223)
+        view.setInt32(4, 0, false);     // Raw (0)
+        view.setInt32(8, -223, false);  // DesktopSize (-223)
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(msg);
         }
     }
 
     requestFramebufferUpdate(incremental, x, y, w, h) {
-        // FramebufferUpdateRequest: msgType 3 (1 byte), incremental (1 byte), x (uint16), y (uint16), w (uint16), h (uint16)
         const msg = new Uint8Array(10);
         const view = new DataView(msg.buffer);
-        view.setUint8(0, 3);
+        view.setUint8(0, 3); // FramebufferUpdateRequest
         view.setUint8(1, incremental ? 1 : 0);
         view.setUint16(2, x, false);
         view.setUint16(4, y, false);
@@ -764,38 +1080,7 @@ class PulseOpsVNCManager {
         }
     }
 
-    renderRawPixels(x, y, w, h, pixelData) {
-        if (!this.ctx || w <= 0 || h <= 0) return;
-        try {
-            const imgData = this.ctx.createImageData(w, h);
-            const data = imgData.data;
-
-            if (this.redShift === 0) {
-                // Standard RGBA: byte 0=R, 1=G, 2=B, 3=Pad/A
-                for (let i = 0; i < pixelData.length; i += 4) {
-                    data[i]     = pixelData[i];     // Red
-                    data[i + 1] = pixelData[i + 1]; // Green
-                    data[i + 2] = pixelData[i + 2]; // Blue
-                    data[i + 3] = 255;              // Alpha
-                }
-            } else {
-                // BGRx (e.g. x11vnc with redShift=16, blueShift=0)
-                for (let i = 0; i < pixelData.length; i += 4) {
-                    data[i]     = pixelData[i + 2]; // Red
-                    data[i + 1] = pixelData[i + 1]; // Green
-                    data[i + 2] = pixelData[i];     // Blue
-                    data[i + 3] = 255;              // Alpha
-                }
-            }
-            this.ctx.putImageData(imgData, x, y);
-        } catch (err) {
-            console.error('[VNC Render Error]', err);
-        }
-    }
-
-    // -------------------------------------------------------------
-    // Mouse & Keyboard Control Actions
-    // -------------------------------------------------------------
+    // ── Mouse & Keyboard Input ────────────────────────────────────────────
 
     getCanvasCoordinates(e) {
         const rect = this.canvas.getBoundingClientRect();
@@ -803,7 +1088,10 @@ class PulseOpsVNCManager {
         const scaleY = this.canvas.height / rect.height;
         const x = Math.floor((e.clientX - rect.left) * scaleX);
         const y = Math.floor((e.clientY - rect.top) * scaleY);
-        return { x: Math.max(0, Math.min(this.width, x)), y: Math.max(0, Math.min(this.height, y)) };
+        return {
+            x: Math.max(0, Math.min(this.width, x)),
+            y: Math.max(0, Math.min(this.height, y))
+        };
     }
 
     handlePointerEvent(e, type) {
@@ -811,25 +1099,19 @@ class PulseOpsVNCManager {
         const pos = this.getCanvasCoordinates(e);
 
         if (type === 'down') {
-            if (e.button === 0) this.buttonMask |= 1; // Left click
-            if (e.button === 1) this.buttonMask |= 2; // Middle click
-            if (e.button === 2) this.buttonMask |= 4; // Right click
+            if (e.button === 0) this.buttonMask |= 1;  // Left
+            if (e.button === 1) this.buttonMask |= 2;  // Middle
+            if (e.button === 2) this.buttonMask |= 4;  // Right
         } else if (type === 'up') {
             if (e.button === 0) this.buttonMask &= ~1;
             if (e.button === 1) this.buttonMask &= ~2;
             if (e.button === 2) this.buttonMask &= ~4;
         }
 
-        if (this.isDemoMode && this.demoState) {
-            this.handleDemoPointer(pos.x, pos.y, type, e.button);
-            return;
-        }
-
         if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-            // PointerEvent message: msgType 5 (1 byte), buttonMask (1 byte), x (uint16), y (uint16)
             const msg = new Uint8Array(6);
             const view = new DataView(msg.buffer);
-            view.setUint8(0, 5);
+            view.setUint8(0, 5); // PointerEvent
             view.setUint8(1, this.buttonMask);
             view.setUint16(2, pos.x, false);
             view.setUint16(4, pos.y, false);
@@ -840,7 +1122,7 @@ class PulseOpsVNCManager {
                     if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
                         this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
                     }
-                }, 15);
+                }, 20);
             }
         }
     }
@@ -848,456 +1130,213 @@ class PulseOpsVNCManager {
     handleWheelEvent(e) {
         e.preventDefault();
         const pos = this.getCanvasCoordinates(e);
-        const wheelMask = e.deltaY < 0 ? 8 : 16; // Scroll up (bit 3) / down (bit 4)
+        const mask = (e.deltaY < 0) ? 8 : 16; // Button 4 (scroll up) or Button 5 (scroll down)
 
         if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-            // Send momentary wheel click down
-            const msgDown = new Uint8Array(6);
-            const viewDown = new DataView(msgDown.buffer);
-            viewDown.setUint8(0, 5);
-            viewDown.setUint8(1, this.buttonMask | wheelMask);
-            viewDown.setUint16(2, pos.x, false);
-            viewDown.setUint16(4, pos.y, false);
-            this.ws.send(msgDown);
+            // Send button down
+            const down = new Uint8Array(6);
+            const v1 = new DataView(down.buffer);
+            v1.setUint8(0, 5);
+            v1.setUint8(1, this.buttonMask | mask);
+            v1.setUint16(2, pos.x, false);
+            v1.setUint16(4, pos.y, false);
+            this.ws.send(down);
 
-            // Wheel release
-            const msgUp = new Uint8Array(6);
-            const viewUp = new DataView(msgUp.buffer);
-            viewUp.setUint8(0, 5);
-            viewUp.setUint8(1, this.buttonMask);
-            viewUp.setUint16(2, pos.x, false);
-            viewUp.setUint16(4, pos.y, false);
-            this.ws.send(msgUp);
+            // Send button up
+            const up = new Uint8Array(6);
+            const v2 = new DataView(up.buffer);
+            v2.setUint8(0, 5);
+            v2.setUint8(1, this.buttonMask);
+            v2.setUint16(2, pos.x, false);
+            v2.setUint16(4, pos.y, false);
+            this.ws.send(up);
+
+            setTimeout(() => {
+                if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+                }
+            }, 30);
         }
     }
 
-    handleKeyEvent(e, isDown) {
-        if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-        
-        // Prevent default browser shortcuts when canvas is active
-        if (['Tab', 'Alt', 'Meta', 'ContextMenu'].includes(e.key)) {
-            e.preventDefault();
-        }
+    handleKeyEvent(e, down) {
+        if (!this.isConnected) return;
+        e.preventDefault();
 
-        const keySym = this.mapKeyToKeySym(e);
-        if (keySym) {
-            // KeyEvent message: msgType 4 (1 byte), downFlag (1 byte), padding (2 bytes), keySym (uint32)
+        const keysym = this.domKeyToKeysym(e);
+        if (keysym && this.ws && this.ws.readyState === WebSocket.OPEN) {
             const msg = new Uint8Array(8);
             const view = new DataView(msg.buffer);
-            view.setUint8(0, 4);
-            view.setUint8(1, isDown ? 1 : 0);
-            view.setUint32(4, keySym, false);
+            view.setUint8(0, 4); // KeyEvent
+            view.setUint8(1, down ? 1 : 0);
+            view.setUint32(4, keysym, false);
             this.ws.send(msg);
 
-            // Request immediate incremental update for keydown so echoed keystrokes appear immediately
-            if (isDown) {
+            if (down) {
                 setTimeout(() => {
                     if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
                         this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
                     }
-                }, 15);
+                }, 30);
             }
         }
     }
 
-    mapKeyToKeySym(e) {
-        const map = {
-            'Backspace': 0xff08,
-            'Tab': 0xff09,
-            'Enter': 0xff0d,
-            'Escape': 0xff1b,
-            'Delete': 0xffff,
-            'Home': 0xff50,
-            'Left': 0xff51,
-            'Up': 0xff52,
-            'Right': 0xff53,
-            'Down': 0xff54,
-            'PageUp': 0xff55,
-            'PageDown': 0xff56,
-            'End': 0xff57,
-            'F1': 0xffbe, 'F2': 0xffbf, 'F3': 0xffc0, 'F4': 0xffc1,
-            'F5': 0xffc2, 'F6': 0xffc3, 'F7': 0xffc4, 'F8': 0xffc5,
-            'Shift': 0xffe1, 'Control': 0xffe3, 'Alt': 0xffe9, 'Meta': 0xffeb
+    domKeyToKeysym(e) {
+        const special = {
+            'Backspace':  0xFF08,
+            'Tab':        0xFF09,
+            'Enter':      0xFF0D,
+            'Escape':     0xFF1B,
+            'Insert':     0xFF63,
+            'Delete':     0xFFFF,
+            'Home':       0xFF50,
+            'End':        0xFF57,
+            'PageUp':     0xFF55,
+            'PageDown':   0xFF56,
+            'ArrowLeft':  0xFF51,
+            'ArrowUp':    0xFF52,
+            'ArrowRight': 0xFF53,
+            'ArrowDown':  0xFF54,
+            'F1':         0xFFBE,
+            'F2':         0xFFBF,
+            'F3':         0xFFC0,
+            'F4':         0xFFC1,
+            'F5':         0xFFC2,
+            'F6':         0xFFC3,
+            'F7':         0xFFC4,
+            'F8':         0xFFC5,
+            'F9':         0xFFC6,
+            'F10':        0xFFC7,
+            'F11':        0xFFC8,
+            'F12':        0xFFC9,
+            'Shift':      0xFFE1,
+            'Control':    0xFFE3,
+            'Meta':       0xFFEB,
+            'Alt':        0xFFE9,
+            'CapsLock':   0xFFE5,
         };
 
-        if (map[e.key]) return map[e.key];
-        if (e.key.length === 1) return e.key.charCodeAt(0);
-        return 0;
+        if (special[e.key]) return special[e.key];
+        if (e.key.length === 1) {
+            const code = e.key.charCodeAt(0);
+            if (code >= 32 && code <= 126) return code;
+        }
+        return e.keyCode || 0;
     }
 
-    sendMacro(type) {
-        if (this.isDemoMode && this.demoState) {
-            if (window.showToast) window.showToast(`Executed Macro: ${type} on Demo Desktop`, 'info');
-            return;
-        }
+    sendSingleKey(keysym) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        // Key down
+        const down = new Uint8Array(8);
+        const v1 = new DataView(down.buffer);
+        v1.setUint8(0, 4);
+        v1.setUint8(1, 1);
+        v1.setUint32(4, keysym, false);
+        this.ws.send(down);
 
+        // Key up
+        setTimeout(() => {
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+            const up = new Uint8Array(8);
+            const v2 = new DataView(up.buffer);
+            v2.setUint8(0, 4);
+            v2.setUint8(1, 0);
+            v2.setUint32(4, keysym, false);
+            this.ws.send(up);
+        }, 50);
+    }
+
+    sendMacro(macroName) {
         if (!this.isConnected) {
-            if (window.showToast) window.showToast('Please connect to a VNC session first', 'error');
+            if (window.showToast) window.showToast('Connect to remote desktop first.', 'warning');
             return;
         }
 
-        this.log(`Sending macro: ${type}`);
-        if (type === 'CAD') {
-            // Send Ctrl+Alt+Del sequence
-            this.sendRawKeySym(0xffe3, true);  // Ctrl down
-            this.sendRawKeySym(0xffe9, true);  // Alt down
-            this.sendRawKeySym(0xffff, true);  // Del down
-            this.sendRawKeySym(0xffff, false); // Del up
-            this.sendRawKeySym(0xffe9, false); // Alt up
-            this.sendRawKeySym(0xffe3, false); // Ctrl up
-        } else if (type === 'ALTTAB') {
-            this.sendRawKeySym(0xffe9, true);  // Alt down
-            this.sendRawKeySym(0xff09, true);  // Tab down
-            this.sendRawKeySym(0xff09, false); // Tab up
-            this.sendRawKeySym(0xffe9, false); // Alt up
-        } else if (type === 'SUPER') {
-            this.sendRawKeySym(0xffeb, true);  // Super down
-            this.sendRawKeySym(0xffeb, false); // Super up
-        } else if (type === 'ESC') {
-            this.sendRawKeySym(0xff1b, true);  // Esc down
-            this.sendRawKeySym(0xff1b, false); // Esc up
-        }
-    }
+        const VK_CTRL  = 0xFFE3;
+        const VK_ALT   = 0xFFE9;
+        const VK_DEL   = 0xFFFF;
+        const VK_TAB   = 0xFF09;
+        const VK_SUPER = 0xFFEB;
+        const VK_ESC   = 0xFF1B;
+        const VK_C     = 0x0063;
+        const VK_V     = 0x0076;
 
-    sendRawKeySym(keySym, isDown) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const sendKeyDirect = (sym, isDown) => {
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
             const msg = new Uint8Array(8);
-            const view = new DataView(msg.buffer);
-            view.setUint8(0, 4);
-            view.setUint8(1, isDown ? 1 : 0);
-            view.setUint32(4, keySym, false);
+            const v = new DataView(msg.buffer);
+            v.setUint8(0, 4);
+            v.setUint8(1, isDown ? 1 : 0);
+            v.setUint32(4, sym, false);
             this.ws.send(msg);
+        };
+
+        if (macroName === 'CAD') {
+            this.log('Sending macro: Ctrl+Alt+Del');
+            sendKeyDirect(VK_CTRL, true);
+            sendKeyDirect(VK_ALT, true);
+            sendKeyDirect(VK_DEL, true);
+            setTimeout(() => {
+                sendKeyDirect(VK_DEL, false);
+                sendKeyDirect(VK_ALT, false);
+                sendKeyDirect(VK_CTRL, false);
+                this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+            }, 100);
+        } else if (macroName === 'ALTTAB') {
+            this.log('Sending macro: Alt+Tab');
+            sendKeyDirect(VK_ALT, true);
+            sendKeyDirect(VK_TAB, true);
+            setTimeout(() => {
+                sendKeyDirect(VK_TAB, false);
+                sendKeyDirect(VK_ALT, false);
+                this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+            }, 100);
+        } else if (macroName === 'SUPER') {
+            this.log('Sending macro: Super key');
+            this.sendSingleKey(VK_SUPER);
+        } else if (macroName === 'ESC') {
+            this.log('Sending macro: Escape');
+            this.sendSingleKey(VK_ESC);
+        } else if (macroName === 'CTRL_C') {
+            this.log('Sending macro: Ctrl+C');
+            sendKeyDirect(VK_CTRL, true);
+            sendKeyDirect(VK_C, true);
+            setTimeout(() => {
+                sendKeyDirect(VK_C, false);
+                sendKeyDirect(VK_CTRL, false);
+            }, 80);
+        } else if (macroName === 'CTRL_V') {
+            this.log('Sending macro: Ctrl+V');
+            sendKeyDirect(VK_CTRL, true);
+            sendKeyDirect(VK_V, true);
+            setTimeout(() => {
+                sendKeyDirect(VK_V, false);
+                sendKeyDirect(VK_CTRL, false);
+            }, 80);
         }
     }
 
     sendText(str) {
-        if (this.isDemoMode && this.demoState) {
-            this.demoState.terminalOutput.push(`pulseops@vnc-demo:~$ ${str}`);
-            if (window.showToast) window.showToast(`Pushed text into Demo Terminal: "${str}"`, 'success');
-            return;
-        }
+        if (!this.isConnected || !str) return;
+        this.log(`Sending text sequence (${str.length} chars)...`);
 
-        if (!this.isConnected) {
-            if (window.showToast) window.showToast('Please connect to VNC session first', 'error');
-            return;
-        }
-
-        this.log(`Sending text string (${str.length} chars) to remote session...`);
+        let delay = 0;
         for (let i = 0; i < str.length; i++) {
-            const code = str.charCodeAt(i);
-            this.sendRawKeySym(code, true);
-            this.sendRawKeySym(code, false);
-        }
-        if (window.showToast) window.showToast('Text sent to remote clipboard/keyboard buffer', 'success');
-    }
-
-    // -------------------------------------------------------------
-    // Interactive VNC Desktop Simulator (Demo / Test Mode)
-    // -------------------------------------------------------------
-
-    startDemoMode() {
-        this.log('Launching Interactive VNC Desktop Simulator...');
-        this.isDemoMode = true;
-        this.width = 1280;
-        this.height = 800;
-
-        if (this.canvas) {
-            this.canvas.width = this.width;
-            this.canvas.height = this.height;
+            const ch = str.charCodeAt(i);
+            setTimeout(() => {
+                this.sendSingleKey(ch);
+            }, delay);
+            delay += 25;
         }
 
-        if (this.overlay) this.overlay.classList.add('hidden');
-        if (this.connectBtn) this.connectBtn.style.display = 'none';
-        if (this.disconnectBtn) this.disconnectBtn.style.display = 'inline-flex';
-        this.updateStatus('DEMO DESKTOP', 'connected');
-
-        this.demoState = {
-            cursor: { x: 640, y: 400 },
-            activeApp: 'telemetry',
-            windows: [
-                { id: 'telemetry', title: 'PulseOps System Performance Monitor', x: 80, y: 70, w: 620, h: 420, active: true },
-                { id: 'terminal', title: 'Bash Terminal Console — pulseops@linux', x: 580, y: 220, w: 600, h: 450, active: false },
-                { id: 'files', title: 'Filesystem Explorer — /var/log/pulseops', x: 220, y: 320, w: 500, h: 360, active: false }
-            ],
-            cpuHistory: Array(30).fill(15),
-            terminalOutput: [
-                'PulseOps VNC Graphical Desktop Session initialized.',
-                'Connected to local X11 display :0 via RFB protocol.',
-                'Type commands in text box above to send key inputs into terminal.'
-            ],
-            dragWindow: null,
-            dragOffset: { x: 0, y: 0 }
-        };
-
-        this.runDemoAnimation();
-    }
-
-    stopDemoMode() {
-        this.isDemoMode = false;
-        if (this.demoAnimId) cancelAnimationFrame(this.demoAnimId);
-        this.demoState = null;
-        this.log('Interactive Desktop Simulator stopped.');
-        this.onDisconnected();
-    }
-
-    runDemoAnimation() {
-        if (!this.isDemoMode || !this.ctx) return;
-
-        this.frameCount++;
-        this.renderDemoDesktop();
-
-        // Update CPU simulation graph data periodically
-        if (Math.random() < 0.1) {
-            const nextVal = Math.max(5, Math.min(95, this.demoState.cpuHistory[this.demoState.cpuHistory.length - 1] + (Math.random() * 20 - 10)));
-            this.demoState.cpuHistory.push(parseFloat(nextVal.toFixed(1)));
-            this.demoState.cpuHistory.shift();
-        }
-
-        this.demoAnimId = requestAnimationFrame(() => this.runDemoAnimation());
-    }
-
-    renderDemoDesktop() {
-        const ctx = this.ctx;
-        const w = this.width;
-        const h = this.height;
-
-        // 1. Desktop Wallpaper Background Gradient
-        const grad = ctx.createLinearGradient(0, 0, w, h);
-        grad.addColorStop(0, '#0a0f1d');
-        grad.addColorStop(0.5, '#070a14');
-        grad.addColorStop(1, '#0e1830');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-
-        // Glowing tech background grid lines
-        ctx.strokeStyle = 'rgba(0, 242, 254, 0.03)';
-        ctx.lineWidth = 1;
-        for (let x = 0; x < w; x += 40) {
-            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-        }
-        for (let y = 0; y < h; y += 40) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-        }
-
-        // 2. Render Desktop Windows
-        this.demoState.windows.forEach(win => {
-            this.renderDemoWindow(win);
-        });
-
-        // 3. Desktop Top Panel Bar
-        ctx.fillStyle = 'rgba(10, 15, 27, 0.9)';
-        ctx.fillRect(0, 0, w, 36);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath(); ctx.moveTo(0, 36); ctx.lineTo(w, 36); ctx.stroke();
-
-        ctx.fillStyle = '#00f2fe';
-        ctx.font = 'bold 13px Inter, sans-serif';
-        ctx.fillText('⚡ PulseOps VNC Desktop', 15, 23);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px "JetBrains Mono", monospace';
-        ctx.fillText('Host: localhost (127.0.0.1:5900)  |  Session: RFB 003.008', 220, 23);
-
-        const clockStr = new Date().toLocaleTimeString();
-        ctx.fillStyle = '#f1f5f9';
-        ctx.fillText(`🕒 ${clockStr}`, w - 110, 23);
-
-        // 4. Desktop Dock / Launcher Bar (Bottom)
-        const dockW = 260;
-        const dockX = (w - dockW) / 2;
-        ctx.fillStyle = 'rgba(14, 20, 36, 0.85)';
-        ctx.beginPath();
-        ctx.roundRect(dockX, h - 55, dockW, 45, 12);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0, 242, 254, 0.25)';
-        ctx.stroke();
-
-        const icons = [
-            { id: 'telemetry', label: '📊' },
-            { id: 'terminal', label: '💻' },
-            { id: 'files', label: '📁' },
-            { id: 'settings', label: '⚙️' }
-        ];
-        icons.forEach((ic, i) => {
-            const ix = dockX + 25 + i * 60;
-            const iy = h - 32;
-            ctx.font = '22px sans-serif';
-            ctx.fillText(ic.label, ix, iy);
-            if (this.demoState.windows.some(win => win.id === ic.id)) {
-                ctx.fillStyle = '#00f2fe';
-                ctx.beginPath(); ctx.arc(ix + 11, h - 14, 3, 0, Math.PI * 2); ctx.fill();
-            }
-        });
-
-        // 5. Draw Pointer Cursor
-        const cur = this.demoState.cursor;
-        ctx.fillStyle = '#00f2fe';
-        ctx.beginPath();
-        ctx.moveTo(cur.x, cur.y);
-        ctx.lineTo(cur.x + 12, cur.y + 12);
-        ctx.lineTo(cur.x + 5, cur.y + 14);
-        ctx.lineTo(cur.x, cur.y + 18);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-    }
-
-    renderDemoWindow(win) {
-        const ctx = this.ctx;
-        
-        // Window Frame Outer Shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetY = 8;
-
-        // Window Background & Header
-        ctx.fillStyle = '#0c1220';
-        ctx.beginPath();
-        ctx.roundRect(win.x, win.y, win.w, win.h, 8);
-        ctx.fill();
-        ctx.shadowBlur = 0; // Reset shadow
-
-        // Window Border
-        ctx.strokeStyle = win.active ? 'rgba(0, 242, 254, 0.4)' : 'rgba(255, 255, 255, 0.08)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Window Header Bar
-        ctx.fillStyle = win.active ? '#131b2e' : '#090e1a';
-        ctx.beginPath();
-        ctx.roundRect(win.x, win.y, win.w, 32, [8, 8, 0, 0]);
-        ctx.fill();
-
-        // Window Title
-        ctx.fillStyle = win.active ? '#f1f5f9' : '#64748b';
-        ctx.font = '12px "JetBrains Mono", monospace';
-        ctx.fillText(win.title, win.x + 40, win.y + 20);
-
-        // Window Window Controls (Red, Yellow, Green dots)
-        ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(win.x + 15, win.y + 16, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(win.x + 27, win.y + 16, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.arc(win.x + 39, win.y + 16, 5, 0, Math.PI * 2); ctx.fill();
-
-        // Window Content Body
-        const cx = win.x + 12;
-        const cy = win.y + 44;
-        const cw = win.w - 24;
-        const ch = win.h - 56;
-
-        if (win.id === 'telemetry') {
-            ctx.fillStyle = '#060a14';
-            ctx.fillRect(cx, cy, cw, ch);
-
-            ctx.fillStyle = '#00f2fe';
-            ctx.font = '12px Inter, sans-serif';
-            ctx.fillText('CPU Utilization History (Live VNC Engine Feed):', cx + 10, cy + 25);
-
-            // Chart area
-            const chartX = cx + 10;
-            const chartY = cy + 40;
-            const chartW = cw - 20;
-            const chartH = ch - 60;
-
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.strokeRect(chartX, chartY, chartW, chartH);
-
-            const hist = this.demoState.cpuHistory;
-            const step = chartW / (hist.length - 1);
-
-            ctx.beginPath();
-            hist.forEach((v, idx) => {
-                const px = chartX + idx * step;
-                const py = chartY + chartH - (v / 100) * chartH;
-                if (idx === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
-            });
-            ctx.strokeStyle = '#00f2fe';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            // Fill under graph
-            ctx.lineTo(chartX + chartW, chartY + chartH);
-            ctx.lineTo(chartX, chartY + chartH);
-            ctx.fillStyle = 'rgba(0, 242, 254, 0.1)';
-            ctx.fill();
-
-            const curVal = hist[hist.length - 1];
-            ctx.fillStyle = '#8b5cf6';
-            ctx.font = 'bold 14px "JetBrains Mono", monospace';
-            ctx.fillText(`Current CPU Load: ${curVal}%`, chartX + 10, chartY + chartH + 18);
-
-        } else if (win.id === 'terminal') {
-            ctx.fillStyle = '#04070d';
-            ctx.fillRect(cx, cy, cw, ch);
-
-            ctx.font = '12px "JetBrains Mono", monospace';
-            this.demoState.terminalOutput.slice(-12).forEach((line, idx) => {
-                ctx.fillStyle = line.startsWith('pulseops') ? '#00f2fe' : '#94a3b8';
-                ctx.fillText(line, cx + 10, cy + 22 + idx * 20);
-            });
-
-            // Cursor blink
-            if (Math.floor(Date.now() / 500) % 2 === 0) {
-                const lastLineY = cy + 22 + (Math.min(12, this.demoState.terminalOutput.length) - 1) * 20;
-                ctx.fillStyle = '#00f2fe';
-                ctx.fillRect(cx + 10 + ctx.measureText(this.demoState.terminalOutput[this.demoState.terminalOutput.length - 1] || '').width + 4, lastLineY - 10, 8, 14);
-            }
-
-        } else if (win.id === 'files') {
-            ctx.fillStyle = '#090e18';
-            ctx.fillRect(cx, cy, cw, ch);
-
-            const fileItems = [
-                { name: 'pulseops-daemon.log', size: '4.2 MB', type: '📄 Log' },
-                { name: 'systemd-journal.sock', size: '0 B', type: '🔌 Socket' },
-                { name: 'rfb_vnc_bridge.config', size: '1.2 KB', type: '⚙️ Config' },
-                { name: 'pulseops.service', size: '340 B', type: '⚡ Service' }
-            ];
-
-            fileItems.forEach((item, idx) => {
-                ctx.fillStyle = idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent';
-                ctx.fillRect(cx + 5, cy + 10 + idx * 32, cw - 10, 28);
-
-                ctx.fillStyle = '#f1f5f9';
-                ctx.font = '12px "JetBrains Mono", monospace';
-                ctx.fillText(`${item.type}  ${item.name}`, cx + 15, cy + 28 + idx * 32);
-
-                ctx.fillStyle = '#64748b';
-                ctx.fillText(item.size, cx + cw - 90, cy + 28 + idx * 32);
-            });
-        }
-    }
-
-    handleDemoPointer(x, y, type, button) {
-        if (!this.demoState) return;
-        this.demoState.cursor = { x, y };
-
-        if (type === 'down') {
-            // Check window title bar drag
-            for (let i = this.demoState.windows.length - 1; i >= 0; i--) {
-                const win = this.demoState.windows[i];
-                if (x >= win.x && x <= win.x + win.w && y >= win.y && y <= win.y + 32) {
-                    // Activate clicked window
-                    this.demoState.windows.forEach(w => w.active = false);
-                    win.active = true;
-                    this.demoState.dragWindow = win;
-                    this.demoState.dragOffset = { x: x - win.x, y: y - win.y };
-                    break;
-                }
-            }
-        } else if (type === 'move') {
-            if (this.demoState.dragWindow) {
-                this.demoState.dragWindow.x = x - this.demoState.dragOffset.x;
-                this.demoState.dragWindow.y = y - this.demoState.dragOffset.y;
-            }
-        } else if (type === 'up') {
-            this.demoState.dragWindow = null;
-        }
+        setTimeout(() => {
+            this.requestFramebufferUpdate(1, 0, 0, this.width, this.height);
+        }, delay + 50);
     }
 }
 
+// Instantiate and attach globally
 document.addEventListener('DOMContentLoaded', () => {
     window.vncMgr = new PulseOpsVNCManager();
 });

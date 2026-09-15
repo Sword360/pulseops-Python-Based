@@ -1715,8 +1715,8 @@ async def api_get_logs(
 
 
 @app.get("/api/vnc/status")
-async def api_vnc_status(host: str = "127.0.0.1", current_user: Dict = Depends(get_auth_user)):
-    return await vnc.get_vnc_status(host)
+async def api_vnc_status(host: str = "127.0.0.1", server_id: Optional[str] = None, current_user: Dict = Depends(get_auth_user)):
+    return await vnc.get_vnc_status(host, server_id=server_id)
 
 
 @app.post("/api/vnc/launch")
@@ -1726,9 +1726,10 @@ async def api_vnc_launch(
 ):
     display = payload.get("display", ":0")
     port = int(payload.get("port", 0) or 0)
-    backend = payload.get("backend", "auto")
+    backend = payload.get("backend", "x11vnc")
     geometry = payload.get("geometry", "1280x800")
-    return await vnc.launch_vnc(display=display, port=port, backend=backend, geometry=geometry)
+    server_id = payload.get("server_id")
+    return await vnc.launch_vnc(display=display, port=port, backend=backend, geometry=geometry, server_id=server_id)
 
 
 @app.post("/api/vnc/stop")
@@ -1737,7 +1738,8 @@ async def api_vnc_stop(
     current_user: Dict = Depends(require_operator),
 ):
     backend = (payload or {}).get("backend", "")
-    return await vnc.stop_vnc_backend(backend)
+    server_id = (payload or {}).get("server_id")
+    return await vnc.stop_vnc_backend(backend, server_id=server_id)
 
 
 @app.post("/api/vnc/install")
@@ -1745,8 +1747,9 @@ async def api_vnc_install(
     payload: Dict[str, Any] = Body(default={}),
     current_user: Dict = Depends(require_operator),
 ):
-    backend = (payload or {}).get("backend", "auto")
-    return await vnc.install_backend(backend)
+    backend = (payload or {}).get("backend", "x11vnc")
+    server_id = (payload or {}).get("server_id")
+    return await vnc.install_backend(backend, server_id=server_id)
 
 
 # ─── Fleet Server Proxy Routes ────────────────────────────────────────────────
@@ -1896,13 +1899,33 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
 
 
 @app.websocket("/api/vnc/ws")
-async def websocket_vnc_proxy(websocket: WebSocket, host: str = "127.0.0.1", port: int = 5900):
+async def websocket_vnc_proxy(
+    websocket: WebSocket,
+    host: str = "127.0.0.1",
+    port: int = 5900,
+    server_id: Optional[str] = None,
+    token: Optional[str] = None
+):
     """WebSocket: proxy RFB traffic to a VNC server."""
+    if ENTERPRISE_AVAILABLE:
+        auth_hdr = websocket.headers.get("authorization", "")
+        if not auth_hdr and token:
+            auth_hdr = f"Bearer {token}"
+        user = await auth.get_current_user(auth_hdr)
+        if not user:
+            await websocket.close(code=1008)
+            return
+
     await websocket.accept()
+    if server_id and server_id != "local-master":
+        srv = await fleet_module.get_server(server_id)
+        if srv:
+            host = srv.get("host_ip", host)
+    writer = None
     try:
         reader, writer = await asyncio.open_connection(host, port)
         await websocket.send_text(json.dumps({
-            "type": "vnc_proxy_meta", "status": "connected", "host": host, "port": port
+            "type": "vnc_proxy_meta", "status": "connected", "host": host, "port": port, "server_id": server_id
         }))
 
         async def forward_tcp():
@@ -1914,6 +1937,16 @@ async def websocket_vnc_proxy(websocket: WebSocket, host: str = "127.0.0.1", por
                     await websocket.send_bytes(data)
             except Exception:
                 pass
+            finally:
+                if writer and not writer.is_closing():
+                    try:
+                        writer.close()
+                    except Exception:
+                        pass
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
 
         asyncio.create_task(forward_tcp())
         while True:
@@ -1931,6 +1964,12 @@ async def websocket_vnc_proxy(websocket: WebSocket, host: str = "127.0.0.1", por
             }))
         except Exception:
             pass
+    finally:
+        if writer and not writer.is_closing():
+            try:
+                writer.close()
+            except Exception:
+                pass
 
 
 # ─── Startup / Shutdown ───────────────────────────────────────────────────────

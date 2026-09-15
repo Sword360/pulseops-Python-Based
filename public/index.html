@@ -907,79 +907,129 @@
                 <!-- TAB: VNC Desktop -->
                 <section id="vnc-tab" class="tab-content">
                     <div class="card vnc-container-card">
+                        <!-- Top Bar: Target & Controls -->
                         <div class="vnc-header-bar">
-                            <div class="vnc-conn-inputs">
-                                <div class="input-badge"><span class="sys-label">Backend:</span>
-                                    <select id="vnc-backend-select" class="vnc-input" style="width:150px;">
-                                        <option value="auto">Auto-detect</option>
-                                        <option value="tigervnc">TigerVNC</option>
-                                        <option value="tightvnc">TightVNC</option>
-                                        <option value="x11vnc">x11vnc</option>
-                                    </select>
+                            <div class="vnc-target-info">
+                                <div class="vnc-target-badge">
+                                    <span class="vnc-server-icon">🖥️</span>
+                                    <div>
+                                        <div class="vnc-server-name" id="vnc-target-hostname">Local Master</div>
+                                        <div class="vnc-server-sub" id="vnc-target-sub">127.0.0.1 · x11vnc on port 5900</div>
+                                    </div>
                                 </div>
+                                <div class="vnc-tightvnc-chip" id="vnc-tightvnc-chip" title="Direct connection string for TightVNC Viewer / RealVNC Viewer">
+                                    <span class="chip-label">TightVNC Target:</span>
+                                    <code id="vnc-tightvnc-target">127.0.0.1:5900</code>
+                                    <button type="button" id="vnc-copy-target-btn" class="btn-vnc-copy" title="Copy IP:Port to clipboard">📋 Copy</button>
+                                </div>
+                            </div>
+
+                            <div class="vnc-conn-inputs">
                                 <div class="input-badge"><span class="sys-label">Host:</span><input type="text" id="vnc-host-input" class="vnc-input" value="127.0.0.1"></div>
-                                <div class="input-badge"><span class="sys-label">Port:</span><input type="number" id="vnc-port-input" class="vnc-input" value="5901" style="width:75px;"></div>
-                                <div class="input-badge"><span class="sys-label">Password:</span><input type="password" id="vnc-pass-input" class="vnc-input" placeholder="Optional" style="width:100px;"></div>
-                                <button id="vnc-launch-btn" class="btn-preset secondary"><span>🚀</span> Start Server</button>
-                                <button id="vnc-stop-btn" class="btn-preset danger"><span>🛑</span> Stop Server</button>
+                                <div class="input-badge"><span class="sys-label">Port:</span><input type="number" id="vnc-port-input" class="vnc-input" value="5900" style="width:75px;"></div>
+                                <div class="input-badge"><span class="sys-label">Password:</span><input type="password" id="vnc-pass-input" class="vnc-input" placeholder="Optional" style="width:110px;"></div>
                                 <button id="vnc-connect-btn" class="btn-preset primary"><span>🔌</span> Connect</button>
                                 <button id="vnc-disconnect-btn" class="btn-preset danger" style="display:none;"><span>⏹</span> Disconnect</button>
-                            </div>
-                            <div class="vnc-status-indicator">
-                                <span class="pulse-dot disconnected" id="vnc-dot"></span>
-                                <span id="vnc-status-text" style="font-weight:600;font-size:0.85rem;">DISCONNECTED</span>
+                                <div class="vnc-action-btn-group">
+                                    <button id="vnc-launch-btn" class="btn-preset secondary" title="Start / Ensure x11vnc service is running"><span>🚀</span> Start x11vnc</button>
+                                    <button id="vnc-restart-btn" class="btn-preset secondary" title="Restart x11vnc service"><span>🔄</span> Restart</button>
+                                    <button id="vnc-stop-btn" class="btn-preset danger" title="Stop x11vnc server"><span>🛑</span> Stop</button>
+                                </div>
+                                <div class="vnc-status-indicator">
+                                    <span class="pulse-dot disconnected" id="vnc-dot"></span>
+                                    <span id="vnc-status-text" style="font-weight:600;font-size:0.85rem;">DISCONNECTED</span>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Workstation Toolbar -->
                         <div class="vnc-toolbar">
                             <div class="vnc-macro-group">
-                                <span class="vnc-toolbar-label">Quick Actions:</span>
-                                <button id="vnc-btn-cad" class="btn-vnc-tool">⚡ Ctrl+Alt+Del</button>
-                                <button id="vnc-btn-alttab" class="btn-vnc-tool">⇄ Alt+Tab</button>
-                                <button id="vnc-btn-super" class="btn-vnc-tool">❖ Super Key</button>
-                                <button id="vnc-btn-esc" class="btn-vnc-tool">⎋ Esc</button>
+                                <span class="vnc-toolbar-label">Keys:</span>
+                                <button id="vnc-btn-cad" class="btn-vnc-tool" title="Send Ctrl+Alt+Del">⚡ Ctrl+Alt+Del</button>
+                                <button id="vnc-btn-alttab" class="btn-vnc-tool" title="Send Alt+Tab">⇄ Alt+Tab</button>
+                                <button id="vnc-btn-super" class="btn-vnc-tool" title="Send Super/Windows Key">❖ Super</button>
+                                <button id="vnc-btn-esc" class="btn-vnc-tool" title="Send Escape">⎋ Esc</button>
+                                <button id="vnc-btn-ctrlc" class="btn-vnc-tool" title="Send Ctrl+C">📋 Ctrl+C</button>
+                                <button id="vnc-btn-ctrlv" class="btn-vnc-tool" title="Send Ctrl+V">📋 Ctrl+V</button>
                             </div>
+
+                            <div class="vnc-macro-group vnc-clip-group">
+                                <span class="vnc-toolbar-label">Text:</span>
+                                <input type="text" id="vnc-clip-input" class="vnc-clip-input" placeholder="Type or paste text to send to remote desktop...">
+                                <button id="vnc-clip-send-btn" class="btn-vnc-tool">📋 Send</button>
+                            </div>
+
                             <div class="vnc-macro-group">
-                                <span class="vnc-toolbar-label">Display:</span>
+                                <span class="vnc-toolbar-label">View:</span>
                                 <select id="vnc-scale-select" class="vnc-select">
                                     <option value="fit">Fit Screen</option>
                                     <option value="1:1">Original (1:1)</option>
                                     <option value="stretch">Stretch</option>
                                 </select>
                                 <button id="vnc-fullscreen-btn" class="btn-vnc-tool">⛶ Fullscreen</button>
-                                <button id="vnc-demo-toggle-btn" class="btn-vnc-tool highlight">🖥️ Demo Mode</button>
+                                <div id="vnc-res-badge" class="vnc-res-badge">1280×800</div>
+                                <div id="vnc-fps-indicator" class="vnc-fps-badge">FPS: 0</div>
                             </div>
                         </div>
-                        <div class="vnc-clip-bar">
-                            <div style="display:flex;gap:0.5rem;flex:1;align-items:center;">
-                                <span class="vnc-toolbar-label">Send Text:</span>
-                                <input type="text" id="vnc-clip-input" class="vnc-clip-input" placeholder="Type text to send to remote desktop...">
-                                <button id="vnc-clip-send-btn" class="btn-vnc-tool">📋 Send</button>
-                            </div>
-                            <div id="vnc-res-badge" class="vnc-res-badge">1280×800</div>
-                        </div>
+
+                        <!-- Desktop Viewport -->
                         <div id="vnc-viewport-container" class="vnc-viewport">
-                            <canvas id="vnc-canvas" width="1280" height="800"></canvas>
+                            <canvas id="vnc-canvas" width="1280" height="800" tabindex="0"></canvas>
+
+                            <!-- In-Canvas Password Modal (for password-protected VNC servers) -->
+                            <div id="vnc-auth-modal" class="vnc-auth-modal" style="display:none;">
+                                <div class="vnc-auth-card">
+                                    <div style="font-size:2rem;margin-bottom:0.5rem;">🔒</div>
+                                    <h3>VNC Password Required</h3>
+                                    <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:1rem;">This remote x11vnc desktop requires authentication.</p>
+                                    <input type="password" id="vnc-auth-modal-pass" class="form-input" placeholder="Enter VNC password..." style="margin-bottom:1rem;text-align:center;">
+                                    <div style="display:flex;gap:0.5rem;justify-content:center;">
+                                        <button type="button" id="vnc-auth-modal-submit" class="btn-primary">Unlock &amp; Connect</button>
+                                        <button type="button" id="vnc-auth-modal-cancel" class="btn-secondary">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Disconnected Overlay -->
                             <div id="vnc-overlay" class="vnc-overlay">
                                 <div class="vnc-overlay-card">
                                     <div class="vnc-icon-hero">🖥️</div>
-                                    <h2>Remote System VNC Desktop</h2>
-                                    <p id="vnc-overlay-desc">Start a real TigerVNC / TightVNC / x11vnc server, or connect to one you already run elsewhere — just like TightVNC Viewer or RealVNC Viewer.</p>
-                                    <div style="display:flex;gap:1rem;margin-top:1.2rem;flex-wrap:wrap;justify-content:center;">
-                                        <button id="vnc-overlay-connect-btn" class="btn-vnc-hero primary">🔌 Connect VNC</button>
-                                        <button id="vnc-overlay-launch-btn" class="btn-vnc-hero secondary">⚙️ Start Local VNC Server</button>
-                                        <button id="vnc-overlay-demo-btn" class="btn-vnc-hero accent">🚀 Demo Desktop</button>
+                                    <h2 id="vnc-overlay-title">Remote Desktop (x11vnc)</h2>
+                                    <p id="vnc-overlay-desc">Connect directly to the client's desktop mirror over RFB 3.8. Use this browser client or any standard TightVNC / RealVNC Viewer.</p>
+                                    <div class="vnc-overlay-diagnostics" id="vnc-overlay-diag">
+                                        <div class="vnc-diag-item">
+                                            <span class="vnc-diag-label">Target Node:</span>
+                                            <span class="vnc-diag-value" id="vnc-diag-host">--</span>
+                                        </div>
+                                        <div class="vnc-diag-item">
+                                            <span class="vnc-diag-label">VNC Port:</span>
+                                            <span class="vnc-diag-value" id="vnc-diag-port">5900</span>
+                                        </div>
+                                        <div class="vnc-diag-item">
+                                            <span class="vnc-diag-label">x11vnc Status:</span>
+                                            <span class="vnc-diag-value" id="vnc-diag-status">Checking...</span>
+                                        </div>
                                     </div>
-                                    <div id="vnc-backends-list" class="vnc-backends-list"></div>
-                                    <div id="vnc-server-info" class="vnc-server-info-box">Checking VNC availability...</div>
+
+                                    <div style="display:flex;gap:1rem;margin-top:1.5rem;flex-wrap:wrap;justify-content:center;">
+                                        <button id="vnc-overlay-connect-btn" class="btn-vnc-hero primary">🔌 Connect to Desktop</button>
+                                        <button id="vnc-overlay-launch-btn" class="btn-vnc-hero secondary">🚀 Start x11vnc Server</button>
+                                        <button id="vnc-overlay-copy-btn" class="btn-vnc-hero accent">📋 Copy TightVNC Target</button>
+                                    </div>
+
+                                    <div id="vnc-server-info" class="vnc-server-info-box" style="margin-top:1.5rem;">Checking x11vnc service availability...</div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Log Footer -->
                         <div class="vnc-log-footer">
                             <div class="vnc-log-title">
-                                <span>📟 VNC Engine Log:</span>
-                                <span id="vnc-fps-indicator" style="color:var(--accent-cyan);">FPS: 0</span>
+                                <span>📟 PulseOps x11vnc Session Log:</span>
+                                <span id="vnc-backend-tag" style="color:var(--accent-cyan);font-family:var(--font-mono);font-size:0.75rem;">Backend: x11vnc (Port 5900)</span>
                             </div>
-                            <div id="vnc-console-output" class="vnc-console-output">[System] PulseOps VNC Client ready.</div>
+                            <div id="vnc-console-output" class="vnc-console-output">[System] PulseOps x11vnc Client ready.</div>
                         </div>
                     </div>
                 </section>
@@ -2353,7 +2403,7 @@
     <script src="js/services.js"></script>
     <script src="js/processes.js"></script>
     <script src="js/logs.js"></script>
-    <script src="js/vnc.js"></script>
+    <script src="js/vnc.js?v=2.0.1"></script>
     <script src="js/fleet.js"></script>
     <script src="js/users.js"></script>
     <script src="js/alerts.js"></script>

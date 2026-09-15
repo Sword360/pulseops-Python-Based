@@ -35,12 +35,18 @@
   - [Manual Agent Registration](#manual-agent-registration)
 - [🎛️ Core Capabilities & Modules](#️-core-capabilities--modules)
   - [1. Real-Time Telemetry & Smooth Canvas Charts](#1-real-time-telemetry--smooth-canvas-charts)
-  - [2. Systemd Operations & Live Journalctl](#2-systemd-operations--live-journalctl)
-  - [3. Process Explorer & Signal Management](#3-process-explorer--signal-management)
-  - [4. Multi-Host Web Terminal](#4-multi-host-web-terminal)
-  - [5. Embedded HTML5 VNC / RFB Desktop](#5-embedded-html5-vnc--rfb-desktop)
-  - [6. Alert Rules Engine & Notifications](#6-alert-rules-engine--notifications)
-  - [7. Compliance Audit Log & System Settings](#7-compliance-audit-log--system-settings)
+  - [2. Multi-Node Fleet Operations](#2-multi-node-fleet-operations)
+  - [3. Docker Container Manager](#3-docker-container-manager)
+  - [4. Network Ports Explorer](#4-network-ports-explorer)
+  - [5. Linux Firewall Manager](#5-linux-firewall-manager)
+  - [6. Security Threat Intelligence & SSH Brute-Force Triage](#6-security-threat-intelligence--ssh-brute-force-triage)
+  - [7. SSL / TLS Certificate Manager & Let's Encrypt Certbot](#7-ssl--tls-certificate-manager--lets-encrypt-certbot)
+  - [8. Systemd Operations & Live Journalctl](#8-systemd-operations--live-journalctl)
+  - [9. Process Explorer & Signal Management](#9-process-explorer--signal-management)
+  - [10. Multi-Host Web Terminal & Runbooks](#10-multi-host-web-terminal--runbooks)
+  - [11. Embedded HTML5 VNC / RFB Desktop (x11vnc Standard)](#11-embedded-html5-vnc--rfb-desktop-x11vnc-standard)
+  - [12. Alert Rules Engine & Notifications](#12-alert-rules-engine--notifications)
+  - [13. Compliance Audit Log & System Settings](#13-compliance-audit-log--system-settings)
 - [🔌 API Reference](#-api-reference)
 - [⚙️ Configuration & Environment Variables](#️-configuration--environment-variables)
 - [🛡️ Security & Hardening Guidelines](#️-security--hardening-guidelines)
@@ -290,32 +296,65 @@ For air-gapped or pre-provisioned environments:
 * **Hardware Information**: Kernel version, architecture, CPU model, core topology, and active storage volume mounts.
 * **Smooth Canvas Engine**: Custom HTML5 Canvas rendering engine with Bezier curve smoothing, dynamic Y-axis scaling, and dual network traffic visualization.
 
-### 2. Systemd Operations & Live Journalctl
-* **Unit Lifecycle**: Start, stop, restart, enable, or disable any loaded systemd unit.
+### 2. Multi-Node Fleet Operations
+* **Central Hub**: Monitor dozens of Linux servers simultaneously with live status badges, latency, uptime, and aggregated health.
+* **1-Click Installer**: Generate secure, time-limited invite tokens and deploy via a single `curl | bash` command.
+* **Agent RPC**: Low-overhead HTTP/JSON RPC proxy connecting master dashboard directly to remote nodes.
+
+### 3. Docker Container Manager
+* **Container Lifecycle**: List, inspect, start, stop, restart, pause, unpause, and delete containers across master and agent nodes.
+* **Live Container Logs**: Stream real-time container `stdout`/`stderr` logs with tail limits.
+* **Deep Inspection**: Inspect container networking, port bindings, volume mounts, environment variables, and CMD configuration.
+
+### 4. Network Ports Explorer
+* **Active Sockets**: Real-time listing of listening TCP/UDP sockets with process name, PID, IP address, and protocol.
+* **Public vs Local Triage**: Instantly identify exposed public ports versus localhost-only internal services.
+
+### 5. Linux Firewall Manager
+* **Dual Engine Support**: Native integration with both `ufw` (Debian/Ubuntu) and `firewalld` (RHEL/Rocky/CentOS).
+* **Rule Administration**: Add and delete port/protocol access rules, inspect active zones, and trigger instant firewall reloads.
+
+### 6. Security Threat Intelligence & SSH Brute-Force Triage
+* **Auth Log Analysis**: Real-time parsing of `/var/log/auth.log` and `/var/log/secure` to identify brute-force attacks.
+* **Attacker Profiling**: Track top attacking IPs, targeted usernames, hit counts, and geographic/network profiles.
+* **Instant IP Banning**: 1-click firewall ban/unban actions with full compliance audit logging.
+
+### 7. SSL / TLS Certificate Manager & Let's Encrypt Certbot
+* **Host Certificate Scanner**: Automatically discover installed SSL certificates in `/etc/ssl`, `/etc/pki`, and Let's Encrypt paths.
+* **Expiry Tracking**: Color-coded expiration progress bars (`Active`, `Expiring Soon`, `Expired`).
+* **Endpoint Probe**: Test and inspect remote TLS handshakes, cipher suites, protocol versions (TLS 1.2 / 1.3), and SANs.
+* **Certbot Integration**: Check Let's Encrypt `certbot` status and renew or issue certificates.
+
+### 8. Systemd Operations & Live Journalctl
+* **Unit Lifecycle**: Start, stop, restart, enable, or disable any loaded systemd unit on master or remote nodes.
 * **Instant Triage**: View color-coded states (`active`, `inactive`, `failed`).
 * **Live Logs**: Inspect the latest `journalctl` service logs directly in a modal console.
 
-### 3. Process Explorer & Signal Management
+### 9. Process Explorer & Signal Management
 * **Resource Sorting**: Live table sorting by CPU%, Memory% (RSS), and PID.
 * **Signal Dispatch**: Send graceful `SIGTERM` (15) or immediate `SIGKILL` (9) signals with role confirmation safeguards.
 
-### 4. Multi-Host Web Terminal
+### 10. Multi-Host Web Terminal & Runbooks
 * **Target Node Switching**: Execute terminal commands directly on Master or transparently on any remote fleet node.
 * **Sudo Elevation**: Prompts and handles elevated `sudo` commands securely without plaintext storage.
+* **Interactive Runbooks**: Store, organize, and execute pre-approved maintenance scripts and troubleshooting commands.
 * **Safety Filter**: Protects against accidental execution of destructive patterns (`rm -rf /`, `mkfs`, fork bombs).
 
-### 5. Embedded HTML5 VNC / RFB Desktop
-* **Real VNC backends, no fake screen**: `vnc.py` manages genuine RFB servers — **TigerVNC**, **TightVNC**, and **x11vnc + Xvfb** — each starting a real virtual X11 desktop (with xterm, or a full DE if installed). There is no simulated/cartoon "screen"; whatever backend you pick is a real, standard RFB server.
-* **Backend picker in the dashboard**: choose `Auto-detect`, `TigerVNC`, `TightVNC`, or `x11vnc` from the VNC tab, install missing packages with one click (`POST /api/vnc/install`), start/stop the session (`POST /api/vnc/launch` / `POST /api/vnc/stop`), and watch live install/running status per backend (`GET /api/vnc/status`).
-* **WebSocket Proxy**: `handle_vnc_proxy` bridges the browser's HTML5 canvas RFB client to the chosen backend's raw TCP RFB port — the same wire protocol used by TightVNC Viewer / RealVNC Viewer, so you can also point any standard VNC client at the same host:port.
+### 11. Embedded HTML5 VNC / RFB Desktop (x11vnc Standard)
+* **Standardized on `x11vnc`**: Provides a real screen mirror of the client desktop on standard RFB port `5900`.
+* **Automated Agent Setup**: When the PulseOps agent is installed on any client machine, `x11vnc` is automatically installed, configured with smart display/Xauthority detection (`:0` or virtual fallback), enabled as a systemd service (`pulseops-x11vnc.service`), and permitted in UFW/firewalld.
+* **Redesigned Dashboard Station**: TightVNC-style workstation interface in the PulseOps dashboard that seamlessly synchronizes with the active fleet node, displaying target hostname, IP, port 5900, 1-click TightVNC target copier, remote server lifecycle controls (Start/Restart/Stop x11vnc), and macro keys (Ctrl+Alt+Del, Alt+Tab, Super, Esc, Ctrl+C, Ctrl+V).
+* **Dual Authentication Support**: Supports both instant 1-click unauthenticated access (`-nopw`) and standard RFB DES password authentication with an in-viewport unlock modal.
+* **Native TightVNC Viewer Compatibility**: Connect directly through the web browser or point any standard desktop VNC client (TightVNC Viewer, RealVNC, TigerVNC) directly at `<CLIENT_IP>:5900`.
 
-### 6. Alert Rules Engine & Notifications
+### 12. Alert Rules Engine & Notifications
 * Define automated rules for CPU%, Memory%, Disk%, and Agent heartbeats (`> 85% for 2 consecutive intervals`).
 * Real-time notifications pop up in the top navigation bell with event severity tags (`WARNING`, `CRITICAL`).
 
-### 7. Compliance Audit Log & System Settings
+### 13. Compliance Audit Log & System Settings
 * **Audit Trail**: Every login attempt, terminal command, service modification, process kill, and fleet mutation is logged with timestamp, user ID, IP address, and status.
 * **Central Settings**: Configure global retention limits, session timeout hours, SMTP alerts, and branding.
+* **Database Maintenance**: 1-click SQLite VACUUM optimization, metric history purge, and automated database backup/restore.
 
 ---
 
@@ -349,10 +388,33 @@ For air-gapped or pre-provisioned environments:
 * `GET  /api/processes` — List running processes (`?server_id=...`).
 * `POST /api/processes/kill` — Dispatch kill signal (`admin`, `operator`).
 * `POST /api/terminal/exec` — Execute shell command on target node (`admin`, `operator`).
-* `GET  /api/vnc/status` — Query VNC availability and per-backend install/running status.
-* `POST /api/vnc/launch` — Launch a VNC desktop session; body: `{ "backend": "auto|tigervnc|tightvnc|x11vnc", "geometry": "1280x800" }` (`admin`, `operator`).
-* `POST /api/vnc/stop` — Stop the active (or a named) VNC backend (`admin`, `operator`).
-* `POST /api/vnc/install` — Install OS packages for a backend, e.g. `{ "backend": "tigervnc" }` (`admin`, `operator`).
+* `GET  /api/commands` — List saved commands and runbooks.
+* `POST /api/commands` — Save a reusable command / runbook (`admin`, `operator`).
+
+### Containers, Network, Security & SSL
+* `GET  /api/docker/status` — Inspect Docker daemon availability (`?server_id=...`).
+* `GET  /api/docker/containers` — List running/stopped containers.
+* `POST /api/docker/action` — Container lifecycle action (start, stop, restart, pause, unpause, rm).
+* `GET  /api/docker/logs` — Tail container standard output logs.
+* `GET  /api/docker/inspect` — Detailed container configuration inspect.
+* `GET  /api/network/ports` — List listening TCP/UDP ports and daemons.
+* `GET  /api/firewall/status` — Get active firewall status and rules.
+* `POST /api/firewall/rules/add` — Add a new firewall port rule (`admin`, `operator`).
+* `POST /api/firewall/rules/delete` — Remove a firewall rule (`admin`, `operator`).
+* `POST /api/firewall/reload` — Reload firewall rules.
+* `GET  /api/security/threats` — Parse auth logs for failed SSH logins and attacker IPs.
+* `POST /api/security/ban` — Block an attacking IP in the firewall (`admin`, `operator`).
+* `POST /api/security/unban` — Unblock a banned IP (`admin`, `operator`).
+* `GET  /api/ssl/certificates` — Discover installed host SSL/TLS certificates.
+* `POST /api/ssl/probe` — Probe an external or local TLS endpoint for certificate details.
+* `GET  /api/ssl/certbot` — Check certbot Let's Encrypt status.
+
+### Remote Desktop (VNC)
+* `GET  /api/vnc/status` — Query VNC availability and active service status (`?server_id=...`).
+* `POST /api/vnc/launch` — Launch / start x11vnc service on target node (`admin`, `operator`).
+* `POST /api/vnc/stop` — Stop x11vnc service (`admin`, `operator`).
+* `POST /api/vnc/install` — Install x11vnc and Xvfb packages (`admin`, `operator`).
+* `WS   /api/vnc/ws` — Authenticated WebSocket RFB 3.8 proxy tunnel to target port 5900.
 
 ### Alerts & Administration
 * `GET    /api/alerts/rules` — List active alert evaluation rules.
@@ -362,6 +424,8 @@ For air-gapped or pre-provisioned environments:
 * `GET    /api/admin/audit` — Query audit log events with filter parameters (Admin only).
 * `GET    /api/admin/settings` — Read system configuration settings (Admin only).
 * `PUT    /api/admin/settings` — Update system configuration settings (Admin only).
+* `POST   /api/admin/db/vacuum` — Optimize and vacuum SQLite database (Admin only).
+* `POST   /api/admin/db/purge` — Purge expired metrics snapshots (Admin only).
 
 ---
 
@@ -407,7 +471,14 @@ pulseops-Python-Based/
 ├── services.py           # Systemd unit manager and journalctl log parser
 ├── processes.py          # Process explorer and POSIX signal dispatcher
 ├── terminal.py           # Safe Web terminal subprocess runner with sudo handling
-├── vnc.py                # Real VNC backend manager (TigerVNC / TightVNC / x11vnc) + RFB TCP proxy target
+├── vnc.py                # Real VNC backend manager (x11vnc & TigerVNC) + RFB TCP proxy target
+├── docker_manager.py     # Docker container inspection, logs, and lifecycle manager
+├── ports_manager.py      # Network listening sockets and open ports explorer
+├── firewall_manager.py   # Linux firewall manager (UFW & firewalld integration)
+├── security_manager.py   # Threat intelligence & SSH brute-force auth log analyzer
+├── ssl_manager.py        # SSL/TLS certificate scanner, endpoint probe & certbot manager
+├── commands_manager.py   # Reusable saved commands and interactive runbooks
+├── maintenance_manager.py# Database optimization, vacuum, purge, and backup/restore
 ├── fleet.py              # Multi-node server coordinator and remote RPC client
 ├── auth.py               # Enterprise JWT, bcrypt, TOTP 2FA, and RBAC authorization
 ├── users.py              # User authentication, credential storage, and profile management
@@ -427,6 +498,12 @@ pulseops-Python-Based/
         ├── auth.js       # Global JWT management, token auto-refresh, and auth guard
         ├── charts.js     # High-performance HTML5 Canvas performance charts
         ├── fleet.js      # Multi-node fleet grid, card actions, and server modals
+        ├── docker.js     # Container manager cards, logs modal, and action dispatch
+        ├── ports.js      # Listening sockets table and protocol filters
+        ├── firewall.js   # Firewall status, rules table, and rule modal
+        ├── security.js   # Threat intelligence dashboard, IP banning, and event stream
+        ├── ssl.js        # SSL certificate cards, TLS probe, and certbot tools
+        ├── commands.js   # Runbooks, saved command executor, and create modal
         ├── services.js   # Systemd service manager and journalctl modal
         ├── processes.js  # Process explorer, filters, and termination controls
         ├── logs.js       # Live system log streamer and WebTerminal console
@@ -434,7 +511,7 @@ pulseops-Python-Based/
         ├── alerts.js     # Alert rules engine modal and active notifications
         ├── audit.js      # Compliance audit activity log viewer
         ├── settings.js   # Enterprise system settings configuration
-        └── vnc.js        # HTML5 Canvas RFB VNC desktop client
+        └── vnc.js        # TightVNC-style HTML5 Canvas RFB 3.8 desktop workstation
 ```
 
 ---

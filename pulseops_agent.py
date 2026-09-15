@@ -694,6 +694,66 @@ def _agent_unban_ip(spec: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": False, "error": "Security manager not available on agent"}
 
 
+def _agent_get_vnc_status() -> Dict[str, Any]:
+    installed = bool(shutil.which("x11vnc"))
+    listening = False
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        listening = (s.connect_ex(("127.0.0.1", 5900)) == 0)
+        s.close()
+    except Exception:
+        listening = False
+
+    service_active = False
+    try:
+        rc = subprocess.run(["systemctl", "is-active", "pulseops-x11vnc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        service_active = (rc.returncode == 0)
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "installed": installed,
+        "backend": "x11vnc",
+        "service_active": service_active,
+        "listening": listening,
+        "port": 5900,
+        "display": os.environ.get("DISPLAY", ":0"),
+    }
+
+
+def _agent_vnc_action(body: Dict[str, Any]) -> Dict[str, Any]:
+    action = body.get("action", "start")
+    if action in ("start", "restart", "stop"):
+        try:
+            rc = subprocess.run(["systemctl", action, "pulseops-x11vnc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            return {
+                "success": rc.returncode == 0,
+                "action": action,
+                "output": (rc.stdout + rc.stderr).decode("utf-8", errors="replace"),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    elif action == "install":
+        cmd = None
+        if shutil.which("apt-get"):
+            cmd = "DEBIAN_FRONTEND=noninteractive apt-get update -qq && apt-get install -y -qq x11vnc xvfb xterm"
+        elif shutil.which("dnf"):
+            cmd = "dnf install -y -q x11vnc xorg-x11-server-Xvfb xterm"
+        elif shutil.which("yum"):
+            cmd = "yum install -y -q x11vnc xorg-x11-server-Xvfb xterm"
+        if cmd:
+            try:
+                rc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+                subprocess.run("systemctl daemon-reload && systemctl restart pulseops-x11vnc", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                return {"success": rc.returncode == 0, "output": (rc.stdout + rc.stderr).decode("utf-8", errors="replace")}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        return {"success": False, "error": "No supported package manager found."}
+    return {"success": False, "error": f"Unknown action {action}"}
+
+
 # ─── HTTP Server (Operations & Telemetry Endpoint) ──────────────────────────
 
 class AgentHTTPHandler(BaseHTTPRequestHandler):
@@ -802,6 +862,9 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._send_json({"installed": False, "error": str(e)})
 
+        if path == "/api/vnc/status":
+            return self._send_json(_agent_get_vnc_status())
+
         self._send_json({"detail": "Not found"}, status=404)
 
     def do_POST(self):
@@ -868,6 +931,9 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
                 return self._send_json(ssl_manager.probe_tls_endpoint(host, port=port))
             except Exception as e:
                 return self._send_json({"success": False, "error": str(e)})
+
+        if path in ("/api/vnc/action", "/api/vnc/launch", "/api/vnc/stop"):
+            return self._send_json(_agent_vnc_action(body))
 
         self._send_json({"detail": "Not found"}, status=404)
 

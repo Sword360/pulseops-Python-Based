@@ -30,9 +30,9 @@ from typing import Dict, Any, Optional
 # ── External backend process tracking ───────────────────────────────────────
 _xvfb_proc: Optional[asyncio.subprocess.Process] = None
 _vnc_daemon_proc: Optional[asyncio.subprocess.Process] = None
-_active_backend: str = 'none'      # 'none' | 'tigervnc' | 'tightvnc' | 'x11vnc'
-_active_backend_port: int = 5901
-_active_display: str = ':99'
+_active_backend: str = 'none'      # 'none' | 'x11vnc' | 'tigervnc' | 'tightvnc'
+_active_backend_port: int = 5900
+_active_display: str = ':0'
 
 # ── Backend definitions ──────────────────────────────────────────────────────
 # 'kind' selects which launcher implementation to use:
@@ -66,12 +66,12 @@ BACKENDS = {
         },
     },
     'x11vnc': {
-        'label': 'x11vnc + Xvfb (Mirror Display)',
-        'description': 'x11vnc mirrors a virtual Xvfb display. Real xterm/apps on a virtual screen.',
+        'label': 'x11vnc Desktop Server',
+        'description': 'Real screen mirror & desktop via x11vnc on standard port 5900. Compatible with TightVNC Viewer and web client.',
         'kind': 'x11vnc',
-        'binaries': ['x11vnc', 'Xvfb'],
-        'binary_candidates': [],
-        'port': 5902,
+        'binaries': ['x11vnc'],
+        'binary_candidates': ['x11vnc'],
+        'port': 5900,
         'install_pkgs': {
             'dnf': ['x11vnc', 'xorg-x11-server-Xvfb', 'xterm', 'openbox'],
             'yum': ['x11vnc', 'xorg-x11-server-Xvfb', 'xterm', 'openbox'],
@@ -80,7 +80,7 @@ BACKENDS = {
     },
 }
 
-# Preference order used by the 'auto' backend
+# Preference order used by the 'auto' backend - x11vnc is premier
 AUTO_ORDER = ['x11vnc', 'tigervnc', 'tightvnc']
 
 
@@ -195,8 +195,20 @@ async def get_backends_status() -> Dict[str, Any]:
     }
 
 
-async def install_backend(backend_key: str) -> Dict[str, Any]:
-    """Install system packages for the given VNC backend."""
+async def install_backend(backend_key: str = 'x11vnc', server_id: Optional[str] = None) -> Dict[str, Any]:
+    """Install system packages for the given VNC backend (local or remote)."""
+    if server_id and server_id != 'local-master':
+        try:
+            import server as master_server
+            res, code = await master_server.proxy_to_agent(server_id, '/api/vnc/action', method='POST', json_body={'action': 'install'})
+            if code == 200 and isinstance(res, dict) and res.get('success'):
+                return {'success': True, 'message': 'x11vnc install finished on remote server.'}
+            install_cmd = "if command -v apt-get >/dev/null; then apt-get update -qq && apt-get install -y -qq x11vnc xvfb; elif command -v dnf >/dev/null; then dnf install -y -q x11vnc xorg-x11-server-Xvfb; fi"
+            await master_server.proxy_to_agent(server_id, '/api/terminal/exec', method='POST', json_body={'command': install_cmd})
+            return {'success': True, 'message': 'x11vnc package installation command dispatched to remote server.'}
+        except Exception as e:
+            return {'success': False, 'error': f'Remote install failed: {e}'}
+
     if backend_key == 'auto':
         backend_key = AUTO_ORDER[0]
     if backend_key not in BACKENDS:
@@ -251,8 +263,19 @@ async def _kill_vnc_daemons():
     await _run_cmd('rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null; true', timeout=5)
 
 
-async def stop_vnc_backend(backend: str = '') -> Dict[str, Any]:
-    """Stop the running VNC backend."""
+async def stop_vnc_backend(backend: str = '', server_id: Optional[str] = None) -> Dict[str, Any]:
+    """Stop the running VNC backend (local or remote)."""
+    if server_id and server_id != 'local-master':
+        try:
+            import server as master_server
+            res, code = await master_server.proxy_to_agent(server_id, '/api/vnc/action', method='POST', json_body={'action': 'stop'})
+            if code == 200 and isinstance(res, dict) and res.get('success'):
+                return {'success': True, 'message': 'x11vnc stopped on remote server.'}
+            await master_server.proxy_to_agent(server_id, '/api/terminal/exec', method='POST', json_body={'command': 'systemctl stop pulseops-x11vnc; pkill -9 -f x11vnc'})
+            return {'success': True, 'message': 'x11vnc stop command sent to remote server.'}
+        except Exception as e:
+            return {'success': False, 'error': f'Remote stop failed: {e}'}
+
     global _active_backend
 
     target = backend or _active_backend
@@ -383,8 +406,8 @@ async def launch_backend_tightvnc(port: int = 5903, geometry: str = '1280x800') 
     return await _launch_xvnc('tightvnc', port, geometry)
 
 
-async def launch_backend_x11vnc(port: int = 5902, geometry: str = '1280x800') -> Dict[str, Any]:
-    """Launch Xvfb virtual display + x11vnc to expose it over RFB."""
+async def launch_backend_x11vnc(port: int = 5900, geometry: str = '1280x800') -> Dict[str, Any]:
+    """Launch x11vnc to expose local desktop or virtual Xvfb display over RFB."""
     global _xvfb_proc, _vnc_daemon_proc, _active_backend, _active_backend_port, _active_display
 
     if not shutil.which('x11vnc'):
@@ -393,42 +416,44 @@ async def launch_backend_x11vnc(port: int = 5902, geometry: str = '1280x800') ->
             'error': 'x11vnc not found.',
             'installCmd': _install_cmd_for('x11vnc'),
         }
-    if not shutil.which('Xvfb'):
-        return {
-            'success': False,
-            'error': 'Xvfb not found.',
-            'installCmd': _install_cmd_for('x11vnc'),
-        }
 
     await _kill_vnc_daemons()
     await asyncio.sleep(0.5)
 
-    width, height = (geometry.split('x') + ['800'])[:2]
-    xvfb_cmd = f'Xvfb :99 -screen 0 {width}x{height}x24 -ac +extension GLX +render -noreset'
-    print(f'[VNC x11vnc] Starting Xvfb: {xvfb_cmd}')
-    _xvfb_proc = await asyncio.create_subprocess_shell(
-        xvfb_cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    await asyncio.sleep(1.8)
+    # Check if an existing X display is running on :0
+    rc_disp, _, _ = await _run_cmd('test -e /tmp/.X11-unix/X0 || pgrep -f "Xorg|Xwayland|X :0"', timeout=2)
+    display_to_use = ':0' if rc_disp == 0 else ':99'
 
-    rc_check, _, _ = await _run_cmd('pgrep -f "Xvfb :99"', timeout=3)
-    if rc_check != 0:
-        return {'success': False, 'error': 'Xvfb failed to start on :99.'}
+    if display_to_use == ':99':
+        if not shutil.which('Xvfb'):
+            return {
+                'success': False,
+                'error': 'No physical display :0 found and Xvfb is not installed.',
+                'installCmd': _install_cmd_for('x11vnc'),
+            }
+        width, height = (geometry.split('x') + ['800'])[:2]
+        xvfb_cmd = f'Xvfb :99 -screen 0 {width}x{height}x24 -ac +extension GLX +render -noreset'
+        print(f'[VNC x11vnc] Starting Xvfb: {xvfb_cmd}')
+        _xvfb_proc = await asyncio.create_subprocess_shell(
+            xvfb_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        await asyncio.sleep(1.5)
 
-    # Start openbox and xterm on DISPLAY :99
-    await _run_cmd(
-        'DISPLAY=:99 bash -c "'
-        'if which openbox >/dev/null 2>&1; then openbox & fi; '
-        'xterm -geometry 120x35+50+50 -fa \\"Monospace\\" -fs 10 -title \\"PulseOps Terminal\\" &"',
-        timeout=3
-    )
-    await asyncio.sleep(0.5)
+        # Start openbox and xterm on DISPLAY :99
+        await _run_cmd(
+            'DISPLAY=:99 bash -c "'
+            'if which openbox >/dev/null 2>&1; then openbox & fi; '
+            'xterm -geometry 120x35+50+50 -fa \\"Monospace\\" -fs 10 -title \\"PulseOps Terminal\\" &"',
+            timeout=3
+        )
+        await asyncio.sleep(0.5)
 
     log_file = f'/tmp/x11vnc_{port}.log'
+    auth_flag = '-auth guess' if display_to_use == ':0' else ''
     x11_cmd = (
-        f'x11vnc -display :99 '
+        f'x11vnc -display {display_to_use} {auth_flag} '
         f'-rfbport {port} '
         f'-shared -forever -nopw '
         f'-noxdamage -repeat '
@@ -440,19 +465,19 @@ async def launch_backend_x11vnc(port: int = 5902, geometry: str = '1280x800') ->
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
-    await asyncio.sleep(2.5)
+    await asyncio.sleep(2.0)
 
     listening = await check_tcp_port('127.0.0.1', port)
     if listening:
         _active_backend = 'x11vnc'
         _active_backend_port = port
-        _active_display = ':99'
+        _active_display = display_to_use
         return {
             'success': True,
             'backend': 'x11vnc',
             'port': port,
-            'display': ':99',
-            'message': f'x11vnc + Xvfb started on :99 -> port {port}. Real Linux desktop visible.',
+            'display': display_to_use,
+            'message': f'x11vnc started on {display_to_use} -> port {port}. Desktop ready for connection.',
         }
     try:
         with open(log_file, 'r') as lf:
@@ -483,55 +508,93 @@ async def launch_vnc(
     port: int = 0,
     use_native: bool = False,   # kept for backward-compat API payloads; ignored
     backend: str = 'auto',
-    geometry: str = '1280x800'
+    geometry: str = '1280x800',
+    server_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Main VNC launch dispatcher.
+    """Main VNC launch dispatcher supporting both local and remote nodes."""
+    if server_id and server_id != 'local-master':
+        try:
+            import server as master_server
+            res, code = await master_server.proxy_to_agent(server_id, '/api/vnc/action', method='POST', json_body={'action': 'start'})
+            if code == 200 and isinstance(res, dict) and res.get('success'):
+                return {'success': True, 'message': 'x11vnc started on remote node.', 'port': 5900, 'server_id': server_id}
+            # Fallback via terminal exec
+            cmd = "systemctl restart pulseops-x11vnc 2>/dev/null || /usr/local/bin/pulseops-x11vnc-start &"
+            await master_server.proxy_to_agent(server_id, '/api/terminal/exec', method='POST', json_body={'command': cmd})
+            return {'success': True, 'message': 'x11vnc start command dispatched to remote node.', 'port': 5900, 'server_id': server_id}
+        except Exception as e:
+            return {'success': False, 'error': f'Remote VNC launch failed: {e}'}
 
-    backend: 'auto' | 'tigervnc' | 'tightvnc' | 'x11vnc'
-    'auto' tries whichever backend is already installed (in AUTO_ORDER),
-    and if none is installed, attempts to install+launch the first one this
-    system's package manager can provide.
-    """
     backend = (backend or 'auto').lower()
+    if backend == 'auto':
+        backend = 'x11vnc'
 
-    if backend != 'auto':
-        if backend not in _LAUNCHERS:
-            return {'success': False, 'error': f'Unknown VNC backend: {backend}'}
-        use_port = port or BACKENDS[backend]['port']
-        return await _LAUNCHERS[backend](port=use_port, geometry=geometry)
-
-    # ── auto mode ────────────────────────────────────────────────────────
-    status = await get_backends_status()
-    backends_info = status['backends']
-
-    # 1) Use whichever real backend is already installed
-    for key in AUTO_ORDER:
-        if backends_info[key]['installed']:
-            use_port = port or BACKENDS[key]['port']
-            result = await _LAUNCHERS[key](port=use_port, geometry=geometry)
-            if result.get('success'):
-                return result
-
-    # 2) Nothing installed — try to auto-install the first backend the
-    #    package manager can provide, then launch it.
-    pkg_mgr = _pkg_manager()
-    if pkg_mgr:
-        for key in AUTO_ORDER:
-            if _install_cmd_for(key):
-                install_result = await install_backend(key)
-                if install_result.get('success'):
-                    use_port = port or BACKENDS[key]['port']
-                    return await _LAUNCHERS[key](port=use_port, geometry=geometry)
-
-    return {
-        'success': False,
-        'error': 'No VNC backend is installed and packages could not be auto-installed.',
-        'installCmd': detect_system_package_manager(),
-    }
+    if backend not in _LAUNCHERS:
+        backend = 'x11vnc'
+    use_port = port or BACKENDS.get(backend, {}).get('port', 5900)
+    return await _LAUNCHERS[backend](port=use_port, geometry=geometry)
 
 
-async def get_vnc_status(target_host: str = '127.0.0.1') -> Dict[str, Any]:
-    """Status endpoint — returns current VNC state including all backends."""
+async def get_vnc_status(target_host: str = '127.0.0.1', server_id: Optional[str] = None) -> Dict[str, Any]:
+    """Status endpoint — returns current VNC state including all backends, supporting remote fleet nodes."""
+    if server_id and server_id != 'local-master':
+        try:
+            import fleet as fleet_module
+            srv = await fleet_module.get_server(server_id)
+            if srv:
+                remote_ip = srv.get('host_ip', target_host)
+                hostname = srv.get('hostname') or srv.get('display_name') or remote_ip
+                open_ports = []
+                for p in [5900, 5901, 5902, 5903]:
+                    if await check_tcp_port(remote_ip, p):
+                        open_ports.append(p)
+
+                agent_data = {}
+                try:
+                    import server as master_server
+                    res, code = await master_server.proxy_to_agent(server_id, '/api/vnc/status')
+                    if code == 200 and isinstance(res, dict) and res.get('success'):
+                        agent_data = res
+                except Exception:
+                    pass
+
+                running = len(open_ports) > 0 or agent_data.get('listening', False)
+                default_port = open_ports[0] if open_ports else 5900
+                display = agent_data.get('display', ':0')
+                installed = agent_data.get('installed', True if running else False)
+
+                return {
+                    'success': True,
+                    'server_id': server_id,
+                    'hostname': hostname,
+                    'host': remote_ip,
+                    'running': running,
+                    'openPorts': open_ports,
+                    'defaultPort': default_port,
+                    'display': display,
+                    'activeBackend': 'x11vnc',
+                    'activePort': default_port,
+                    'isRemote': True,
+                    'service_active': agent_data.get('service_active', running),
+                    'installed': installed,
+                    'backends': {
+                        'x11vnc': {
+                            'key': 'x11vnc',
+                            'label': 'x11vnc Desktop Server',
+                            'description': 'Real screen mirror & desktop via x11vnc on port 5900.',
+                            'installed': installed,
+                            'port': default_port,
+                            'listening': running,
+                            'isActive': running,
+                            'installCmd': 'sudo apt-get install -y x11vnc xvfb'
+                        }
+                    },
+                    'installCmd': 'sudo apt-get install -y x11vnc xvfb'
+                }
+        except Exception as e:
+            print(f"[VNC Remote Status] Error resolving {server_id}: {e}")
+
+    # Local master status
     backends_info = await get_backends_status()
 
     open_ports = []
@@ -543,18 +606,21 @@ async def get_vnc_status(target_host: str = '127.0.0.1') -> Dict[str, Any]:
                           if shutil.which(b)]
 
     running = len(open_ports) > 0
-    default_port = open_ports[0] if open_ports else BACKENDS['tigervnc']['port']
+    default_port = open_ports[0] if open_ports else 5900
 
     return {
         'success': True,
+        'server_id': 'local-master',
+        'hostname': 'Local Master',
         'host': target_host,
         'running': running,
         'openPorts': open_ports,
         'defaultPort': default_port,
         'installedBinaries': installed_binaries,
         'display': os.environ.get('DISPLAY', ':0'),
-        'activeBackend': _active_backend,
-        'activePort': _active_backend_port,
+        'activeBackend': _active_backend if _active_backend != 'none' else ('x11vnc' if running else 'none'),
+        'activePort': _active_backend_port if running else default_port,
+        'isRemote': False,
         'backends': backends_info['backends'],
         'installCmd': detect_system_package_manager(),
     }
