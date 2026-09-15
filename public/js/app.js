@@ -394,6 +394,7 @@ class PulseOpsDashboard {
                 if (btn.dataset.tab === 'services'  && window.systemdMgr)  window.systemdMgr.loadServices();
                 if (btn.dataset.tab === 'processes' && window.procMgr)    window.procMgr.loadProcesses();
                 if (btn.dataset.tab === 'ssl'       && window.sslMgr)     window.sslMgr.loadSSLData();
+                if (btn.dataset.tab === 'logs'      && window.logViewer)  window.logViewer.loadLogs();
                 if (btn.dataset.tab === 'vnc'       && window.vncMgr) {
                     const hostBtn = document.querySelector(`.sidebar-server-item[data-server-id="${this.currentServerId}"]`);
                     const hostIp = hostBtn ? hostBtn.dataset.ip : '';
@@ -552,6 +553,7 @@ class PulseOpsDashboard {
         if (activeTab === 'processes' && window.procMgr) window.procMgr.loadProcesses();
         if (activeTab === 'ssl' && window.sslMgr) window.sslMgr.loadSSLData();
         if (activeTab === 'services' && window.systemdMgr) window.systemdMgr.loadServices();
+        if (activeTab === 'logs' && window.logViewer) window.logViewer.loadLogs();
         if (activeTab === 'terminal' && window.webTerminal && typeof window.webTerminal.onTabActivated === 'function') {
             window.webTerminal.onTabActivated();
         }
@@ -1038,7 +1040,11 @@ class PulseOpsDashboard {
     // ── Log Stream Handler ────────────────────────────────────────────────────
 
     handleLogStream(log) {
-        if (window.logStreamMgr) window.logStreamMgr.appendLog(log);
+        if (window.logViewer && typeof window.logViewer.pushLog === 'function') {
+            window.logViewer.pushLog(log);
+        } else if (window.logStreamMgr && typeof window.logStreamMgr.appendLog === 'function') {
+            window.logStreamMgr.appendLog(log);
+        }
     }
 
     // ── Charts ────────────────────────────────────────────────────────────────

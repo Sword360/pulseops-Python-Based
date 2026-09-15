@@ -1711,7 +1711,17 @@ async def api_get_logs(
     if target and target != "local-master":
         data, code = await proxy_to_agent(target, "/api/logs", "GET", query_params={"lines": str(lines)})
         return JSONResponse(status_code=code, content=data)
-    return {"success": True, "logs": []}
+    # Local master system logs
+    try:
+        import subprocess
+        from datetime import datetime
+        out = subprocess.check_output(['journalctl', '-n', str(lines), '--no-pager'], text=True, timeout=5)
+        logs = []
+        for line_entry in out.splitlines():
+            logs.append({"time": datetime.utcnow().isoformat() + "Z", "line": line_entry})
+        return {"success": True, "logs": logs}
+    except Exception as e:
+        return {"success": True, "logs": [{"time": datetime.utcnow().isoformat() + "Z", "line": f"Local system log: {str(e)}"}]}
 
 
 @app.get("/api/vnc/status")
@@ -1830,6 +1840,16 @@ async def proxy_to_agent(
                             "hostname": hostname,
                             "server_id": server_id,
                         }, 200
+                    if resp.status == 401:
+                        return {
+                            "success": False,
+                            "token_mismatch": True,
+                            "unauthorized": True,
+                            "error": f"Agent token authentication failed on {hostname} (401 Unauthorized). The agent daemon is running with an out-of-sync token. Run 'sudo systemctl restart pulseops-agent' on {hostname}.",
+                            "fix_cmd": "sudo systemctl restart pulseops-agent",
+                            "hostname": hostname,
+                            "server_id": server_id,
+                        }, 401
                     try:
                         data = await resp.json()
                         return data, resp.status
@@ -1846,6 +1866,16 @@ async def proxy_to_agent(
                             "hostname": hostname,
                             "server_id": server_id,
                         }, 200
+                    if resp.status == 401:
+                        return {
+                            "success": False,
+                            "token_mismatch": True,
+                            "unauthorized": True,
+                            "error": f"Agent token authentication failed on {hostname} (401 Unauthorized). The agent daemon is running with an out-of-sync token. Run 'sudo systemctl restart pulseops-agent' on {hostname}.",
+                            "fix_cmd": "sudo systemctl restart pulseops-agent",
+                            "hostname": hostname,
+                            "server_id": server_id,
+                        }, 401
                     try:
                         data = await resp.json()
                         return data, resp.status

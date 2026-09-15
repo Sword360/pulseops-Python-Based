@@ -279,6 +279,16 @@ async def proxy_to_agent(
                             "hostname": hostname,
                             "server_id": server_id
                         }, 200
+                    if resp.status == 401:
+                        return {
+                            "success": False,
+                            "token_mismatch": True,
+                            "unauthorized": True,
+                            "error": f"Agent token authentication failed on {hostname} (401 Unauthorized). The agent daemon is running with an out-of-sync token. Run 'sudo systemctl restart pulseops-agent' on {hostname}.",
+                            "fix_cmd": "sudo systemctl restart pulseops-agent",
+                            "hostname": hostname,
+                            "server_id": server_id
+                        }, 401
                     try:
                         data = await resp.json()
                         return data, resp.status
@@ -295,6 +305,16 @@ async def proxy_to_agent(
                             "hostname": hostname,
                             "server_id": server_id
                         }, 200
+                    if resp.status == 401:
+                        return {
+                            "success": False,
+                            "token_mismatch": True,
+                            "unauthorized": True,
+                            "error": f"Agent token authentication failed on {hostname} (401 Unauthorized). The agent daemon is running with an out-of-sync token. Run 'sudo systemctl restart pulseops-agent' on {hostname}.",
+                            "fix_cmd": "sudo systemctl restart pulseops-agent",
+                            "hostname": hostname,
+                            "server_id": server_id
+                        }, 401
                     try:
                         data = await resp.json()
                         return data, resp.status
@@ -1057,7 +1077,16 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             if target_server and target_server != 'local-master':
                 res_data, code = await proxy_to_agent(target_server, '/api/logs', 'GET', query_params={'lines': lines_val})
                 return await send_json_response(writer, res_data, status=code)
-            return await send_json_response(writer, {'success': True, 'logs': []})
+            # Local master system journal logs
+            try:
+                import subprocess
+                out = subprocess.check_output(['journalctl', '-n', str(lines_val), '--no-pager'], text=True, timeout=5)
+                logs = []
+                for line_entry in out.splitlines():
+                    logs.append({"time": datetime.utcnow().isoformat() + "Z", "line": line_entry})
+                return await send_json_response(writer, {'success': True, 'logs': logs})
+            except Exception as e:
+                return await send_json_response(writer, {'success': True, 'logs': [{"time": datetime.utcnow().isoformat() + "Z", "line": f"Local system log: {str(e)}"}]})
 
         if path == '/api/vnc/status' and method == 'GET':
             if ENTERPRISE_AVAILABLE:
@@ -1435,6 +1464,8 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
 
             if path == '/api/fleet/heartbeat' and method == 'POST':
                 agent_token = headers.get('x-agent-token') or json_body.get('agent_token', '')
+                peer = writer.get_extra_info('peername')
+                print(f"[HEARTBEAT INCOMING] token={repr(agent_token)} from {peer}")
                 if not agent_token:
                     return await send_json_response(writer, {'detail': 'X-Agent-Token required'}, 401)
                 result = await fleet_module.process_heartbeat(agent_token, json_body)

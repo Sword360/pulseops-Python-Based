@@ -80,6 +80,62 @@ class LogStreamViewer {
         this.container.innerHTML = '';
         this.logs.forEach(entry => this.appendSingleLog(entry));
     }
+
+    async loadLogs(serverId) {
+        const sId = serverId || window.PulseOpsCurrentServer || 'local-master';
+        const hostname = window.PulseOpsCurrentServerHostname || (sId === 'local-master' ? 'mail.sword.local' : 'node');
+        const authFetch = (window.PulseOpsAuth && PulseOpsAuth.apiFetch) ? PulseOpsAuth.apiFetch : fetch;
+        try {
+            const res = await authFetch(`/api/logs?server_id=${encodeURIComponent(sId)}&lines=100`);
+            const data = await res.json();
+            if (data.token_mismatch || (res.status === 401 && sId !== 'local-master')) {
+                this.pushLog({
+                    timestamp: new Date().toISOString(),
+                    source: 'pulseops',
+                    level: 'ERROR',
+                    message: `[Auth Mismatch] Agent on ${hostname} rejected authentication token. Run 'sudo systemctl restart pulseops-agent' on ${hostname} to synchronize.`
+                });
+                return;
+            }
+            if (data && data.logs && Array.isArray(data.logs)) {
+                if (data.logs.length > 0) {
+                    this.logs = [];
+                    if (this.container) this.container.innerHTML = '';
+                }
+                data.logs.forEach(entry => {
+                    if (typeof entry === 'string') {
+                        let lvl = 'INFO';
+                        const low = entry.toLowerCase();
+                        if (low.includes('error') || low.includes('fail') || low.includes('crit')) lvl = 'ERROR';
+                        else if (low.includes('warn')) lvl = 'WARN';
+                        else if (low.includes('debug')) lvl = 'DEBUG';
+                        this.pushLog({
+                            timestamp: new Date().toISOString(),
+                            source: 'journal',
+                            level: lvl,
+                            message: entry
+                        });
+                    } else if (entry && entry.line) {
+                        let lvl = 'INFO';
+                        const low = entry.line.toLowerCase();
+                        if (low.includes('error') || low.includes('fail') || low.includes('crit')) lvl = 'ERROR';
+                        else if (low.includes('warn')) lvl = 'WARN';
+                        else if (low.includes('debug')) lvl = 'DEBUG';
+                        this.pushLog({
+                            timestamp: entry.time || new Date().toISOString(),
+                            source: 'journal',
+                            level: lvl,
+                            message: entry.line
+                        });
+                    } else if (entry) {
+                        this.pushLog(entry);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Failed to fetch logs:', e);
+        }
+    }
 }
 
 class WebTerminal {
@@ -608,9 +664,13 @@ class WebTerminal {
 }
 
 window.logViewer = null;
+window.logStreamMgr = null;
 window.webTerminal = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     window.logViewer = new LogStreamViewer();
+    window.logStreamMgr = {
+        appendLog: (entry) => window.logViewer && window.logViewer.pushLog(entry)
+    };
     window.webTerminal = new WebTerminal();
 });

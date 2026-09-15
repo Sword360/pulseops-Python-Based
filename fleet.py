@@ -184,12 +184,25 @@ async def register_server(
     if not hostname or not host_ip:
         return {"success": False, "error": "hostname and host_ip are required"}
 
-    # Check for duplicate hostname/IP combo
+    # Check for existing server with matching hostname/IP
     existing = await fetchone(
-        "SELECT id FROM servers WHERE hostname = ? AND host_ip = ?", (hostname, host_ip)
+        "SELECT id FROM servers WHERE (hostname = ? AND host_ip = ?) OR (host_ip != '127.0.0.1' AND host_ip = ?)",
+        (hostname, host_ip, host_ip)
     )
     if existing:
-        return {"success": False, "error": "Server with this hostname and IP already registered"}
+        server_id = existing["id"]
+        agent_token = str(uuid.uuid4())
+        tags_json = json.dumps(tags or [])
+        driver_config_json = json.dumps(driver_config or {})
+        await execute(
+            "UPDATE servers SET agent_token = ?, agent_port = ?, os_info = COALESCE(?, os_info), "
+            "arch = COALESCE(?, arch), hostname = ?, display_name = COALESCE(display_name, ?), "
+            "driver_type = ?, driver_config = ?, status = 'online', updated_at = datetime('now') WHERE id = ?",
+            (agent_token, agent_port, os_info, arch, hostname, display_name or hostname,
+             driver_type, driver_config_json, server_id)
+        )
+        logger.info("[Fleet] Re-registered existing server %s (%s) id=%s with fresh agent token", hostname, host_ip, server_id)
+        return {"success": True, "server_id": server_id, "agent_token": agent_token}
 
     server_id = str(uuid.uuid4())
     agent_token = str(uuid.uuid4())
@@ -1339,7 +1352,8 @@ WantedBy=multi-user.target
 EOF
 
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable --now $SERVICE_NAME
+$SUDO systemctl enable $SERVICE_NAME
+$SUDO systemctl restart $SERVICE_NAME
 
 # ── Setup x11vnc Remote Desktop Subsystem ─────────────────────────
 echo ""
@@ -1432,7 +1446,8 @@ if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewa
 fi
 
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable --now pulseops-x11vnc 2>/dev/null || true
+$SUDO systemctl enable pulseops-x11vnc 2>/dev/null || true
+$SUDO systemctl restart pulseops-x11vnc 2>/dev/null || true
 
 echo ""
 echo "✅ PulseOps Agent installed and running!"
