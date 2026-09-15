@@ -50,6 +50,8 @@ try:
     import fleet as fleet_module
     import alerts as alerts_module
     import audit
+    import cron_manager
+    import updates_manager
     ENTERPRISE_AVAILABLE = True
 except ImportError as e:
     ENTERPRISE_AVAILABLE = False
@@ -918,6 +920,134 @@ async def api_test_webhook(
     if not url:
         raise HTTPException(status_code=400, detail="webhook_url is required")
     return await alerts_module.test_webhook_channel(url, channel)
+
+
+# ─── Cron & Timers ────────────────────────────────────────────────────────────
+
+@app.get("/api/cron/jobs")
+async def api_cron_jobs(current_user: Dict = Depends(get_auth_user)):
+    """List user and system cron jobs."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await cron_manager.list_cron_jobs()
+
+
+@app.post("/api/cron/jobs")
+async def api_create_cron_job(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(require_admin)):
+    """Create a new scheduled cron job."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    res = await cron_manager.create_cron_job(
+        schedule=payload.get("schedule", ""),
+        command=payload.get("command", ""),
+        user=payload.get("user", "root"),
+        comment=payload.get("comment", ""),
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.post("/api/cron/jobs/{job_id}/toggle")
+async def api_toggle_cron_job(job_id: str, current_user: Dict = Depends(require_admin)):
+    """Toggle a cron job enabled or disabled."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    res = await cron_manager.toggle_cron_job(job_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.delete("/api/cron/jobs/{job_id}")
+async def api_delete_cron_job(job_id: str, current_user: Dict = Depends(require_admin)):
+    """Delete a cron job."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    res = await cron_manager.delete_cron_job(job_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.post("/api/cron/jobs/run-now")
+async def api_run_cron_now(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(get_auth_user)):
+    """Execute a cron command on-demand."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    if current_user.get("role") not in ("admin", "operator"):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    command = payload.get("command", "")
+    name = payload.get("name", "manual")
+    return await cron_manager.run_cron_now(command, name=name, triggered_by=current_user.get("email", "operator"))
+
+
+@app.get("/api/cron/timers")
+async def api_cron_timers(current_user: Dict = Depends(get_auth_user)):
+    """List systemd timers."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await cron_manager.list_systemd_timers()
+
+
+@app.post("/api/cron/timers/control")
+async def api_control_timer(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(get_auth_user)):
+    """Control systemd timer."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    if current_user.get("role") not in ("admin", "operator"):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    res = await cron_manager.control_systemd_timer(payload.get("timer_unit", ""), payload.get("action", ""))
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.get("/api/cron/history")
+async def api_cron_history(limit: int = Query(50), current_user: Dict = Depends(get_auth_user)):
+    """Get cron execution history."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await cron_manager.get_execution_history(limit)
+
+
+# ─── OS Updates & Patching ───────────────────────────────────────────────────
+
+@app.get("/api/updates/status")
+async def api_updates_status(refresh: Optional[str] = Query(None), current_user: Dict = Depends(get_auth_user)):
+    """Inspect pending system package updates."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await updates_manager.check_updates(force_refresh=(refresh == "1"))
+
+
+@app.get("/api/updates/reboot")
+async def api_updates_reboot(current_user: Dict = Depends(get_auth_user)):
+    """Check if system reboot is required."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await updates_manager.check_reboot_required()
+
+
+@app.post("/api/updates/upgrade")
+async def api_run_upgrade(payload: Dict[str, Any] = Body(default={}), current_user: Dict = Depends(require_admin)):
+    """Run dry-run or live system upgrade."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    dry_run = payload.get("dry_run", False)
+    security_only = payload.get("security_only", False)
+    res = await updates_manager.run_upgrade(dry_run=dry_run, security_only=security_only, user_email=current_user.get("email", "admin"))
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.get("/api/updates/history")
+async def api_updates_history(limit: int = Query(20), current_user: Dict = Depends(get_auth_user)):
+    """Get upgrade execution history."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await updates_manager.get_update_history(limit)
 
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────

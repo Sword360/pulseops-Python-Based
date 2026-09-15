@@ -46,6 +46,15 @@
                 <span class="sidebar-label">Alerts</span>
                 <span class="sidebar-badge" id="sidebar-alert-badge" style="display:none;">0</span>
             </button>
+            <button class="sidebar-btn" data-section="cron" title="Cron Jobs &amp; Timers">
+                <span class="sidebar-icon">⏰</span>
+                <span class="sidebar-label">Cron &amp; Timers</span>
+            </button>
+            <button class="sidebar-btn" data-section="updates" title="OS Updates &amp; Patches">
+                <span class="sidebar-icon">📦</span>
+                <span class="sidebar-label">OS Updates</span>
+                <span class="sidebar-badge" id="sidebar-updates-badge" style="display:none; background:#f59e0b;">0</span>
+            </button>
             <button class="sidebar-btn admin-only" data-section="audit" title="Audit Log">
                 <span class="sidebar-icon">📋</span>
                 <span class="sidebar-label">Audit Log</span>
@@ -1274,6 +1283,224 @@
                                     <div>Configure your SMTP credentials under <a href="#settings" style="color:#38bdf8;" onclick="showSection('settings')">Settings ➜ Email Notifications</a>.</div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── SECTION: Cron Jobs & Systemd Timers ──────────────────────── -->
+            <section id="section-cron" class="app-section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">⏰ Cron Jobs &amp; Systemd Timers</h2>
+                        <p class="section-desc">Manage scheduled background jobs, recurring crontabs, and systemd automation timers.</p>
+                    </div>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-secondary" onclick="CronManager.loadAll()">🔄 Refresh</button>
+                        <button class="btn-primary admin-only" id="create-cron-btn" data-open-modal="create-cron-modal" onclick="window.CronManager && window.CronManager.openCreateJobModal()">+ New Cron Job</button>
+                    </div>
+                </div>
+
+                <!-- KPI Stats -->
+                <div class="user-stats-row">
+                    <div class="fleet-stat-card" style="border-left:4px solid #38bdf8;">
+                        <div class="fleet-stat-value" id="cron-stat-jobs-count">0</div>
+                        <div class="fleet-stat-label">📅 Cron Jobs</div>
+                    </div>
+                    <div class="fleet-stat-card" style="border-left:4px solid #a855f7;">
+                        <div class="fleet-stat-value" id="cron-stat-timers-count">0</div>
+                        <div class="fleet-stat-label">⏱️ Systemd Timers</div>
+                    </div>
+                    <div class="fleet-stat-card online" style="border-left:4px solid #10b981;">
+                        <div class="fleet-stat-value" id="cron-stat-runs-count">0</div>
+                        <div class="fleet-stat-label">🚀 Execution Runs</div>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="tabs-nav" style="margin:1rem 0 1.5rem 0; display:flex; gap:0.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                    <button class="tab-btn active" id="cron-tab-btn-cron" data-cron-tab="cron">
+                        📅 Scheduled Cron Jobs
+                    </button>
+                    <button class="tab-btn" id="cron-tab-btn-timers" data-cron-tab="timers">
+                        ⏱️ Systemd Timers
+                    </button>
+                    <button class="tab-btn" id="cron-tab-btn-history" data-cron-tab="history">
+                        📜 Execution History Log
+                    </button>
+                </div>
+
+                <!-- Tab 1: Cron Jobs -->
+                <div id="cron-view-cron" class="cron-tab-panel">
+                    <div class="card">
+                        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>Active System &amp; User Crontabs</span>
+                            <button class="btn-primary admin-only" style="font-size:0.78rem; padding:0.25rem 0.65rem;" onclick="window.CronManager && window.CronManager.openCreateJobModal()">+ Add Job</button>
+                        </div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:50px;">State</th>
+                                        <th>Schedule / Frequency</th>
+                                        <th>Command &amp; Description</th>
+                                        <th>User</th>
+                                        <th>Origin</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cron-jobs-tbody">
+                                    <tr><td colspan="6" class="empty-table-cell">Loading scheduled jobs...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Systemd Timers -->
+                <div id="cron-view-timers" class="cron-tab-panel" style="display:none;">
+                    <div class="card">
+                        <div class="card-title">Active Systemd Timers &amp; Target Daemons</div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timer Unit</th>
+                                        <th>Activates Target</th>
+                                        <th>Schedule &amp; Trigger Details</th>
+                                        <th>Operations</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cron-timers-tbody">
+                                    <tr><td colspan="4" class="empty-table-cell">Loading systemd timers...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Execution History -->
+                <div id="cron-view-history" class="cron-tab-panel" style="display:none;">
+                    <div class="card">
+                        <div class="card-title">Manual Execution &amp; Trigger Audit Log</div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Command Executed</th>
+                                        <th>Execution Timestamp</th>
+                                        <th>Duration</th>
+                                        <th>Triggered By</th>
+                                        <th>Logs</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cron-history-tbody">
+                                    <tr><td colspan="6" class="empty-table-cell">Loading execution audit log...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── SECTION: OS Updates & Patching ───────────────────────────── -->
+            <section id="section-updates" class="app-section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">📦 OS Patch &amp; Update Center</h2>
+                        <p class="section-desc">Operating system package patch manager, CVE vulnerability tracking, and live upgrade execution.</p>
+                    </div>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-secondary" id="updates-refresh-btn">🔄 Check for Updates</button>
+                        <button class="btn-secondary" id="updates-dry-run-btn" title="Simulate upgrade without altering files">🧪 Dry Run</button>
+                        <button class="btn-primary admin-only" id="updates-sec-upgrade-btn" style="background:#f59e0b; border-color:#fbbf24; color:#000; font-weight:700;">🛡️ Security Patches Only</button>
+                        <button class="btn-primary admin-only" id="updates-full-upgrade-btn">🚀 Upgrade All</button>
+                    </div>
+                </div>
+
+                <!-- Reboot Required Banner -->
+                <div id="updates-reboot-banner" class="alert-critical-banner" style="display:none; background:linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.08)); border-color:rgba(245, 158, 11, 0.45);">
+                    <div class="banner-icon">⚠️</div>
+                    <div class="banner-body">
+                        <div class="banner-title" style="color:#fbbf24;">System Reboot Required</div>
+                        <div class="banner-subtitle" id="updates-reboot-reason">Kernel or critical system library updates have been installed and require a reboot to take effect.</div>
+                    </div>
+                    <button class="btn-secondary" onclick="PulseOpsApp.restartServer()" style="color:#fbbf24; border-color:rgba(245, 158, 11, 0.4);">Reboot Server</button>
+                </div>
+
+                <!-- KPI Stats -->
+                <div class="user-stats-row">
+                    <div class="fleet-stat-card" style="border-left:4px solid #38bdf8;">
+                        <div class="fleet-stat-value" id="updates-stat-total">0</div>
+                        <div class="fleet-stat-label">📦 Upgradable Packages</div>
+                    </div>
+                    <div class="fleet-stat-card" style="border-left:4px solid #ef4444;">
+                        <div class="fleet-stat-value" id="updates-stat-security" style="color:#ef4444;">0</div>
+                        <div class="fleet-stat-label">🚨 Security CVEs</div>
+                    </div>
+                    <div class="fleet-stat-card online" style="border-left:4px solid #10b981;">
+                        <div class="fleet-stat-value" id="updates-stat-reboot" style="color:#10b981; font-size:1.1rem; font-weight:800;">CLEAN</div>
+                        <div class="fleet-stat-label">Reboot Status</div>
+                    </div>
+                    <div class="fleet-stat-card" style="border-left:4px solid #a855f7;">
+                        <div class="fleet-stat-value" id="updates-stat-manager" style="font-size:1.1rem; font-weight:800;">—</div>
+                        <div class="fleet-stat-label">Package Manager</div>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="tabs-nav" style="margin:1rem 0 1.5rem 0; display:flex; gap:0.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                    <button class="tab-btn active" id="updates-tab-btn-packages" data-updates-tab="packages">
+                        📦 Upgradable Packages List
+                    </button>
+                    <button class="tab-btn" id="updates-tab-btn-history" data-updates-tab="history">
+                        📜 Upgrade Session History
+                    </button>
+                </div>
+
+                <!-- Tab 1: Upgradable Packages -->
+                <div id="updates-view-packages" class="updates-tab-panel">
+                    <div class="card">
+                        <div class="card-title">Available System Packages &amp; Security Advisories</div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Classification</th>
+                                        <th>Package Name</th>
+                                        <th>Target Version</th>
+                                        <th>Repository Channel</th>
+                                        <th>Priority</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="updates-packages-tbody">
+                                    <tr><td colspan="5" class="empty-table-cell">Checking repository metadata...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Upgrade History -->
+                <div id="updates-view-history" class="updates-tab-panel" style="display:none;">
+                    <div class="card">
+                        <div class="card-title">Previous Upgrade Execution Sessions</div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Result</th>
+                                        <th>Initiated Timestamp</th>
+                                        <th>Completed Time</th>
+                                        <th>Operator</th>
+                                        <th>Session Logs</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="updates-history-tbody">
+                                    <tr><td colspan="5" class="empty-table-cell">Loading update logs...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -2639,6 +2866,73 @@
         </div>
     </div>
 
+    <!-- Create Scheduled Cron Job Modal -->
+    <div id="create-cron-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:500px;">
+            <div class="modal-header">
+                <h3>⏰ Schedule Recurring Cron Job</h3>
+                <button class="modal-close" data-close-modal="create-cron-modal">×</button>
+            </div>
+            <div class="modal-form">
+                <div class="form-group">
+                    <label class="form-label">Cron Schedule Expression *</label>
+                    <input type="text" id="create-cron-schedule" class="form-input" style="font-family:var(--font-mono);" placeholder="0 2 * * * (e.g. at 02:00 AM daily)">
+                    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.4rem;">
+                        <button type="button" class="alert-action-btn test" data-cron-preset="0 * * * *">Hourly</button>
+                        <button type="button" class="alert-action-btn test" data-cron-preset="0 0 * * *">Midnight</button>
+                        <button type="button" class="alert-action-btn test" data-cron-preset="*/15 * * * *">Every 15m</button>
+                        <button type="button" class="alert-action-btn test" data-cron-preset="0 2 * * 0">Weekly Sun 2AM</button>
+                        <button type="button" class="alert-action-btn test" data-cron-preset="@reboot">On Reboot</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Shell Command to Execute *</label>
+                    <input type="text" id="create-cron-command" class="form-input" style="font-family:var(--font-mono);" placeholder="/usr/bin/certbot renew --quiet or /opt/scripts/backup.sh">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description / Comment (Optional)</label>
+                    <input type="text" id="create-cron-comment" class="form-input" placeholder="e.g. Automated daily database snapshot">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="create-cron-modal">Cancel</button>
+                <button class="btn-primary" id="create-cron-submit-btn">Save Scheduled Job</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cron Command Output Modal -->
+    <div id="cron-output-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:650px;">
+            <div class="modal-header">
+                <h3 id="cron-output-title">Execution Logs</h3>
+                <button class="modal-close" data-close-modal="cron-output-modal">×</button>
+            </div>
+            <div class="modal-form" style="padding:0 1.25rem 1.25rem;">
+                <pre id="cron-output-content" style="background:rgba(0,0,0,0.5); padding:1rem; border-radius:8px; font-family:var(--font-mono); font-size:0.8rem; color:#e2e8f0; max-height:350px; overflow-y:auto; white-space:pre-wrap; border:1px solid var(--border-color);"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="cron-output-modal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgrade Progress & Live Output Modal -->
+    <div id="upgrade-progress-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:700px;">
+            <div class="modal-header">
+                <h3 id="upgrade-modal-title">OS Package Upgrade</h3>
+                <button class="modal-close" data-close-modal="upgrade-progress-modal">×</button>
+            </div>
+            <div class="modal-form" style="padding:0 1.25rem 1.25rem;">
+                <pre id="upgrade-modal-output" style="background:#090d16; padding:1rem; border-radius:8px; font-family:var(--font-mono); font-size:0.78rem; color:#a5f3fc; max-height:400px; overflow-y:auto; white-space:pre-wrap; border:1px solid var(--border-color); line-height:1.45;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="upgrade-modal-done-btn" data-close-modal="upgrade-progress-modal">Done</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -2662,6 +2956,8 @@
     <script src="js/audit.js?v=2.0.3"></script>
     <script src="js/settings.js?v=2.0.3"></script>
     <script src="js/ssl.js?v=2.0.3"></script>
+    <script src="js/cron.js?v=2.0.4"></script>
+    <script src="js/updates.js?v=2.0.4"></script>
     <script src="js/app.js?v=2.0.3"></script>
 </body>
 </html>

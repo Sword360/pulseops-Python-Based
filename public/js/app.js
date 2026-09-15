@@ -325,6 +325,8 @@ class PulseOpsDashboard {
                     window.AlertsManager.loadActiveAlerts();
                     window.AlertsManager.loadAlertRules();
                 }
+                if (section === 'cron' && window.CronManager) window.CronManager.loadAll();
+                if (section === 'updates' && window.UpdatesManager) window.UpdatesManager.loadUpdates();
                 if (section === 'audit' && window.AuditViewer) window.AuditViewer.loadAuditLog(1);
                 if (section === 'settings' && window.SettingsManager) window.SettingsManager.loadSettings();
 
@@ -468,6 +470,10 @@ class PulseOpsDashboard {
         if (typeof UsersManager !== 'undefined' && this.currentUser?.role === 'admin') UsersManager.init();
         // Alerts
         if (typeof AlertsManager !== 'undefined') AlertsManager.init();
+        // Cron & Timers
+        if (typeof CronManager !== 'undefined') CronManager.init();
+        // OS Updates & Patches
+        if (typeof UpdatesManager !== 'undefined') UpdatesManager.init();
         // Audit (admin only)
         if (typeof AuditViewer !== 'undefined' && this.currentUser?.role === 'admin') AuditViewer.init();
         // Settings (admin only)

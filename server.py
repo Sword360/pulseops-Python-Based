@@ -37,6 +37,8 @@ try:
     import fleet as fleet_module
     import alerts as alerts_module
     import audit
+    import cron_manager
+    import updates_manager
     ENTERPRISE_AVAILABLE = True
 except ImportError as _e:
     ENTERPRISE_AVAILABLE = False
@@ -1609,6 +1611,102 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'webhook_url is required'}, 400)
                 result = await alerts_module.test_webhook_channel(url, channel_type)
                 return await send_json_response(writer, result)
+
+            # ── Cron & Timers ──────────────────────────────────────────────────
+            if path == '/api/cron/jobs' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                return await send_json_response(writer, await cron_manager.list_cron_jobs())
+
+            if path == '/api/cron/jobs' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                result = await cron_manager.create_cron_job(
+                    schedule=json_body.get('schedule', ''),
+                    command=json_body.get('command', ''),
+                    user=json_body.get('user', 'root'),
+                    comment=json_body.get('comment', ''),
+                )
+                return await send_json_response(writer, result, status=200 if result.get('success') else 400)
+
+            if path.startswith('/api/cron/jobs/') and path.endswith('/toggle') and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                job_id = path.split('/')[4]
+                result = await cron_manager.toggle_cron_job(job_id)
+                return await send_json_response(writer, result, status=200 if result.get('success') else 400)
+
+            if path.startswith('/api/cron/jobs/') and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                job_id = path.split('/')[4]
+                result = await cron_manager.delete_cron_job(job_id)
+                return await send_json_response(writer, result, status=200 if result.get('success') else 400)
+
+            if path == '/api/cron/jobs/run-now' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Operator access required'}, 403)
+                command = json_body.get('command', '')
+                name = json_body.get('name', 'manual')
+                result = await cron_manager.run_cron_now(command, name=name, triggered_by=user.get('email', 'operator'))
+                return await send_json_response(writer, result)
+
+            if path == '/api/cron/timers' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                return await send_json_response(writer, await cron_manager.list_systemd_timers())
+
+            if path == '/api/cron/timers/control' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Operator access required'}, 403)
+                timer_unit = json_body.get('timer_unit', '')
+                action = json_body.get('action', '')
+                result = await cron_manager.control_systemd_timer(timer_unit, action)
+                return await send_json_response(writer, result, status=200 if result.get('success') else 400)
+
+            if path == '/api/cron/history' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                limit = int(query_params.get('limit', 50))
+                return await send_json_response(writer, await cron_manager.get_execution_history(limit))
+
+            # ── OS Updates & Patching ──────────────────────────────────────────
+            if path == '/api/updates/status' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                force_refresh = query_params.get('refresh') == '1'
+                return await send_json_response(writer, await updates_manager.check_updates(force_refresh=force_refresh))
+
+            if path == '/api/updates/reboot' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                return await send_json_response(writer, await updates_manager.check_reboot_required())
+
+            if path == '/api/updates/upgrade' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                dry_run = json_body.get('dry_run', False)
+                security_only = json_body.get('security_only', False)
+                result = await updates_manager.run_upgrade(dry_run=dry_run, security_only=security_only, user_email=user.get('email', 'admin'))
+                return await send_json_response(writer, result, status=200 if result.get('success') else 400)
+
+            if path == '/api/updates/history' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                limit = int(query_params.get('limit', 20))
+                return await send_json_response(writer, await updates_manager.get_update_history(limit))
 
             # ── Audit log ─────────────────────────────────────────────────────
             if path == '/api/admin/audit' and method == 'GET':

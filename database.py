@@ -147,6 +147,30 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
 
+CREATE TABLE IF NOT EXISTS cron_executions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    command TEXT NOT NULL,
+    exit_code INTEGER,
+    stdout TEXT,
+    stderr TEXT,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    duration_ms INTEGER,
+    triggered_by TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS update_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    initiated_by TEXT NOT NULL,
+    status TEXT NOT NULL,
+    packages_count INTEGER DEFAULT 0,
+    packages_list TEXT,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    finished_at TEXT,
+    log_output TEXT
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT,
