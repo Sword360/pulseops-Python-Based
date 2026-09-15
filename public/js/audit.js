@@ -204,7 +204,13 @@ const AuditViewer = (() => {
 
     // ── Init ──────────────────────────────────────────────────────────────────
 
+    let _initialized = false;
     function init() {
+        if (_initialized) {
+            loadAuditLog(1);
+            return;
+        }
+        _initialized = true;
         const applyBtn = document.getElementById('audit-filter-apply-btn');
         if (applyBtn) applyBtn.addEventListener('click', applyFilters);
 

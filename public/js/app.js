@@ -359,7 +359,10 @@ class PulseOpsDashboard {
                 if (section === 'updates' && window.UpdatesManager) window.UpdatesManager.loadUpdates();
                 if (section === 'proxy' && window.ProxyManager) window.ProxyManager.init();
                 if (section === 'backups' && window.BackupManager) window.BackupManager.init();
-                if (section === 'audit' && window.AuditViewer) window.AuditViewer.loadAuditLog(1);
+                if (section === 'audit' && window.AuditViewer) {
+                    if (typeof window.AuditViewer.init === 'function') window.AuditViewer.init();
+                    else window.AuditViewer.loadAuditLog(1);
+                }
                 if (section === 'settings' && window.SettingsManager) window.SettingsManager.loadSettings();
 
                 // If navigating away from server dashboard, pause remote polling
