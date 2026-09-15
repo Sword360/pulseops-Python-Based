@@ -215,15 +215,18 @@ class PulseOpsVNCManager {
             if (this.serverInfoBox) {
                 if (data.running) {
                     const portsStr = data.openPorts && data.openPorts.length > 0 ? data.openPorts.join(', ') : data.defaultPort;
+                    const clientHost = window.location.hostname || data.host;
+                    const dispNum = (data.defaultPort >= 5900) ? `:${data.defaultPort - 5900}` : data.display;
                     this.serverInfoBox.innerHTML = `
-                        <span style="color: var(--accent-green);">✓ Active VNC Server (${data.activeBackend || 'external'}) listening on ${data.host}:${data.defaultPort}</span><br>
-                        Open ports: <strong>${portsStr}</strong> | Display: <code>${data.display}</code>
+                        <span style="color: var(--accent-green); font-weight: 600;">✓ Active VNC Server (${data.activeBackend || 'external'}) listening on port ${data.defaultPort}</span><br>
+                        <span>Display: <code>${data.display}</code> | Open ports: <strong>${portsStr}</strong></span><br>
+                        <span style="font-size: 0.82rem; color: var(--accent-cyan); display: inline-block; margin-top: 4px;">🖥️ <strong>TightVNC / RealVNC Viewer Target:</strong> <code>${clientHost}:${data.defaultPort}</code> (or <code>${clientHost}${dispNum}</code>)</span>
                     `;
                     if (this.portInput) this.portInput.value = data.defaultPort;
                 } else {
                     this.serverInfoBox.innerHTML = `
                         <span style="color: var(--accent-amber);">ℹ No VNC server currently running.</span><br>
-                        <span style="font-size: 0.75rem; color: var(--text-dim);">Pick a backend below and click "Start Local VNC Server" — it launches a real Linux desktop you can view/control, same as connecting with TightVNC Viewer or RealVNC Viewer.</span>
+                        <span style="font-size: 0.75rem; color: var(--text-dim);">Pick a backend below and click "Start Local VNC Server" — it launches a real Linux desktop you can view in this browser, or connect to using TightVNC Viewer / RealVNC Viewer.</span>
                     `;
                 }
             }
@@ -663,6 +666,17 @@ class PulseOpsVNCManager {
                             const rawPixels = this.rxBuffer.subarray(renderOffset, renderOffset + pixelBytes);
                             this.renderRawPixels(rx, ry, rw, rh, rawPixels);
                             renderOffset += pixelBytes;
+                        } else if (enc === 1) {
+                            // CopyRect: 4 bytes (srcX uint16, srcY uint16)
+                            const srcX = view.getUint16(renderOffset, false);
+                            const srcY = view.getUint16(renderOffset + 2, false);
+                            renderOffset += 4;
+                            if (this.ctx && rw > 0 && rh > 0) {
+                                try {
+                                    const copyData = this.ctx.getImageData(srcX, srcY, rw, rh);
+                                    this.ctx.putImageData(copyData, rx, ry);
+                                } catch (e) {}
+                            }
                         } else if (enc === -223) {
                             this.width = rw;
                             this.height = rh;
@@ -751,28 +765,32 @@ class PulseOpsVNCManager {
     }
 
     renderRawPixels(x, y, w, h, pixelData) {
-        if (!this.ctx) return;
-        const imgData = this.ctx.createImageData(w, h);
-        const data = imgData.data;
+        if (!this.ctx || w <= 0 || h <= 0) return;
+        try {
+            const imgData = this.ctx.createImageData(w, h);
+            const data = imgData.data;
 
-        if (this.redShift === 0) {
-            // Standard RGBA: byte 0=R, 1=G, 2=B, 3=Pad/A
-            for (let i = 0; i < pixelData.length; i += 4) {
-                data[i]     = pixelData[i];     // Red
-                data[i + 1] = pixelData[i + 1]; // Green
-                data[i + 2] = pixelData[i + 2]; // Blue
-                data[i + 3] = 255;              // Alpha
+            if (this.redShift === 0) {
+                // Standard RGBA: byte 0=R, 1=G, 2=B, 3=Pad/A
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    data[i]     = pixelData[i];     // Red
+                    data[i + 1] = pixelData[i + 1]; // Green
+                    data[i + 2] = pixelData[i + 2]; // Blue
+                    data[i + 3] = 255;              // Alpha
+                }
+            } else {
+                // BGRx (e.g. x11vnc with redShift=16, blueShift=0)
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    data[i]     = pixelData[i + 2]; // Red
+                    data[i + 1] = pixelData[i + 1]; // Green
+                    data[i + 2] = pixelData[i];     // Blue
+                    data[i + 3] = 255;              // Alpha
+                }
             }
-        } else {
-            // BGRx (e.g. x11vnc with redShift=16, blueShift=0)
-            for (let i = 0; i < pixelData.length; i += 4) {
-                data[i]     = pixelData[i + 2]; // Red
-                data[i + 1] = pixelData[i + 1]; // Green
-                data[i + 2] = pixelData[i];     // Blue
-                data[i + 3] = 255;              // Alpha
-            }
+            this.ctx.putImageData(imgData, x, y);
+        } catch (err) {
+            console.error('[VNC Render Error]', err);
         }
-        this.ctx.putImageData(imgData, x, y);
     }
 
     // -------------------------------------------------------------

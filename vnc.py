@@ -44,25 +44,25 @@ BACKENDS = {
         'description': 'Full real Linux desktop via TigerVNC\'s Xvnc server. Connect with this viewer, TightVNC Viewer, or RealVNC Viewer.',
         'kind': 'xvnc',
         'binaries': ['vncserver'],
-        'binary_candidates': ['vncserver', 'tigervncserver', 'Xtigervnc'],
+        'binary_candidates': ['Xvnc', 'vncserver', 'tigervncserver', 'Xtigervnc'],
         'port': 5901,
         'install_pkgs': {
-            'dnf': ['tigervnc-server', 'xterm'],
-            'yum': ['tigervnc-server', 'xterm'],
-            'apt-get': ['tigervnc-standalone-server', 'xterm'],
+            'dnf': ['tigervnc-server', 'xterm', 'openbox'],
+            'yum': ['tigervnc-server', 'xterm', 'openbox'],
+            'apt-get': ['tigervnc-standalone-server', 'xterm', 'openbox'],
         },
     },
     'tightvnc': {
         'label': 'TightVNC (Real Linux Desktop)',
-        'description': 'Full real Linux desktop via TightVNC\'s Xvnc server. Behaves like connecting with the classic TightVNC Viewer.',
+        'description': 'Full real Linux desktop via TightVNC / TigerVNC Xvnc server. Compatible with TightVNC Viewer and RealVNC Viewer.',
         'kind': 'xvnc',
         'binaries': ['tightvncserver'],
-        'binary_candidates': ['tightvncserver', 'vncserver'],
+        'binary_candidates': ['tightvncserver', 'Xvnc', 'vncserver'],
         'port': 5903,
         'install_pkgs': {
-            'dnf': ['tigervnc-server', 'xterm'],   # RHEL family ships TigerVNC as the vncserver provider
-            'yum': ['tigervnc-server', 'xterm'],
-            'apt-get': ['tightvncserver', 'xterm'],
+            'dnf': ['tigervnc-server', 'xterm', 'openbox'],   # RHEL family ships TigerVNC as the vncserver provider
+            'yum': ['tigervnc-server', 'xterm', 'openbox'],
+            'apt-get': ['tightvncserver', 'xterm', 'openbox'],
         },
     },
     'x11vnc': {
@@ -73,9 +73,9 @@ BACKENDS = {
         'binary_candidates': [],
         'port': 5902,
         'install_pkgs': {
-            'dnf': ['x11vnc', 'xorg-x11-server-Xvfb', 'xterm'],
-            'yum': ['x11vnc', 'xorg-x11-server-Xvfb', 'xterm'],
-            'apt-get': ['x11vnc', 'xvfb', 'xterm'],
+            'dnf': ['x11vnc', 'xorg-x11-server-Xvfb', 'xterm', 'openbox'],
+            'yum': ['x11vnc', 'xorg-x11-server-Xvfb', 'xterm', 'openbox'],
+            'apt-get': ['x11vnc', 'xvfb', 'xterm', 'openbox'],
         },
     },
 }
@@ -240,11 +240,15 @@ async def _kill_vnc_daemons():
     _active_backend = 'none'
 
     # Fallback: kill by name in case processes were detached (-bg / -fg &)
-    await _run_cmd('pkill -f "Xvfb :99" 2>/dev/null; true', timeout=5)
-    await _run_cmd('pkill -f "x11vnc.*590" 2>/dev/null; true', timeout=5)
+    await _run_cmd('pkill -9 -f "Xvnc :99" 2>/dev/null; true', timeout=5)
+    await _run_cmd('pkill -9 -f "Xvfb :99" 2>/dev/null; true', timeout=5)
+    await _run_cmd('pkill -9 -f "x11vnc.*590" 2>/dev/null; true', timeout=5)
     await _run_cmd('pkill -9 -f "Xtigervnc :99" 2>/dev/null; true', timeout=5)
+    await _run_cmd('pkill -9 -f "openbox" 2>/dev/null; true', timeout=5)
     await _run_cmd('vncserver -kill :99 2>/dev/null; true', timeout=5)
     await _run_cmd('tightvncserver -kill :99 2>/dev/null; true', timeout=5)
+    # Remove stale X11 lock files for display :99
+    await _run_cmd('rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null; true', timeout=5)
 
 
 async def stop_vnc_backend(backend: str = '') -> Dict[str, Any]:
@@ -262,11 +266,11 @@ async def stop_vnc_backend(backend: str = '') -> Dict[str, Any]:
 # ────────────────────────────────────────────────────────────────────────────
 
 async def _launch_xvnc(backend_key: str, port: int, geometry: str = '1280x800') -> Dict[str, Any]:
-    """Launch an Xvnc-family server (TigerVNC's vncserver or TightVNC's tightvncserver).
-    Both tools share essentially the same CLI/behaviour: they start a real,
-    self-contained X server plus your xstartup script, all reachable over RFB.
+    """Launch an Xvnc-family server (TigerVNC or TightVNC).
+    Starts a real, self-contained X server + window manager + xterm,
+    fully reachable over RFB via WebSockets or native RealVNC / TightVNC viewers.
     """
-    global _active_backend, _active_backend_port, _active_display
+    global _active_backend, _active_backend_port, _active_display, _vnc_daemon_proc
 
     info = BACKENDS[backend_key]
     vnc_bin = _find_binary(info['binary_candidates'])
@@ -277,7 +281,7 @@ async def _launch_xvnc(backend_key: str, port: int, geometry: str = '1280x800') 
             'installCmd': _install_cmd_for(backend_key),
         }
 
-    # Kill any existing session on :99 first (any flavor)
+    # Kill any existing session on :99 first
     await _kill_vnc_daemons()
     await asyncio.sleep(0.8)
 
@@ -285,28 +289,24 @@ async def _launch_xvnc(backend_key: str, port: int, geometry: str = '1280x800') 
     vnc_dir = os.path.join(home, '.vnc')
     os.makedirs(vnc_dir, exist_ok=True)
 
-    # xstartup — prefer a real desktop environment if one is installed,
-    # otherwise fall back to a couple of xterms so there's always something
-    # real on screen to look at and type into.
+    # Clean xstartup script: run window manager (openbox / xfce) and xterm.
+    # Note: we explicitly do NOT source /etc/X11/xinit/xinitrc because on RHEL/Rocky
+    # it executes failsafe Xclients and exits immediately if twm is missing.
     xstartup = os.path.join(vnc_dir, 'xstartup')
     with open(xstartup, 'w') as f:
         f.write('#!/bin/sh\n')
         f.write('unset SESSION_MANAGER\n')
         f.write('unset DBUS_SESSION_BUS_ADDRESS\n')
         f.write('export XDG_SESSION_TYPE=x11\n')
-        f.write('[ -r /etc/X11/xinit/xinitrc ] && . /etc/X11/xinit/xinitrc\n')
-        f.write('if which xfce4-session >/dev/null 2>&1; then\n')
-        f.write('    exec startxfce4\n')
-        f.write('elif which openbox-session >/dev/null 2>&1; then\n')
-        f.write('    exec openbox-session\n')
-        f.write('elif which fluxbox >/dev/null 2>&1; then\n')
-        f.write('    fluxbox &\n')
-        f.write('    wait\n')
-        f.write('else\n')
-        f.write('    xterm -geometry 200x50+0+0 -fa "Monospace" -fs 10 -title "PulseOps Terminal" &\n')
-        f.write('    xterm -geometry 100x25+800+0 -fa "Monospace" -fs 10 -title "Shell 2" &\n')
-        f.write('    wait\n')
+        f.write('if which openbox >/dev/null 2>&1; then\n')
+        f.write('    openbox &\n')
+        f.write('elif which xfce4-session >/dev/null 2>&1; then\n')
+        f.write('    startxfce4 &\n')
         f.write('fi\n')
+        f.write('if which xterm >/dev/null 2>&1; then\n')
+        f.write('    xterm -geometry 120x35+50+50 -fa "Monospace" -fs 10 -title "PulseOps Terminal" &\n')
+        f.write('fi\n')
+        f.write('while true; do sleep 60; done\n')
     os.chmod(xstartup, 0o755)
 
     cfg_path = os.path.join(vnc_dir, 'config')
@@ -315,20 +315,43 @@ async def _launch_xvnc(backend_key: str, port: int, geometry: str = '1280x800') 
         f.write('depth=24\n')
         f.write('SecurityTypes=None\n')
 
-    cmd = (
-        f'{vnc_bin} :99 '
-        f'-geometry {geometry} '
-        f'-depth 24 '
-        f'-SecurityTypes None '
-        f'-rfbport {port} '
-        f'-localhost no '
-        f'-fg &'
-    )
-    print(f'[VNC {backend_key}] Launching: {cmd}')
-    rc, stdout, stderr = await _run_cmd(cmd, timeout=15)
-    output = (stdout + stderr).strip()
+    # Prefer direct Xvnc execution if available (modern TigerVNC on RHEL/Rocky/Debian)
+    xvnc_bin = shutil.which('Xvnc')
+    output = ''
+    if xvnc_bin:
+        cmd = f'{xvnc_bin} :99 -geometry {geometry} -depth 24 -rfbport {port} -SecurityTypes None -localhost=0'
+        print(f'[VNC {backend_key}] Launching direct Xvnc: {cmd}')
+        _vnc_daemon_proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        await asyncio.sleep(1.5)
 
-    await asyncio.sleep(2.0)
+        # Launch Openbox WM and xterm on DISPLAY :99
+        wm_cmd = (
+            'DISPLAY=:99 bash -c "'
+            'if which openbox >/dev/null 2>&1; then openbox & fi; '
+            'if which xterm >/dev/null 2>&1; then xterm -geometry 120x35+50+50 -fa \\"Monospace\\" -fs 10 -title \\"PulseOps Terminal\\" & fi"'
+        )
+        await asyncio.create_subprocess_shell(wm_cmd)
+        await asyncio.sleep(1.0)
+    else:
+        # Fallback to wrapper script (e.g. tightvncserver)
+        cmd = (
+            f'{vnc_bin} :99 '
+            f'-geometry {geometry} '
+            f'-depth 24 '
+            f'-SecurityTypes None '
+            f'-rfbport {port} '
+            f'-localhost no '
+            f'-fg &'
+        )
+        print(f'[VNC {backend_key}] Launching: {cmd}')
+        rc, stdout, stderr = await _run_cmd(cmd, timeout=15)
+        output = (stdout + stderr).strip()
+        await asyncio.sleep(2.0)
+
     listening = await check_tcp_port('127.0.0.1', port)
 
     if listening:
@@ -340,7 +363,7 @@ async def _launch_xvnc(backend_key: str, port: int, geometry: str = '1280x800') 
             'backend': backend_key,
             'port': port,
             'display': ':99',
-            'message': f'{info["label"]} running on :99 -> port {port}. Connect now to see a real Linux desktop.',
+            'message': f'{info["label"]} running on :99 -> port {port}. Connect via web or RealVNC / TightVNC Viewer.',
             'output': output,
         }
     return {
@@ -348,7 +371,7 @@ async def _launch_xvnc(backend_key: str, port: int, geometry: str = '1280x800') 
         'backend': backend_key,
         'error': f'{info["label"]} started but port {port} is not listening.',
         'output': output,
-        'hint': 'Check that xterm (or a desktop environment) is installed.',
+        'hint': 'Check that xterm and openbox are installed.',
     }
 
 
@@ -394,8 +417,11 @@ async def launch_backend_x11vnc(port: int = 5902, geometry: str = '1280x800') ->
     if rc_check != 0:
         return {'success': False, 'error': 'Xvfb failed to start on :99.'}
 
+    # Start openbox and xterm on DISPLAY :99
     await _run_cmd(
-        'DISPLAY=:99 xterm -geometry 200x50+0+0 -fa "Monospace" -fs 10 -title "PulseOps Terminal" &',
+        'DISPLAY=:99 bash -c "'
+        'if which openbox >/dev/null 2>&1; then openbox & fi; '
+        'xterm -geometry 120x35+50+50 -fa \\"Monospace\\" -fs 10 -title \\"PulseOps Terminal\\" &"',
         timeout=3
     )
     await asyncio.sleep(0.5)
@@ -426,7 +452,7 @@ async def launch_backend_x11vnc(port: int = 5902, geometry: str = '1280x800') ->
             'backend': 'x11vnc',
             'port': port,
             'display': ':99',
-            'message': f'x11vnc + Xvfb started on :99 -> port {port}. Real Linux xterm desktop visible.',
+            'message': f'x11vnc + Xvfb started on :99 -> port {port}. Real Linux desktop visible.',
         }
     try:
         with open(log_file, 'r') as lf:
