@@ -248,7 +248,7 @@ const AlertsManager = (() => {
 
         tbody.innerHTML = _activeAlerts.map(alert => {
             const sc = getSeverityConfig(alert.severity);
-            const firedAgo = timeSince(new Date(alert.fired_at));
+            const firedAgo = timeSince(alert.fired_at);
             const server = alert.hostname || alert.display_name || alert.server_id || 'master-node';
             const mMeta = METRIC_LABELS[alert.metric] || { label: alert.metric, unit: '' };
 
@@ -391,14 +391,15 @@ const AlertsManager = (() => {
 
         tbody.innerHTML = _alertHistory.map(alert => {
             const sc = getSeverityConfig(alert.severity);
-            const server = alert.hostname || alert.display_name || alert.server_id || 'master-node';
-            const firedAt = alert.fired_at ? new Date(alert.fired_at).toLocaleString() : '—';
-            const resolvedAt = alert.resolved_at ? new Date(alert.resolved_at).toLocaleString() : '<span style="color:#ef4444; font-weight:600;">Active Now</span>';
+            const dFired = parseDate(alert.fired_at);
+            const dResolved = parseDate(alert.resolved_at);
+            const firedAt = dFired ? dFired.toLocaleString() : '—';
+            const resolvedAt = dResolved ? dResolved.toLocaleString() : '<span style="color:#ef4444; font-weight:600;">Active Now</span>';
 
             let duration = '—';
-            if (alert.fired_at && alert.resolved_at) {
-                const diffMs = new Date(alert.resolved_at) - new Date(alert.fired_at);
-                const secs = Math.floor(diffMs / 1000);
+            if (dFired && dResolved) {
+                const diffMs = dResolved.getTime() - dFired.getTime();
+                const secs = Math.max(0, Math.floor(diffMs / 1000));
                 if (secs < 60) duration = `${secs}s`;
                 else if (secs < 3600) duration = `${Math.floor(secs / 60)}m ${secs % 60}s`;
                 else duration = `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
@@ -741,7 +742,7 @@ const AlertsManager = (() => {
 
         panel.innerHTML = _activeAlerts.slice(0, 10).map(alert => {
             const sc = getSeverityConfig(alert.severity);
-            const firedAgo = timeSince(new Date(alert.fired_at));
+            const firedAgo = timeSince(alert.fired_at);
             const server = alert.hostname || alert.display_name || alert.server_id || 'master-node';
             return `
             <div class="alert-item ${sc.cls}">
@@ -786,8 +787,24 @@ const AlertsManager = (() => {
         }
     }
 
-    function timeSince(date) {
-        if (!date || isNaN(date.getTime())) return 'just now';
+    function parseDate(dateInput) {
+        if (!dateInput) return null;
+        if (dateInput instanceof Date) return isNaN(dateInput.getTime()) ? null : dateInput;
+        let s = String(dateInput).trim();
+        if (!s) return null;
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+            s = s.replace(' ', 'T');
+        }
+        if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) {
+            s += 'Z';
+        }
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    function timeSince(dateInput) {
+        const date = parseDate(dateInput);
+        if (!date) return 'just now';
         const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
         if (seconds < 60) return 'just now';
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;

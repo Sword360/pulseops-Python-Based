@@ -148,6 +148,31 @@ async def delete_alert_rule(rule_id: int) -> Dict[str, Any]:
 
 # ─── Incident Lifecycle & Active Alerts ───────────────────────────────────────
 
+def _normalize_iso_utc(ts: Optional[str]) -> Optional[str]:
+    """Ensure a timestamp string is serialized in clean ISO 8601 UTC format with Z."""
+    if not ts:
+        return ts
+    s = str(ts).strip()
+    if not s:
+        return s
+    if " " in s and "T" not in s:
+        s = s.replace(" ", "T")
+    if not s.endswith("Z") and "+" not in s and "-" not in s[10:]:
+        s += "Z"
+    return s
+
+
+def _normalize_alert_row(alert: Dict[str, Any]) -> Dict[str, Any]:
+    res = dict(alert)
+    if "fired_at" in res:
+        res["fired_at"] = _normalize_iso_utc(res["fired_at"])
+    if "resolved_at" in res and res["resolved_at"]:
+        res["resolved_at"] = _normalize_iso_utc(res["resolved_at"])
+    if "acknowledged_at" in res and res["acknowledged_at"]:
+        res["acknowledged_at"] = _normalize_iso_utc(res["acknowledged_at"])
+    return res
+
+
 async def get_active_alerts(server_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Return currently firing or acknowledged (unresolved) alerts."""
     from database import fetchall
@@ -160,13 +185,15 @@ async def get_active_alerts(server_id: Optional[str] = None) -> List[Dict[str, A
         WHERE aa.resolved_at IS NULL
     """
     if server_id:
-        return await fetchall(
+        rows = await fetchall(
             base_query + " AND aa.server_id = ? ORDER BY (CASE WHEN aa.acknowledged_at IS NULL THEN 0 ELSE 1 END), aa.fired_at DESC",
             (server_id,)
         )
-    return await fetchall(
-        base_query + " ORDER BY (CASE WHEN aa.acknowledged_at IS NULL THEN 0 ELSE 1 END), aa.fired_at DESC"
-    )
+    else:
+        rows = await fetchall(
+            base_query + " ORDER BY (CASE WHEN aa.acknowledged_at IS NULL THEN 0 ELSE 1 END), aa.fired_at DESC"
+        )
+    return [_normalize_alert_row(r) for r in rows]
 
 
 async def get_all_alerts(limit: int = 100, server_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -180,11 +207,13 @@ async def get_all_alerts(limit: int = 100, server_id: Optional[str] = None) -> L
         LEFT JOIN servers s ON aa.server_id = s.id
     """
     if server_id:
-        return await fetchall(
+        rows = await fetchall(
             base_query + " WHERE aa.server_id = ? ORDER BY aa.fired_at DESC LIMIT ?",
             (server_id, limit)
         )
-    return await fetchall(base_query + " ORDER BY aa.fired_at DESC LIMIT ?", (limit,))
+    else:
+        rows = await fetchall(base_query + " ORDER BY aa.fired_at DESC LIMIT ?", (limit,))
+    return [_normalize_alert_row(r) for r in rows]
 
 
 async def acknowledge_alert(alert_id: int, user_email: str, note: str = "") -> Dict[str, Any]:
@@ -264,7 +293,7 @@ async def get_alert_stats() -> Dict[str, Any]:
     )
     resolved_today_row = await fetchone(
         "SELECT COUNT(*) as count FROM active_alerts "
-        "WHERE resolved_at >= datetime('now', '-24 hours')"
+        "WHERE datetime(resolved_at) >= datetime('now', '-24 hours')"
     )
     rules_row = await fetchone("SELECT COUNT(*) as count FROM alert_rules WHERE is_active = 1")
 
@@ -277,12 +306,13 @@ async def get_alert_stats() -> Dict[str, Any]:
     }
 
 
-async def _fire_alert(rule_id: int, server_id: str, details: str) -> int:
+async def _fire_alert(rule_id: int, server_id: str, details: str, fired_at_iso: Optional[str] = None) -> int:
     """Insert a new firing alert record."""
     from database import execute
+    now_iso = fired_at_iso or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return await execute(
-        "INSERT INTO active_alerts (rule_id, server_id, fired_at, details) VALUES (?, ?, datetime('now'), ?)",
-        (rule_id, server_id, details)
+        "INSERT INTO active_alerts (rule_id, server_id, fired_at, details) VALUES (?, ?, ?, ?)",
+        (rule_id, server_id, now_iso, details)
     )
 
 
@@ -298,8 +328,8 @@ async def _resolve_alert(alert_id: int) -> None:
     if not alert or alert["resolved_at"]:
         return
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await execute("UPDATE active_alerts SET resolved_at = datetime('now') WHERE id = ?", (alert_id,))
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    await execute("UPDATE active_alerts SET resolved_at = ? WHERE id = ?", (now_iso, alert_id))
     logger.info("[Alerts] Auto-resolved alert id=%d", alert_id)
 
     # Broadcast resolution
@@ -434,7 +464,8 @@ async def evaluate_alerts_for_server(server_id: str, snapshot: Dict[str, Any]) -
                 "threshold": threshold,
                 "operator": operator,
             })
-            alert_id = await _fire_alert(rule["id"], server_id, details)
+            fired_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            alert_id = await _fire_alert(rule["id"], server_id, details, fired_iso)
             alert_info = {
                 "id": alert_id,
                 "alert_id": alert_id,
@@ -446,7 +477,7 @@ async def evaluate_alerts_for_server(server_id: str, snapshot: Dict[str, Any]) -
                 "threshold": threshold,
                 "operator": operator,
                 "server_id": server_id,
-                "fired_at": datetime.now(timezone.utc).isoformat(),
+                "fired_at": fired_iso,
                 "acknowledged_at": None,
                 "is_recovery": False,
             }
@@ -479,7 +510,7 @@ async def evaluate_alerts_for_server(server_id: str, snapshot: Dict[str, Any]) -
                     "value": round(current_value, 2),
                     "threshold": threshold,
                     "server_id": server_id,
-                    "fired_at": existing["fired_at"],
+                    "fired_at": _normalize_iso_utc(existing["fired_at"]),
                     "is_repeat": True,
                     "is_recovery": False,
                 }
@@ -509,7 +540,8 @@ async def evaluate_agent_offline(server_id: str, hostname: str) -> None:
         )
         if not existing:
             details = json.dumps({"hostname": hostname, "reason": "heartbeat_timeout", "metric": "agent_offline"})
-            alert_id = await _fire_alert(rule["id"], server_id, details)
+            fired_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            alert_id = await _fire_alert(rule["id"], server_id, details, fired_iso)
             alert_info = {
                 "id": alert_id,
                 "alert_id": alert_id,
@@ -521,7 +553,7 @@ async def evaluate_agent_offline(server_id: str, hostname: str) -> None:
                 "threshold": 0,
                 "server_id": server_id,
                 "hostname": hostname,
-                "fired_at": datetime.now(timezone.utc).isoformat(),
+                "fired_at": fired_iso,
                 "is_recovery": False,
             }
             logger.warning("[Alerts] FIRED agent_offline for server %s (%s)", server_id, hostname)
@@ -558,7 +590,8 @@ async def evaluate_service_down(server_id: str, service_name: str, is_active: bo
         )
         if not is_active and not existing:
             details = json.dumps({"service": service_name, "state": "down", "metric": "service_down"})
-            alert_id = await _fire_alert(rule["id"], server_id, details)
+            fired_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            alert_id = await _fire_alert(rule["id"], server_id, details, fired_iso)
             alert_info = {
                 "id": alert_id,
                 "alert_id": alert_id,
@@ -568,7 +601,7 @@ async def evaluate_service_down(server_id: str, service_name: str, is_active: bo
                 "metric": "service_down",
                 "value": f"{service_name} (inactive)",
                 "server_id": server_id,
-                "fired_at": datetime.now(timezone.utc).isoformat(),
+                "fired_at": fired_iso,
                 "is_recovery": False,
             }
             logger.warning("[Alerts] FIRED service_down: %s on server %s", service_name, server_id)
