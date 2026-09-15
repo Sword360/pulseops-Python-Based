@@ -813,6 +813,9 @@ async def api_create_alert_rule(
         notify_email=payload.get("notify_email", False),
         notify_webhook=payload.get("notify_webhook", False),
         webhook_url=payload.get("webhook_url"),
+        channel_type=payload.get("channel_type", "webhook"),
+        target_service=payload.get("target_service"),
+        cooldown_minutes=int(payload.get("cooldown_minutes", 15) or 15),
         created_by=current_user["id"],
     )
     if not result["success"]:
@@ -820,9 +823,25 @@ async def api_create_alert_rule(
     return result
 
 
+@app.post("/api/alerts/rules/{rule_id}/toggle")
+async def api_toggle_alert_rule(rule_id: int, current_user: Dict = Depends(require_admin)):
+    """Toggle an alert rule active state."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await alerts_module.toggle_alert_rule(rule_id)
+
+
+@app.post("/api/alerts/rules/{rule_id}/test")
+async def api_test_alert_rule(rule_id: int, current_user: Dict = Depends(require_admin)):
+    """Simulate a test alert notification for a rule."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await alerts_module.test_alert_rule(rule_id)
+
+
 @app.delete("/api/alerts/rules/{rule_id}")
 async def api_delete_alert_rule(rule_id: int, current_user: Dict = Depends(require_admin)):
-    """Deactivate an alert rule."""
+    """Deactivate or delete an alert rule."""
     if not ENTERPRISE_AVAILABLE:
         raise HTTPException(status_code=503)
     return await alerts_module.delete_alert_rule(rule_id)
@@ -833,21 +852,72 @@ async def api_active_alerts(
     server_id: Optional[str] = Query(None),
     current_user: Dict = Depends(get_auth_user),
 ):
-    """List currently active (firing) alerts."""
+    """List currently active (firing or acknowledged) alerts."""
     if not ENTERPRISE_AVAILABLE:
         return []
     return await alerts_module.get_active_alerts(server_id)
 
 
+@app.post("/api/alerts/active/{alert_id}/ack")
+async def api_ack_alert(
+    alert_id: int,
+    payload: Dict[str, Any] = Body(default={}),
+    current_user: Dict = Depends(get_auth_user),
+):
+    """Acknowledge a firing alert."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    return await alerts_module.acknowledge_alert(
+        alert_id, current_user.get("email", "operator"), note=payload.get("note", "")
+    )
+
+
+@app.post("/api/alerts/active/{alert_id}/resolve")
+async def api_resolve_alert(
+    alert_id: int,
+    current_user: Dict = Depends(get_auth_user),
+):
+    """Manually resolve an active alert."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    if current_user.get("role") not in ("admin", "operator"):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    return await alerts_module.resolve_alert_manual(alert_id, current_user.get("email", "operator"))
+
+
 @app.get("/api/alerts/history")
 async def api_alert_history(
     limit: int = Query(100),
+    server_id: Optional[str] = Query(None),
     current_user: Dict = Depends(get_auth_user),
 ):
     """List recent alert history (fired and resolved)."""
     if not ENTERPRISE_AVAILABLE:
         return []
-    return await alerts_module.get_all_alerts(limit)
+    return await alerts_module.get_all_alerts(limit, server_id)
+
+
+@app.get("/api/alerts/stats")
+async def api_alert_stats(current_user: Dict = Depends(get_auth_user)):
+    """Return aggregated incident statistics."""
+    if not ENTERPRISE_AVAILABLE:
+        return {"firing": 0, "acknowledged": 0, "critical": 0, "resolved_24h": 0, "rules_active": 0}
+    return await alerts_module.get_alert_stats()
+
+
+@app.post("/api/alerts/test-webhook")
+async def api_test_webhook(
+    payload: Dict[str, Any] = Body(...),
+    current_user: Dict = Depends(require_admin),
+):
+    """Test webhook endpoint delivery."""
+    if not ENTERPRISE_AVAILABLE:
+        raise HTTPException(status_code=503)
+    url = payload.get("webhook_url", "")
+    channel = payload.get("channel_type", "webhook")
+    if not url:
+        raise HTTPException(status_code=400, detail="webhook_url is required")
+    return await alerts_module.test_webhook_channel(url, channel)
 
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────

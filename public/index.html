@@ -1074,32 +1074,207 @@
                 </div>
             </section>
 
-            <!-- ── SECTION: Alerts & Rules ────────────────────────────────── -->
+            <!-- ── SECTION: Alerts & Incident Center ────────────────────────── -->
             <section id="section-alerts" class="app-section">
                 <div class="section-header">
                     <div>
-                        <h2 class="section-title">🔔 Alerts &amp; Rules</h2>
-                        <p class="section-desc">Monitor alert thresholds and notification rules across your fleet.</p>
+                        <h2 class="section-title">🚨 Alerts &amp; Incident Center</h2>
+                        <p class="section-desc">Real-time anomaly monitoring, multi-channel alerting, and on-call incident triage.</p>
                     </div>
-                    <div style="display:flex; gap:1rem; align-items:center;">
-                        <div class="fleet-stat-card" style="min-width:120px;">
-                            <div class="fleet-stat-value" id="active-alerts-count">0</div>
-                            <div class="fleet-stat-label">Active Alerts</div>
-                        </div>
-                        <div class="fleet-stat-card" style="min-width:120px;">
-                            <div class="fleet-stat-value" id="alert-rules-count">0</div>
-                            <div class="fleet-stat-label">Rules Defined</div>
-                        </div>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-secondary" id="alert-sound-toggle-btn" title="Toggle audio alert chime">
+                            <span id="alert-sound-icon">🔊</span> <span id="alert-sound-label">Audio On</span>
+                        </button>
+                        <button class="btn-secondary" id="alert-desktop-notify-btn" title="Enable browser push notifications">
+                            🔔 Desktop Alerts
+                        </button>
                         <button class="btn-primary admin-only" id="create-rule-btn" data-open-modal="create-rule-modal" onclick="window.openCreateRuleModal && window.openCreateRuleModal()">+ New Alert Rule</button>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-title">📋 Alert Rules</div>
-                    <div class="data-table-wrapper">
-                        <table class="data-table">
-                            <thead><tr><th>Rule Name</th><th>Metric</th><th>Condition</th><th>Severity</th><th>Scope</th><th>Actions</th></tr></thead>
-                            <tbody id="alert-rules-tbody"><tr><td colspan="6" class="empty-table-cell">Loading rules...</td></tr></tbody>
-                        </table>
+
+                <!-- Critical Incident Banner (hidden when 0 critical) -->
+                <div id="alert-critical-banner" class="alert-critical-banner" style="display:none;">
+                    <div class="banner-icon">🚨</div>
+                    <div class="banner-body">
+                        <div class="banner-title" id="alert-critical-banner-title">Critical System Incidents Detected</div>
+                        <div class="banner-subtitle" id="alert-critical-banner-desc">One or more monitored nodes have breached critical reliability thresholds.</div>
+                    </div>
+                    <button class="btn-primary" style="background:#ef4444;border-color:#f87171;" onclick="document.getElementById('alerts-tab-btn-active').click()">Review Incidents</button>
+                </div>
+
+                <!-- Modern Stats Cards -->
+                <div class="user-stats-row">
+                    <div class="fleet-stat-card" style="border-left:4px solid #ef4444;">
+                        <div class="fleet-stat-value" id="alert-stat-firing" style="color:#ef4444;">0</div>
+                        <div class="fleet-stat-label">🔴 Firing Incidents</div>
+                    </div>
+                    <div class="fleet-stat-card" style="border-left:4px solid #f59e0b;">
+                        <div class="fleet-stat-value" id="alert-stat-ack" style="color:#f59e0b;">0</div>
+                        <div class="fleet-stat-label">🟡 In-Progress (Ack)</div>
+                    </div>
+                    <div class="fleet-stat-card online" style="border-left:4px solid #10b981;">
+                        <div class="fleet-stat-value" id="alert-stat-resolved" style="color:#10b981;">0</div>
+                        <div class="fleet-stat-label">🟢 Resolved (24h)</div>
+                    </div>
+                    <div class="fleet-stat-card" style="border-left:4px solid #38bdf8;">
+                        <div class="fleet-stat-value" id="alert-stat-rules">0</div>
+                        <div class="fleet-stat-label">📋 Active Policies</div>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="tabs-nav" style="margin:1rem 0 1.5rem 0; display:flex; gap:0.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                    <button class="tab-btn active" id="alerts-tab-btn-active" data-alert-tab="active">
+                        ⚡ Active Incidents <span class="badge" id="alerts-badge-active-count" style="margin-left:0.35rem; background:#ef4444; color:#fff; padding:0.1rem 0.45rem; border-radius:10px; font-size:0.7rem; display:none;">0</span>
+                    </button>
+                    <button class="tab-btn" id="alerts-tab-btn-rules" data-alert-tab="rules">
+                        📋 Alert Rules &amp; Policies
+                    </button>
+                    <button class="tab-btn" id="alerts-tab-btn-history" data-alert-tab="history">
+                        📜 Incident History Log
+                    </button>
+                    <button class="tab-btn" id="alerts-tab-btn-integrations" data-alert-tab="integrations">
+                        🔔 Webhooks &amp; Simulator
+                    </button>
+                </div>
+
+                <!-- Tab 1: Active Incidents -->
+                <div id="alerts-view-active" class="alert-tab-panel">
+                    <div class="card">
+                        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>⚡ Firing &amp; In-Progress Incidents</span>
+                            <button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.6rem;" onclick="AlertsManager.loadActiveAlerts()">🔄 Refresh</button>
+                        </div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Severity</th>
+                                        <th>Rule / Metric</th>
+                                        <th>Target Server</th>
+                                        <th>Value vs Threshold</th>
+                                        <th>Fired Time</th>
+                                        <th>Triage Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="active-incidents-tbody">
+                                    <tr><td colspan="7" class="empty-table-cell">Checking active incidents...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Alert Rules & Policies -->
+                <div id="alerts-view-rules" class="alert-tab-panel" style="display:none;">
+                    <div class="card">
+                        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>📋 Alert Policies &amp; Thresholds</span>
+                            <button class="btn-primary admin-only" onclick="window.openCreateRuleModal && window.openCreateRuleModal()">+ Add Rule</button>
+                        </div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Rule Name</th>
+                                        <th>Metric &amp; Condition</th>
+                                        <th>Severity</th>
+                                        <th>Scope</th>
+                                        <th>Notifications</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alert-rules-tbody">
+                                    <tr><td colspan="7" class="empty-table-cell">Loading rules...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Incident History Log -->
+                <div id="alerts-view-history" class="alert-tab-panel" style="display:none;">
+                    <div class="card">
+                        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>📜 Resolved Incidents Audit Trail</span>
+                            <button class="btn-secondary" style="font-size:0.75rem; padding:0.25rem 0.6rem;" onclick="AlertsManager.loadAlertHistory()">🔄 Refresh History</button>
+                        </div>
+                        <div class="data-table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Severity</th>
+                                        <th>Server</th>
+                                        <th>Rule</th>
+                                        <th>Metric</th>
+                                        <th>Fired At</th>
+                                        <th>Resolved At</th>
+                                        <th>Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="alert-history-tbody">
+                                    <tr><td colspan="7" class="empty-table-cell">Loading history log...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Webhooks & Simulator -->
+                <div id="alerts-view-integrations" class="alert-tab-panel" style="display:none;">
+                    <div class="settings-grid">
+                        <div class="card">
+                            <div class="card-header-clean">
+                                <h3 class="card-title">🚀 Real-Time Webhook Simulator</h3>
+                            </div>
+                            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">
+                                Send an instant test payload to verify connectivity and formatting with Discord, Slack, Telegram, or any custom HTTP webhook before triggering real incidents.
+                            </p>
+                            <div class="form-group">
+                                <label class="form-label">Channel Type</label>
+                                <select id="simulator-channel-type" class="form-input">
+                                    <option value="discord">Discord Webhook (Rich Embed)</option>
+                                    <option value="slack">Slack Incoming Webhook</option>
+                                    <option value="telegram">Telegram Bot</option>
+                                    <option value="webhook">Generic JSON Webhook</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Webhook Destination URL</label>
+                                <input type="url" id="simulator-webhook-url" class="form-input" placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/...">
+                            </div>
+                            <div style="display:flex; gap:0.75rem; align-items:center; margin-top:1rem;">
+                                <button class="btn-primary" id="simulator-send-btn">🚀 Send Test Alert</button>
+                                <span id="simulator-status-text" style="font-size:0.8rem;"></span>
+                            </div>
+                            <div id="simulator-response-box" style="display:none; margin-top:1rem; padding:0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; font-family:var(--font-mono); font-size:0.78rem;"></div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header-clean">
+                                <h3 class="card-title">📖 Integration Quick Guides</h3>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:0.75rem; font-size:0.82rem; color:var(--text-muted);">
+                                <div>
+                                    <strong style="color:var(--text-main);">🟣 Discord Webhook:</strong>
+                                    <div>Server Settings ➜ Integrations ➜ Webhooks ➜ Create Webhook. Paste the webhook URL into PulseOps.</div>
+                                </div>
+                                <div>
+                                    <strong style="color:var(--text-main);">🟡 Slack Incoming Webhook:</strong>
+                                    <div>Create a Slack App at <code>api.slack.com/apps</code>, enable <em>Incoming Webhooks</em>, and copy the Webhook URL.</div>
+                                </div>
+                                <div>
+                                    <strong style="color:var(--text-main);">✈️ Telegram Bot:</strong>
+                                    <div>Message <code>@BotFather</code> to get a bot token, then format URL: <code>https://api.telegram.org/bot&lt;TOKEN&gt;/sendMessage?chat_id=&lt;CHAT_ID&gt;</code>.</div>
+                                </div>
+                                <div>
+                                    <strong style="color:var(--text-main);">📧 SMTP Email Notifications:</strong>
+                                    <div>Configure your SMTP credentials under <a href="#settings" style="color:#38bdf8;" onclick="showSection('settings')">Settings ➜ Email Notifications</a>.</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -2086,23 +2261,34 @@
 
     <!-- Create Alert Rule Modal -->
     <div id="create-rule-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-card" style="max-width:480px;">
+        <div class="modal-card" style="max-width:520px;">
             <div class="modal-header">
-                <h3>Create Alert Rule</h3>
+                <h3>⚡ Configure Alert Rule Policy</h3>
                 <button class="modal-close" data-close-modal="create-rule-modal">×</button>
             </div>
             <div class="modal-form">
-                <div class="form-group"><label class="form-label">Rule Name *</label><input type="text" id="rule-name" class="form-input" placeholder="High CPU Alert"></div>
+                <div class="form-group">
+                    <label class="form-label">Rule Name *</label>
+                    <input type="text" id="rule-name" class="form-input" placeholder="e.g. Critical High CPU Load or Nginx Down">
+                </div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">Metric *</label>
+                    <div class="form-group">
+                        <label class="form-label">Telemetry Metric *</label>
                         <select id="rule-metric" class="form-input">
-                            <option value="cpu_percent">CPU %</option>
-                            <option value="mem_percent">Memory %</option>
-                            <option value="disk_percent">Disk %</option>
-                            <option value="agent_offline">Agent Offline</option>
+                            <option value="cpu_percent">CPU Utilization (%)</option>
+                            <option value="mem_percent">Memory Usage (%)</option>
+                            <option value="disk_percent">Root Disk Usage (%)</option>
+                            <option value="swap_percent">Swap Memory (%)</option>
+                            <option value="load_avg_1">Load Average (1-min)</option>
+                            <option value="load_avg_15">Load Average (15-min)</option>
+                            <option value="net_rx_mb">Network Inbound (MB/s)</option>
+                            <option value="net_tx_mb">Network Outbound (MB/s)</option>
+                            <option value="agent_offline">Agent Offline / Node Down</option>
+                            <option value="service_down">Systemd Service Down</option>
                         </select>
                     </div>
-                    <div class="form-group"><label class="form-label">Operator *</label>
+                    <div class="form-group" id="rule-operator-group">
+                        <label class="form-label">Condition *</label>
                         <select id="rule-operator" class="form-input">
                             <option value="gt">Greater than (&gt;)</option>
                             <option value="lt">Less than (&lt;)</option>
@@ -2110,28 +2296,94 @@
                         </select>
                     </div>
                 </div>
+
+                <!-- Dynamic Target Service Input (shown when service_down is selected) -->
+                <div class="form-group" id="rule-target-service-group" style="display:none;">
+                    <label class="form-label">Target Systemd Service Name *</label>
+                    <input type="text" id="rule-target-service" class="form-input" placeholder="e.g. nginx, docker, postgresql, sshd">
+                </div>
+
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">Threshold *</label><input type="number" id="rule-threshold" class="form-input" placeholder="85" min="0" max="100"></div>
-                    <div class="form-group"><label class="form-label">Severity</label>
+                    <div class="form-group" id="rule-threshold-group">
+                        <label class="form-label">Threshold Value *</label>
+                        <input type="number" id="rule-threshold" class="form-input" placeholder="85" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Severity Level</label>
                         <select id="rule-severity" class="form-input">
-                            <option value="warning">Warning</option>
-                            <option value="critical">Critical</option>
-                            <option value="info">Info</option>
+                            <option value="warning">🟡 Warning</option>
+                            <option value="critical">🔴 Critical</option>
+                            <option value="info">🔵 Info</option>
                         </select>
                     </div>
                 </div>
-                <div class="form-group"><label class="form-label">Server ID (blank = global rule)</label><input type="text" id="rule-server-id" class="form-input" placeholder="Leave blank for all servers"></div>
-                <div class="form-group" style="display:flex;gap:1.5rem;">
-                    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.85rem;"><input type="checkbox" id="rule-notify-email"> Email Alerts</label>
-                    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.85rem;"><input type="checkbox" id="rule-notify-webhook"> Webhook</label>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Scope (Host Filter)</label>
+                        <input type="text" id="rule-server-id" class="form-input" placeholder="Leave blank for all servers (Global)">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Alert Cooldown</label>
+                        <select id="rule-cooldown" class="form-input">
+                            <option value="5">5 Minutes</option>
+                            <option value="15" selected>15 Minutes</option>
+                            <option value="30">30 Minutes</option>
+                            <option value="60">60 Minutes</option>
+                        </select>
+                    </div>
                 </div>
-                <div id="webhook-url-group" style="display:none;">
-                    <div class="form-group"><label class="form-label">Webhook URL</label><input type="url" id="rule-webhook-url" class="form-input" placeholder="https://hooks.slack.com/..."></div>
+
+                <div class="form-group" style="display:flex; gap:1.5rem; margin-top:0.25rem;">
+                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem;">
+                        <input type="checkbox" id="rule-notify-email"> 📧 Email Alert (SMTP)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.85rem;">
+                        <input type="checkbox" id="rule-notify-webhook"> 🚀 Webhook / Messaging
+                    </label>
+                </div>
+
+                <div id="webhook-url-group" style="display:none; background:rgba(255,255,255,0.02); padding:0.85rem; border-radius:8px; border:1px solid var(--border-color);">
+                    <div class="form-group">
+                        <label class="form-label">Channel Integration Type</label>
+                        <select id="rule-channel-type" class="form-input">
+                            <option value="discord">Discord Webhook</option>
+                            <option value="slack">Slack Incoming Webhook</option>
+                            <option value="telegram">Telegram Bot</option>
+                            <option value="webhook" selected>Standard JSON Webhook</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Destination Webhook URL</label>
+                        <input type="url" id="rule-webhook-url" class="form-input" placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/...">
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" data-close-modal="create-rule-modal">Cancel</button>
-                <button class="btn-primary" id="create-rule-submit-btn">Create Rule</button>
+                <button class="btn-primary" id="create-rule-submit-btn">Save Alert Policy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acknowledge Incident Modal -->
+    <div id="ack-incident-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:440px;">
+            <div class="modal-header">
+                <h3>🟡 Acknowledge Incident</h3>
+                <button class="modal-close" data-close-modal="ack-incident-modal">×</button>
+            </div>
+            <div class="modal-form">
+                <input type="hidden" id="ack-alert-id">
+                <p id="ack-incident-info" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;"></p>
+                <div class="form-group">
+                    <label class="form-label">Triage Note (Optional)</label>
+                    <textarea id="ack-incident-note" class="form-input" style="min-height:75px;" placeholder="e.g. Under investigation by On-Call team; deploying memory patch."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-close-modal="ack-incident-modal">Cancel</button>
+                <button class="btn-primary" id="ack-incident-submit-btn" style="background:#f59e0b; border-color:#fbbf24; color:#000; font-weight:700;">Confirm Acknowledgment</button>
             </div>
         </div>
     </div>

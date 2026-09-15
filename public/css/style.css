@@ -3086,3 +3086,118 @@ input:checked + .toggle-slider::before {
     color: var(--text-muted);
 }
 
+/* ── Modern Incident Command Center & Alerts UI ─────────────────────────────── */
+.alert-critical-banner {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.08));
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.2);
+    animation: pulse-critical-glow 2.5s infinite;
+}
+
+@keyframes pulse-critical-glow {
+    0%, 100% { box-shadow: 0 4px 20px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.45); }
+    50% { box-shadow: 0 4px 30px rgba(239, 68, 68, 0.4); border-color: rgba(239, 68, 68, 0.75); }
+}
+
+.alert-critical-banner .banner-icon {
+    font-size: 1.8rem;
+    flex-shrink: 0;
+}
+
+.alert-critical-banner .banner-body {
+    flex: 1;
+}
+
+.alert-critical-banner .banner-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f87171;
+    margin-bottom: 0.2rem;
+}
+
+.alert-critical-banner .banner-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.triage-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.triage-badge-firing {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    animation: pulse-alert 2s infinite;
+}
+
+.triage-badge-ack {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.triage-badge-resolved {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.alert-action-btn {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.alert-action-btn.ack {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+.alert-action-btn.ack:hover {
+    background: rgba(245, 158, 11, 0.25);
+    border-color: #fbbf24;
+}
+
+.alert-action-btn.resolve {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+.alert-action-btn.resolve:hover {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #34d399;
+}
+
+.alert-action-btn.test {
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.3);
+}
+.alert-action-btn.test:hover {
+    background: rgba(56, 189, 248, 0.22);
+    border-color: #38bdf8;
+}
+
+

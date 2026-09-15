@@ -845,7 +845,9 @@ class PulseOpsDashboard {
                 if (msg.type === 'telemetry')   this.handleTelemetry(msg.data);
                 if (msg.type === 'logStream')   this.handleLogStream(msg.data);
                 if (msg.type === 'fleetUpdate') this._handleFleetUpdate(msg);
-                if (msg.type === 'alert_fired') AlertsManager?.handleAlertEvent(msg);
+                if (msg.type === 'alert_fired' || msg.type === 'alert_acknowledged' || msg.type === 'alert_resolved') {
+                    AlertsManager?.handleAlertEvent(msg);
+                }
             } catch (e) {
                 console.warn('[WS] Parse error:', e);
             }

@@ -334,6 +334,36 @@ async def init_db() -> None:
     except Exception as e:
         logger.warning("[DB] Servers table driver columns migration check: %s", e)
 
+    # Ensure active_alerts has acknowledgment columns
+    try:
+        cursor = await db.execute("PRAGMA table_info(active_alerts)")
+        rows = await cursor.fetchall()
+        cols = [r["name"] for r in rows]
+        if "acknowledged_at" not in cols:
+            await db.execute("ALTER TABLE active_alerts ADD COLUMN acknowledged_at TEXT")
+        if "acknowledged_by" not in cols:
+            await db.execute("ALTER TABLE active_alerts ADD COLUMN acknowledged_by TEXT")
+        if "acknowledged_note" not in cols:
+            await db.execute("ALTER TABLE active_alerts ADD COLUMN acknowledged_note TEXT")
+        await db.commit()
+    except Exception as e:
+        logger.warning("[DB] active_alerts migration check: %s", e)
+
+    # Ensure alert_rules has target_service, cooldown_minutes, and channel_type
+    try:
+        cursor = await db.execute("PRAGMA table_info(alert_rules)")
+        rows = await cursor.fetchall()
+        cols = [r["name"] for r in rows]
+        if "target_service" not in cols:
+            await db.execute("ALTER TABLE alert_rules ADD COLUMN target_service TEXT")
+        if "cooldown_minutes" not in cols:
+            await db.execute("ALTER TABLE alert_rules ADD COLUMN cooldown_minutes INTEGER DEFAULT 15")
+        if "channel_type" not in cols:
+            await db.execute("ALTER TABLE alert_rules ADD COLUMN channel_type TEXT DEFAULT 'webhook'")
+        await db.commit()
+    except Exception as e:
+        logger.warning("[DB] alert_rules migration check: %s", e)
+
     logger.info("[DB] Schema initialized at %s", DB_PATH)
 
 

@@ -1497,13 +1497,14 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 await database.execute("DELETE FROM invite_tokens WHERE token = ?", (token_val,))
                 return await send_json_response(writer, {'success': True})
 
-            # ── Alert rules ───────────────────────────────────────────────────
+            # ── Alert rules & incidents ───────────────────────────────────────────
             if path == '/api/alerts/rules' and method == 'GET':
                 user = await auth.get_current_user(headers.get('authorization', ''))
                 if not user:
                     return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
                 server_id = query_params.get('server_id')
-                return await send_json_response(writer, await alerts_module.list_alert_rules(server_id))
+                include_inactive = query_params.get('all') == '1'
+                return await send_json_response(writer, await alerts_module.list_alert_rules(server_id, include_inactive=include_inactive))
 
             if path == '/api/alerts/rules' and method == 'POST':
                 user = await auth.get_current_user(headers.get('authorization', ''))
@@ -1514,10 +1515,34 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     operator=json_body.get('operator', 'gt'), threshold=json_body.get('threshold'),
                     severity=json_body.get('severity', 'warning'), server_id=json_body.get('server_id'),
                     notify_email=json_body.get('notify_email', False), notify_webhook=json_body.get('notify_webhook', False),
-                    webhook_url=json_body.get('webhook_url'), created_by=user['id'],
+                    webhook_url=json_body.get('webhook_url'), channel_type=json_body.get('channel_type', 'webhook'),
+                    target_service=json_body.get('target_service'), cooldown_minutes=int(json_body.get('cooldown_minutes', 15) or 15),
+                    created_by=user['id'],
                 )
                 if not result['success']:
                     return await send_json_response(writer, {'detail': result['error']}, 400)
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/alerts/rules/') and path.endswith('/toggle') and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                try:
+                    rule_id = int(path.split('/')[4])
+                except (IndexError, ValueError):
+                    return await send_json_response(writer, {'detail': 'Invalid rule ID'}, 400)
+                result = await alerts_module.toggle_alert_rule(rule_id)
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/alerts/rules/') and path.endswith('/test') and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                try:
+                    rule_id = int(path.split('/')[4])
+                except (IndexError, ValueError):
+                    return await send_json_response(writer, {'detail': 'Invalid rule ID'}, 400)
+                result = await alerts_module.test_alert_rule(rule_id)
                 return await send_json_response(writer, result)
 
             if path.startswith('/api/alerts/rules/') and method == 'DELETE':
@@ -1537,6 +1562,53 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
                 server_id = query_params.get('server_id')
                 return await send_json_response(writer, await alerts_module.get_active_alerts(server_id))
+
+            if path.startswith('/api/alerts/active/') and path.endswith('/ack') and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                try:
+                    alert_id = int(path.split('/')[4])
+                except (IndexError, ValueError):
+                    return await send_json_response(writer, {'detail': 'Invalid alert ID'}, 400)
+                result = await alerts_module.acknowledge_alert(alert_id, user.get('email', 'operator'), note=json_body.get('note', ''))
+                return await send_json_response(writer, result)
+
+            if path.startswith('/api/alerts/active/') and path.endswith('/resolve') and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Operator access required'}, 403)
+                try:
+                    alert_id = int(path.split('/')[4])
+                except (IndexError, ValueError):
+                    return await send_json_response(writer, {'detail': 'Invalid alert ID'}, 400)
+                result = await alerts_module.resolve_alert_manual(alert_id, user.get('email', 'operator'))
+                return await send_json_response(writer, result)
+
+            if path == '/api/alerts/history' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                limit = int(query_params.get('limit', 100))
+                server_id = query_params.get('server_id')
+                return await send_json_response(writer, await alerts_module.get_all_alerts(limit, server_id))
+
+            if path == '/api/alerts/stats' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                return await send_json_response(writer, await alerts_module.get_alert_stats())
+
+            if path == '/api/alerts/test-webhook' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                url = json_body.get('webhook_url', '')
+                channel_type = json_body.get('channel_type', 'webhook')
+                if not url:
+                    return await send_json_response(writer, {'detail': 'webhook_url is required'}, 400)
+                result = await alerts_module.test_webhook_channel(url, channel_type)
+                return await send_json_response(writer, result)
 
             # ── Audit log ─────────────────────────────────────────────────────
             if path == '/api/admin/audit' and method == 'GET':
@@ -2023,6 +2095,7 @@ async def send_json_response(writer: asyncio.StreamWriter, data: Dict[str, Any],
         f"HTTP/1.1 {status} {status_text}\r\n"
         "Content-Type: application/json\r\n"
         f"Content-Length: {len(content)}\r\n"
+        "Connection: close\r\n"
         "Access-Control-Allow-Origin: *\r\n"
         "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
         "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
@@ -2035,6 +2108,7 @@ async def send_json_response(writer: asyncio.StreamWriter, data: Dict[str, Any],
 
 # Background task: Telemetry broadcast every 2 seconds
 async def telemetry_broadcast_loop():
+    _cycle_count = 0
     while True:
         await asyncio.sleep(2.0)
         try:
@@ -2042,6 +2116,10 @@ async def telemetry_broadcast_loop():
             if ENTERPRISE_AVAILABLE:
                 try:
                     fleet_module.update_local_snapshot("local-master", data)
+                    _cycle_count += 1
+                    # Evaluate local master alert rules every 4 seconds (every 2 cycles)
+                    if _cycle_count % 2 == 0:
+                        asyncio.create_task(alerts_module.evaluate_alerts_for_server("local-master", data))
                 except Exception:
                     pass
             if connected_ws_clients:
@@ -2094,8 +2172,9 @@ async def main():
             await auth.bootstrap_admin()
             await fleet_module.ensure_local_server(PORT)
             fleet_module.set_broadcast_callback(_fleet_broadcast)
+            alerts_module.set_broadcast_callback(_alert_broadcast)
             asyncio.create_task(fleet_module.fleet_health_poll_loop())
-            print("✅ Enterprise features initialized (DB, Auth, Fleet)")
+            print("✅ Enterprise features initialized (DB, Auth, Fleet, Alerts)")
         except Exception as e:
             print(f"[Warning] Enterprise init error: {e}")
 
@@ -2133,6 +2212,14 @@ async def main():
 
 async def _fleet_broadcast(payload: dict) -> None:
     """Broadcast a fleet update to all connected WebSocket clients."""
+    msg = json.dumps(payload)
+    for ws in list(connected_ws_clients):
+        if ws.open and not ws.is_vnc:
+            asyncio.create_task(ws.send_text(msg))
+
+
+async def _alert_broadcast(payload: dict) -> None:
+    """Broadcast an alert event to all connected WebSocket clients."""
     msg = json.dumps(payload)
     for ws in list(connected_ws_clients):
         if ws.open and not ws.is_vnc:
