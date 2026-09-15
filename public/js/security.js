@@ -80,6 +80,38 @@ class SecurityManager {
             });
         }
 
+        // Hardening Audit DOM
+        this.auditScoreEl = document.getElementById('security-audit-score');
+        this.auditGradeEl = document.getElementById('security-audit-grade');
+        this.auditPassedEl = document.getElementById('security-audit-passed');
+        this.auditWarnEl = document.getElementById('security-audit-warn');
+        this.auditFailedEl = document.getElementById('security-audit-failed');
+        this.auditChecklistEl = document.getElementById('security-audit-checklist');
+        this.auditFilterBtns = document.querySelectorAll('[data-audit-filter]');
+        this.runAuditBtn = document.getElementById('btn-security-run-audit');
+        this.fail2banBadge = document.getElementById('security-fail2ban-badge');
+        this.fail2banInfo = document.getElementById('security-fail2ban-info');
+
+        this.auditFilter = 'all';
+        this.auditData = null;
+
+        if (this.runAuditBtn) {
+            this.runAuditBtn.addEventListener('click', () => {
+                this.loadSecurityAudit(true);
+            });
+        }
+
+        if (this.auditFilterBtns) {
+            this.auditFilterBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    this.auditFilterBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.auditFilter = btn.dataset.auditFilter || 'all';
+                    this.renderAuditChecklist();
+                });
+            });
+        }
+
         // Action delegation
         const handleAction = (e) => {
             const btn = e.target.closest('[data-security-action]');
@@ -93,7 +125,7 @@ class SecurityManager {
                 this.unbanIp(ip);
             } else if (action === 'copy') {
                 const txt = btn.dataset.copyText || ip;
-                if (txt) {
+                if (txt && window.copyToClipboard) {
                     window.copyToClipboard(txt, `Copied ${txt} to clipboard!`);
                 }
             }
@@ -151,6 +183,10 @@ class SecurityManager {
             if (showFeedback && window.showToast) {
                 window.showToast(`Security audit updated: ${data.stats?.total_failed || 0} failed attempts tracked`, 'success', 2000);
             }
+
+            // Also load hardening score audit & fail2ban
+            this.loadSecurityAudit(false);
+            this.loadFail2ban();
         } catch (err) {
             console.error('[Security] Error loading security data:', err);
             const sId = this._getCurrentServerId();
@@ -407,6 +443,153 @@ class SecurityManager {
         } catch (err) {
             console.error('[Security] Unban error:', err);
             if (window.showToast) window.showToast(`Failed to unban IP: ${err.message}`, 'error');
+        }
+    }
+
+    async loadSecurityAudit(forceRun = false) {
+        const sId = this._getCurrentServerId();
+        if (this.runAuditBtn && forceRun) {
+            this.runAuditBtn.disabled = true;
+            this.runAuditBtn.textContent = '⏳ Scanning System Hardening...';
+        }
+
+        try {
+            const url = `/api/security/audit?server_id=${encodeURIComponent(sId)}`;
+            const res = await _authSecurityFetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                this.auditData = data;
+                this.renderAudit(data);
+                if (forceRun && window.showToast) {
+                    window.showToast(`Hardening audit completed: Score ${data.score}/100 (Grade ${data.grade})`, 'success');
+                }
+            }
+        } catch (e) {
+            console.error('[Security] Audit error:', e);
+        } finally {
+            if (this.runAuditBtn) {
+                this.runAuditBtn.disabled = false;
+                this.runAuditBtn.textContent = '🛡️ Run Full Audit Now';
+            }
+        }
+    }
+
+    renderAudit(data) {
+        if (!data) return;
+        const score = data.score || 0;
+        const grade = data.grade || 'F';
+        const counts = data.counts || {};
+
+        if (this.auditScoreEl) {
+            this.auditScoreEl.textContent = `${score}/100`;
+            if (score >= 80) this.auditScoreEl.style.color = 'var(--accent-green)';
+            else if (score >= 60) this.auditScoreEl.style.color = 'var(--accent-amber)';
+            else this.auditScoreEl.style.color = 'var(--accent-red)';
+        }
+
+        if (this.auditGradeEl) {
+            this.auditGradeEl.textContent = grade;
+            let bg = 'rgba(239,68,68,0.2)';
+            let color = 'var(--accent-red)';
+            if (score >= 80) { bg = 'rgba(34,197,94,0.2)'; color = 'var(--accent-green)'; }
+            else if (score >= 60) { bg = 'rgba(245,158,11,0.2)'; color = 'var(--accent-amber)'; }
+            this.auditGradeEl.style.background = bg;
+            this.auditGradeEl.style.color = color;
+        }
+
+        if (this.auditPassedEl) this.auditPassedEl.textContent = counts.passed || 0;
+        if (this.auditWarnEl) this.auditWarnEl.textContent = counts.warning || 0;
+        if (this.auditFailedEl) this.auditFailedEl.textContent = counts.failed || 0;
+
+        this.renderAuditChecklist();
+    }
+
+    renderAuditChecklist() {
+        if (!this.auditChecklistEl || !this.auditData) return;
+        const checks = this.auditData.checks || [];
+
+        let filtered = checks;
+        if (this.auditFilter === 'issues') {
+            filtered = checks.filter(c => c.status !== 'PASS');
+        } else if (this.auditFilter === 'passed') {
+            filtered = checks.filter(c => c.status === 'PASS');
+        }
+
+        if (filtered.length === 0) {
+            this.auditChecklistEl.innerHTML = '<div style="color:var(--text-dim); text-align:center; padding:1.5rem;">No security findings match current filter.</div>';
+            return;
+        }
+
+        this.auditChecklistEl.innerHTML = filtered.map(c => {
+            let statusBadge = '<span class="badge" style="background:rgba(34,197,94,0.15); color:var(--accent-green);">✅ PASS</span>';
+            let borderStyle = 'border-left: 3px solid var(--accent-green);';
+            if (c.status === 'FAIL') {
+                statusBadge = '<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--accent-red);">❌ CRITICAL FAIL</span>';
+                borderStyle = 'border-left: 3px solid var(--accent-red);';
+            } else if (c.status === 'WARN') {
+                statusBadge = '<span class="badge" style="background:rgba(245,158,11,0.15); color:var(--accent-amber);">⚠️ WARNING</span>';
+                borderStyle = 'border-left: 3px solid var(--accent-amber);';
+            } else if (c.status === 'INFO') {
+                statusBadge = '<span class="badge" style="background:rgba(56,189,248,0.15); color:var(--accent-cyan);">ℹ️ INFO</span>';
+                borderStyle = 'border-left: 3px solid var(--accent-cyan);';
+            }
+
+            const impactStr = c.score_impact < 0 ? `<span style="color:var(--accent-red); font-weight:700; font-family:var(--font-mono); font-size:0.75rem;">${c.score_impact} pts</span>` : '<span style="color:var(--text-dim); font-size:0.75rem;">0 pts</span>';
+
+            let remediationHtml = '';
+            if (c.remediation) {
+                remediationHtml = `
+                    <div style="margin-top:0.6rem; padding:0.55rem 0.8rem; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.06); border-radius:6px; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                        <span style="font-family:var(--font-mono); font-size:0.75rem; color:var(--accent-cyan); word-break:break-all;">💡 Fix: ${this._escape(c.remediation)}</span>
+                        <button class="btn btn-sm btn-secondary" onclick="window.copyToClipboard('${this._escape(c.remediation).replace(/'/g, "\\'")}', 'Copied remediation command!');" style="font-size:0.7rem; padding:0.2rem 0.5rem; flex-shrink:0;">📋 Copy</button>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card" style="margin-bottom:0.75rem; padding:0.9rem 1.1rem; ${borderStyle} background:var(--bg-card);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.4rem;">
+                        <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                            <span style="font-weight:600; font-size:0.88rem; color:var(--text-main);">${this._escape(c.title)}</span>
+                            <span class="badge" style="background:rgba(255,255,255,0.06); font-size:0.7rem; color:var(--text-dim);">${this._escape(c.category)}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:0.6rem;">
+                            ${impactStr}
+                            ${statusBadge}
+                        </div>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.4;">
+                        ${this._escape(c.description)}
+                    </div>
+                    ${remediationHtml}
+                </div>
+            `;
+        }).join('');
+    }
+
+    async loadFail2ban() {
+        try {
+            const res = await _authSecurityFetch('/api/security/fail2ban');
+            if (res.ok) {
+                const data = await res.json();
+                if (this.fail2banBadge) {
+                    if (data.running) {
+                        this.fail2banBadge.textContent = `● ACTIVE (${data.total_banned || 0} banned)`;
+                        this.fail2banBadge.className = 'badge badge-online';
+                    } else if (data.installed) {
+                        this.fail2banBadge.textContent = '● STOPPED';
+                        this.fail2banBadge.className = 'badge badge-offline';
+                    } else {
+                        this.fail2banBadge.textContent = '○ NOT INSTALLED';
+                        this.fail2banBadge.className = 'badge';
+                    }
+                }
+                if (this.fail2banInfo) {
+                    this.fail2banInfo.textContent = data.message || '';
+                }
+            }
+        } catch (e) {
+            console.debug('[Security] Fail2ban fetch error:', e);
         }
     }
 

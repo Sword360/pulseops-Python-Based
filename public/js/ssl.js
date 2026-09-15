@@ -738,6 +738,49 @@ class SSLManager {
 
         this.detailsModal.style.display = 'flex';
     }
+
+    async renewCertbot(dryRun = true) {
+        const modeStr = dryRun ? 'Dry-Run Simulation' : 'Live Production Renewal';
+        if (!dryRun && !confirm('Trigger live Let\'s Encrypt certificate renewal for all host certificates?')) return;
+
+        if (window.showToast) window.showToast(`Running Certbot ${modeStr}...`, 'info');
+
+        try {
+            const res = await _authSslFetch('/api/ssl/certbot/renew', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dry_run: dryRun })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                if (window.showToast) {
+                    window.showToast(`✅ ${data.message || 'Certbot completed successfully.'}`, 'success', 5000);
+                }
+                await this.loadSSLData();
+            } else {
+                throw new Error(data.details || data.error || data.stderr || 'Certbot renewal failed');
+            }
+        } catch (e) {
+            console.error('[SSL] Certbot renew error:', e);
+            if (window.showToast) window.showToast('Certbot error: ' + e.message, 'error', 6000);
+        }
+    }
+
+    async checkAllMonitored() {
+        if (window.showToast) window.showToast('Probing all monitored domain endpoints...', 'info');
+        try {
+            const res = await _authSslFetch('/api/ssl/monitored/check-all');
+            const data = await res.json();
+            if (res.ok && data.success) {
+                this.monitoredDomains = data.domains || [];
+                this.renderMonitoredTable();
+                this.updateAggregateCounters();
+                if (window.showToast) window.showToast(`Probed ${this.monitoredDomains.length} monitored domains.`, 'success');
+            }
+        } catch (e) {
+            if (window.showToast) window.showToast('Batch probe error: ' + e.message, 'error');
+        }
+    }
 }
 
 // Global initialization

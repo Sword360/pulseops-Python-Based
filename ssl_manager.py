@@ -543,3 +543,104 @@ def check_certbot_status() -> Dict[str, Any]:
             "binary": certbot_bin,
             "error": str(e)
         }
+
+
+def renew_certbot_sync(dry_run: bool = True) -> Dict[str, Any]:
+    """Execute certbot renewal (dry-run or live production renewal)."""
+    certbot_bin = None
+    for path in ("/usr/bin/certbot", "/usr/local/bin/certbot", "/snap/bin/certbot"):
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            certbot_bin = path
+            break
+
+    if not certbot_bin:
+        proc = subprocess.run(["which", "certbot"], capture_output=True, text=True)
+        if proc.returncode == 0 and proc.stdout.strip():
+            certbot_bin = proc.stdout.strip()
+
+    if not certbot_bin:
+        return {
+            "success": False,
+            "error": "Certbot is not installed. Install via `dnf install certbot` or `apt install certbot`."
+        }
+
+    cmd = [certbot_bin, "renew", "--non-interactive"]
+    if dry_run:
+        cmd.append("--dry-run")
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        return {
+            "success": proc.returncode == 0,
+            "dry_run": dry_run,
+            "binary": certbot_bin,
+            "returncode": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "message": "Renewal dry-run completed successfully." if (proc.returncode == 0 and dry_run) else ("Certificates renewed successfully." if proc.returncode == 0 else "Certbot renewal failed.")
+        }
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Certbot renewal timed out after 60 seconds."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def check_all_monitored_domains_sync() -> List[Dict[str, Any]]:
+    """Probes all monitored domains and updates status in SQLite."""
+    conn = _get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM ssl_monitored_domains ORDER BY id ASC")
+    rows = cur.fetchall()
+
+    updated = []
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    for row in rows:
+        domain_id = row["id"]
+        host = row["host"]
+        port = row["port"] or 443
+
+        probe = probe_tls_endpoint(host, port)
+        if probe.get("success"):
+            cert_data = probe.get("cert") or {}
+            days = cert_data.get("days_remaining")
+            status = cert_data.get("status", "unknown")
+            issuer = cert_data.get("issuer", "")
+            subject = cert_data.get("subject_cn", host)
+            tls_ver = probe.get("tls_version", "")
+            cipher = probe.get("cipher_name", "")
+            latency = probe.get("latency_ms", 0.0)
+
+            cur.execute("""
+                UPDATE ssl_monitored_domains
+                SET last_status = ?, last_checked = ?, days_remaining = ?,
+                    issuer = ?, subject_cn = ?, tls_version = ?, cipher = ?, latency_ms = ?
+                WHERE id = ?
+            """, (status, now_str, days, issuer, subject, tls_ver, cipher, latency, domain_id))
+        else:
+            cur.execute("""
+                UPDATE ssl_monitored_domains
+                SET last_status = 'offline', last_checked = ?
+                WHERE id = ?
+            """, (now_str, domain_id))
+
+    conn.commit()
+    conn.close()
+
+    # Re-fetch updated list
+    return get_monitored_domains_sync()
+
+
+# ─── Async APIs ──────────────────────────────────────────────────────────────
+
+async def renew_certbot(dry_run: bool = True) -> Dict[str, Any]:
+    """Async wrapper to run certbot renewal."""
+    import asyncio
+    return await asyncio.to_thread(renew_certbot_sync, dry_run)
+
+
+async def check_all_monitored_domains() -> List[Dict[str, Any]]:
+    """Async wrapper to probe all monitored domains."""
+    import asyncio
+    return await asyncio.to_thread(check_all_monitored_domains_sync)
+

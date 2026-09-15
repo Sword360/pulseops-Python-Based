@@ -55,6 +55,14 @@
                 <span class="sidebar-label">OS Updates</span>
                 <span class="sidebar-badge" id="sidebar-updates-badge" style="display:none; background:#f59e0b;">0</span>
             </button>
+            <button class="sidebar-btn" data-section="proxy" title="Reverse Proxy Manager">
+                <span class="sidebar-icon">🌐</span>
+                <span class="sidebar-label">Reverse Proxy</span>
+            </button>
+            <button class="sidebar-btn" data-section="backups" title="Backups &amp; Recovery">
+                <span class="sidebar-icon">💾</span>
+                <span class="sidebar-label">Backups</span>
+            </button>
             <button class="sidebar-btn admin-only" data-section="audit" title="Audit Log">
                 <span class="sidebar-icon">📋</span>
                 <span class="sidebar-label">Audit Log</span>
@@ -514,6 +522,73 @@
 
                 <!-- TAB: Security & Threat Intelligence -->
                 <section id="security-tab" class="tab-content">
+                    <!-- System Hardening & Compliance Audit Banner -->
+                    <div class="card" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(15,23,42,0.85), rgba(30,41,59,0.7)); border: 1px solid rgba(56,189,248,0.25);">
+                        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                            <div>
+                                <h3 style="margin:0; font-size:1.15rem; display:flex; align-items:center; gap:0.5rem; color:var(--text-main);">
+                                    <span>🛡️</span> Linux Security Hardening &amp; Compliance Audit
+                                </h3>
+                                <p style="margin:0.25rem 0 0; font-size:0.8rem; color:var(--text-dim);">Deep inspects SSH configuration, firewall enforcement, exposed ports, filesystem permissions, and kernel ASLR.</p>
+                            </div>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <button class="btn btn-primary" id="btn-security-run-audit" style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; padding:0.4rem 0.9rem;">
+                                    <span>🛡️</span> Run Full Audit Now
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Score Dial & Breakdown Row -->
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-top:1.25rem; align-items:center;">
+                            <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:1rem; text-align:center;">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:0.25rem;">Hardening Score</div>
+                                <div id="security-audit-score" style="font-size:2rem; font-weight:800; font-family:var(--font-mono); color:var(--accent-green);">--</div>
+                                <div style="margin-top:0.25rem;">
+                                    <span id="security-audit-grade" class="badge" style="font-size:0.85rem; padding:0.15rem 0.6rem; font-weight:700;">--</span>
+                                </div>
+                            </div>
+
+                            <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:1rem; text-align:center;">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:0.25rem;">Passed Checks</div>
+                                <div id="security-audit-passed" style="font-size:1.8rem; font-weight:800; font-family:var(--font-mono); color:var(--accent-green);">--</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Compliant Rules</div>
+                            </div>
+
+                            <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:1rem; text-align:center;">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:0.25rem;">Warnings / Info</div>
+                                <div id="security-audit-warn" style="font-size:1.8rem; font-weight:800; font-family:var(--font-mono); color:var(--accent-amber);">--</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Advisory Items</div>
+                            </div>
+
+                            <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:1rem; text-align:center;">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:0.25rem;">Critical Failures</div>
+                                <div id="security-audit-failed" style="font-size:1.8rem; font-weight:800; font-family:var(--font-mono); color:var(--accent-red);">--</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Requires Remediation</div>
+                            </div>
+
+                            <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:1rem; text-align:center;">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:0.25rem;">Fail2ban Shield</div>
+                                <div id="security-fail2ban-badge" class="badge" style="margin-top:0.4rem; font-size:0.82rem; font-weight:700;">Checking...</div>
+                                <div id="security-fail2ban-info" style="font-size:0.72rem; color:var(--text-dim); margin-top:4px;">--</div>
+                            </div>
+                        </div>
+
+                        <!-- Filter Tabs & Checklist -->
+                        <div style="margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+                                <div style="font-size:0.9rem; font-weight:700; color:var(--text-main);">Security Hardening Inspection Checklist</div>
+                                <div style="display:flex; gap:0.4rem;">
+                                    <button class="btn-filter active" data-audit-filter="all">All Checks</button>
+                                    <button class="btn-filter" data-audit-filter="issues">Issues Only</button>
+                                    <button class="btn-filter" data-audit-filter="passed">Passed Only</button>
+                                </div>
+                            </div>
+                            <div id="security-audit-checklist" style="max-height:360px; overflow-y:auto; padding-right:4px;">
+                                <div style="text-align:center; padding:1.5rem; color:var(--text-dim);">Running hardening audit...</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Top Metric Cards -->
                     <div class="metrics-grid" style="margin-bottom: 1.25rem;">
                         <div class="metric-card metric-card-disk">
@@ -689,8 +764,11 @@
                                 </h3>
                                 <p style="margin:0.25rem 0 0; font-size:0.8rem; color:var(--text-dim);">Test any public domain, internal server, IP, or microservice endpoint in real-time.</p>
                             </div>
-                            <div style="display:flex; gap:0.5rem; align-items:center;">
-                                <button id="btn-ssl-refresh" class="btn btn-secondary" style="font-size:0.8rem; padding:0.4rem 0.8rem;">🔄 Refresh All</button>
+                            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                                <button id="btn-ssl-check-all" class="btn btn-secondary" onclick="window.sslMgr &amp;&amp; window.sslMgr.checkAllMonitored()" style="font-size:0.8rem; padding:0.4rem 0.8rem;">🌐 Probe All Watchlist</button>
+                                <button id="btn-ssl-certbot-dry" class="btn btn-secondary admin-only" onclick="window.sslMgr &amp;&amp; window.sslMgr.renewCertbot(true)" style="font-size:0.8rem; padding:0.4rem 0.8rem;" title="Test Let's Encrypt certificate renewal without modifying live certs">🧪 Renew (Dry-Run)</button>
+                                <button id="btn-ssl-certbot-live" class="btn btn-primary admin-only" onclick="window.sslMgr &amp;&amp; window.sslMgr.renewCertbot(false)" style="font-size:0.8rem; padding:0.4rem 0.8rem;" title="Execute live Let's Encrypt certificate renewal">🔒 Renew Live</button>
+                                <button id="btn-ssl-refresh" class="btn btn-secondary" style="font-size:0.8rem; padding:0.4rem 0.8rem;">🔄 Refresh</button>
                             </div>
                         </div>
                         <div style="padding: 1rem 0 0.25rem;">
@@ -1502,6 +1580,172 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+            <!-- ── SECTION: Reverse Proxy Manager (Nginx / Caddy / Apache) ── -->
+            <section id="section-proxy" class="app-section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">🌐 Reverse Proxy Manager</h2>
+                        <p class="section-desc">Manage domain routing, SSL termination, and WebSocket proxy passes for Nginx, Caddy, or Apache.</p>
+                    </div>
+                    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-secondary" id="btn-proxy-view-logs">📜 View Proxy Logs</button>
+                        <button class="btn-secondary operator-only" id="btn-proxy-test-syntax">🧪 Test Syntax (nginx -t)</button>
+                        <button class="btn-secondary admin-only" id="btn-proxy-reload">🔄 Graceful Reload</button>
+                        <button class="btn-primary admin-only" id="btn-proxy-create-modal">+ Add Proxy Host</button>
+                        <button class="btn-secondary" id="btn-proxy-refresh">🔄</button>
+                    </div>
+                </div>
+
+                <!-- Engine & Telemetry Cards -->
+                <div class="metrics-grid" style="margin-bottom:1.5rem;">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Active Engine</span>
+                            <div class="metric-icon">🚀</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="proxy-engine-name" style="font-size:1.3rem;">Detecting...</div>
+                            <div class="metric-sub"><span id="proxy-engine-badge" class="badge">--</span></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Total Virtual Hosts</span>
+                            <div class="metric-icon">📑</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="proxy-hosts-count">0</div>
+                            <div class="metric-sub">Configured server blocks</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Active Routes</span>
+                            <div class="metric-icon">🟢</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="proxy-active-hosts" style="color:var(--accent-green);">0</div>
+                            <div class="metric-sub">Traffic currently passing</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Virtual Hosts Table -->
+                <div class="card">
+                    <div class="card-header-flex" style="margin-bottom:0.75rem;">
+                        <h3 class="card-title">Reverse Proxy Routes &amp; Virtual Hosts</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Domain / Server Name</th>
+                                    <th>Listen Ports</th>
+                                    <th>Upstream Forward</th>
+                                    <th>SSL / TLS</th>
+                                    <th>Status</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="proxy-hosts-table-body">
+                                <tr><td colspan="6" class="empty-table-cell">Loading proxy hosts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="proxy-table-empty" style="display:none; text-align:center; padding:2rem; color:var(--text-dim);">
+                        No reverse proxy hosts configured. Click "+ Add Proxy Host" to create your first domain route.
+                    </div>
+                    <div id="proxy-table-loading" style="display:none; text-align:center; padding:2rem; color:var(--text-dim);">
+                        Scanning configuration directories...
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── SECTION: Backup & Disaster Recovery Center ─────────────── -->
+            <section id="section-backups" class="app-section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">💾 Backup &amp; Disaster Recovery</h2>
+                        <p class="section-desc">Create compressed system snapshots, verify archive SHA256 integrity, inspect file manifests, and download archives.</p>
+                    </div>
+                    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-primary admin-only" id="btn-backup-create-modal">+ Create Backup Now</button>
+                        <button class="btn-secondary" id="btn-backup-refresh">🔄 Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="metrics-grid" style="margin-bottom:1.5rem;">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Total Snapshots</span>
+                            <div class="metric-icon">📦</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="backup-stat-total">0</div>
+                            <div class="metric-sub">Stored archive files</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Storage Consumed</span>
+                            <div class="metric-icon">💽</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="backup-stat-size" style="color:var(--accent-cyan);">0 MB</div>
+                            <div class="metric-sub">Compressed tar.gz disk space</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Latest Snapshot</span>
+                            <div class="metric-icon">⏰</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="backup-stat-latest" style="font-size:1.15rem;">None</div>
+                            <div class="metric-sub">Most recent execution</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Storage Directory</span>
+                            <div class="metric-icon">📂</div>
+                        </div>
+                        <div class="metric-body">
+                            <div class="metric-value" id="backup-stat-dir" style="font-size:0.8rem; font-family:var(--font-mono); word-break:break-all;">--</div>
+                            <div class="metric-sub">Local backup repository</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backups Table -->
+                <div class="card">
+                    <div class="card-header-flex" style="margin-bottom:0.75rem;">
+                        <h3 class="card-title">Saved Backup Snapshots</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Archive Filename</th>
+                                    <th>Profile</th>
+                                    <th>Size &amp; Files</th>
+                                    <th>SHA256 Checksum</th>
+                                    <th>Created At</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backup-table-body">
+                                <tr><td colspan="6" class="empty-table-cell">Loading backup snapshots...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="backup-table-empty" style="display:none; text-align:center; padding:2rem; color:var(--text-dim);">
+                        No backups found. Click "+ Create Backup Now" to create your first system snapshot.
+                    </div>
+                    <div id="backup-table-loading" style="display:none; text-align:center; padding:2rem; color:var(--text-dim);">
+                        Querying backup catalog...
                     </div>
                 </div>
             </section>
@@ -2933,6 +3177,154 @@
         </div>
     </div>
 
+    <!-- Create Backup Snapshot Modal -->
+    <div id="modal-create-backup" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:520px; width:95%;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0; font-size:1.1rem; color:var(--accent-cyan);">💾 Create System Backup Snapshot</h3>
+                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Compress selected directories into a verified tar.gz archive</div>
+                </div>
+                <button class="modal-close" data-close-modal="modal-create-backup">×</button>
+            </div>
+            <form id="form-create-backup" style="padding-top:0.75rem;">
+                <div class="form-group">
+                    <label class="form-label">Backup Profile Preset</label>
+                    <select id="backup-profile-select" class="form-input">
+                        <option value="config">System Configurations (/etc/nginx, /etc/ssh, systemd)</option>
+                        <option value="pulseops">PulseOps Database &amp; Application State</option>
+                        <option value="web">Web Applications Root (/var/www or ./public)</option>
+                        <option value="custom">Custom Specified Paths...</option>
+                    </select>
+                </div>
+                <div class="form-group" id="backup-custom-paths-group" style="display:none;">
+                    <label class="form-label">Custom Paths (comma-separated)</label>
+                    <input type="text" id="backup-custom-paths" class="form-input" placeholder="/opt/app, /var/log/my-service, /home/deploy">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Snapshot Notes / Label (Optional)</label>
+                    <input type="text" id="backup-notes" class="form-input" placeholder="e.g. Pre-upgrade system snapshot, weekly maintenance">
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.25rem;">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-create-backup">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-create-backup">Create Backup Now</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Backup Manifest / File Browser Modal -->
+    <div id="modal-backup-manifest" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:650px; width:95%; max-height:85vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div>
+                    <h3 id="backup-manifest-title" style="margin:0; font-size:1.1rem; color:var(--accent-cyan);">Archive Manifest</h3>
+                    <div id="backup-manifest-subtitle" style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Inspecting archived file entries</div>
+                </div>
+                <button class="modal-close" data-close-modal="modal-backup-manifest">×</button>
+            </div>
+            <div style="padding:0.75rem 0 0.5rem 0;">
+                <input type="text" id="backup-manifest-search" class="search-input" placeholder="Filter files inside archive...">
+            </div>
+            <div id="backup-manifest-list" style="overflow-y:auto; flex:1; max-height:400px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid var(--border-color); padding:0.5rem;">
+                <div style="text-align:center; padding:2rem; color:var(--text-dim);">Reading archive entries...</div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; padding-top:0.75rem;">
+                <button class="btn btn-secondary" data-close-modal="modal-backup-manifest">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Reverse Proxy Host Modal -->
+    <div id="modal-create-proxy-host" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:540px; width:95%;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0; font-size:1.1rem; color:var(--accent-cyan);">🌐 Add Reverse Proxy Route</h3>
+                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Route domain requests to internal applications or microservices</div>
+                </div>
+                <button class="modal-close" data-close-modal="modal-create-proxy-host">×</button>
+            </div>
+            <form id="form-create-proxy-host" style="padding-top:0.75rem;">
+                <div class="form-group">
+                    <label class="form-label">Domain Name *</label>
+                    <input type="text" id="proxy-host-domain" class="form-input" placeholder="e.g. api.domain.com or dash.sword.local" required style="font-family:var(--font-mono);">
+                </div>
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:0.75rem;">
+                    <div class="form-group">
+                        <label class="form-label">Forward Target Host *</label>
+                        <input type="text" id="proxy-host-forward-host" class="form-input" value="127.0.0.1" required style="font-family:var(--font-mono);">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Target Port *</label>
+                        <input type="number" id="proxy-host-forward-port" class="form-input" value="8000" min="1" max="65535" required style="font-family:var(--font-mono);">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Protocol Scheme</label>
+                    <select id="proxy-host-scheme" class="form-input">
+                        <option value="http">HTTP (Standard reverse proxy)</option>
+                        <option value="https">HTTPS (Upstream TLS)</option>
+                    </select>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-top:0.5rem;">
+                    <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.82rem; color:var(--text-main); cursor:pointer;">
+                        <input type="checkbox" id="proxy-host-ws" checked> Enable WebSockets
+                    </label>
+                    <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.82rem; color:var(--text-main); cursor:pointer;">
+                        <input type="checkbox" id="proxy-host-ssl"> Enable SSL/TLS
+                    </label>
+                </div>
+                <div class="form-group" style="margin-top:0.75rem;">
+                    <label class="form-label">Client Max Body Size</label>
+                    <input type="text" id="proxy-host-max-body" class="form-input" value="128M" placeholder="e.g. 64M, 128M, 1G">
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:1.25rem;">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-create-proxy-host">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-create-proxy">Create &amp; Activate Route</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Raw Proxy Config Modal -->
+    <div id="modal-proxy-config" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:680px; width:95%;">
+            <div class="modal-header">
+                <h3 id="proxy-config-title" style="margin:0; font-size:1.1rem; color:var(--accent-cyan);">Virtual Host Config</h3>
+                <button class="modal-close" data-close-modal="modal-proxy-config">×</button>
+            </div>
+            <div id="proxy-config-body" style="padding:1rem 0;"></div>
+            <div style="display:flex; justify-content:flex-end;">
+                <button class="btn btn-secondary" data-close-modal="modal-proxy-config">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Proxy Logs Modal -->
+    <div id="modal-proxy-logs" class="modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width:750px; width:95%; max-height:88vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0; font-size:1.1rem; color:var(--accent-cyan);">📜 Nginx Access &amp; Error Logs</h3>
+                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Recent HTTP request telemetry and web daemon logs</div>
+                </div>
+                <button class="modal-close" data-close-modal="modal-proxy-logs">×</button>
+            </div>
+            <!-- Status pills -->
+            <div style="display:flex; gap:0.6rem; padding:0.6rem 0; flex-wrap:wrap;">
+                <span class="badge" style="background:rgba(34,197,94,0.15); color:var(--accent-green);">2xx OK: <strong id="proxy-stat-2xx">0</strong></span>
+                <span class="badge" style="background:rgba(56,189,248,0.15); color:var(--accent-cyan);">3xx Redirect: <strong id="proxy-stat-3xx">0</strong></span>
+                <span class="badge" style="background:rgba(245,158,11,0.15); color:var(--accent-amber);">4xx Client: <strong id="proxy-stat-4xx">0</strong></span>
+                <span class="badge" style="background:rgba(239,68,68,0.15); color:var(--accent-red);">5xx Server: <strong id="proxy-stat-5xx">0</strong></span>
+            </div>
+            <pre id="proxy-logs-container" style="flex:1; max-height:420px; overflow-y:auto; background:#070b13; padding:1rem; border-radius:6px; font-family:var(--font-mono); font-size:0.75rem; color:#e2e8f0; border:1px solid var(--border-color); white-space:pre-wrap; line-height:1.45;">Loading logs...</pre>
+            <div style="display:flex; justify-content:flex-end; padding-top:0.75rem;">
+                <button class="btn btn-secondary" data-close-modal="modal-proxy-logs">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
@@ -2944,7 +3336,7 @@
     <script src="js/docker.js?v=2.0.3"></script>
     <script src="js/ports.js?v=2.0.3"></script>
     <script src="js/firewall.js?v=2.0.3"></script>
-    <script src="js/security.js?v=2.0.3"></script>
+    <script src="js/security.js?v=2.0.4"></script>
     <script src="js/commands.js?v=2.0.3"></script>
     <script src="js/services.js?v=2.0.3"></script>
     <script src="js/processes.js?v=2.0.3"></script>
@@ -2955,9 +3347,11 @@
     <script src="js/alerts.js?v=2.0.3"></script>
     <script src="js/audit.js?v=2.0.3"></script>
     <script src="js/settings.js?v=2.0.3"></script>
-    <script src="js/ssl.js?v=2.0.3"></script>
+    <script src="js/ssl.js?v=2.0.4"></script>
     <script src="js/cron.js?v=2.0.4"></script>
     <script src="js/updates.js?v=2.0.4"></script>
-    <script src="js/app.js?v=2.0.3"></script>
+    <script src="js/proxy.js?v=2.0.4"></script>
+    <script src="js/backup.js?v=2.0.4"></script>
+    <script src="js/app.js?v=2.0.4"></script>
 </body>
 </html>

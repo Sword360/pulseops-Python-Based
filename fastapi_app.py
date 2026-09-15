@@ -41,6 +41,7 @@ import firewall_manager
 import security_manager
 import commands_manager
 import maintenance_manager
+import ssl_manager
 
 # Enterprise modules (gracefully degrade if DB not initialized)
 try:
@@ -52,6 +53,8 @@ try:
     import audit
     import cron_manager
     import updates_manager
+    import backup_manager
+    import proxy_manager
     ENTERPRISE_AVAILABLE = True
 except ImportError as e:
     ENTERPRISE_AVAILABLE = False
@@ -1048,6 +1051,201 @@ async def api_updates_history(limit: int = Query(20), current_user: Dict = Depen
     if not ENTERPRISE_AVAILABLE:
         raise HTTPException(status_code=503)
     return await updates_manager.get_update_history(limit)
+
+
+# ─── Backups & Disaster Recovery ──────────────────────────────────────────────
+
+@app.get("/api/backups")
+async def api_list_backups(current_user: Dict = Depends(get_auth_user)):
+    """List system backups and summary metrics."""
+    return await backup_manager.list_backups()
+
+
+@app.post("/api/backups")
+async def api_create_backup(payload: Dict[str, Any] = Body(default={}), current_user: Dict = Depends(require_admin)):
+    """Create a new backup archive."""
+    b_type = payload.get("type", "config")
+    custom_paths = payload.get("custom_paths")
+    notes = payload.get("notes", "")
+    res = await backup_manager.create_backup(b_type, custom_paths, notes, current_user.get("email", "admin"))
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.get("/api/backups/{backup_id}/contents")
+async def api_backup_contents(backup_id: int, current_user: Dict = Depends(get_auth_user)):
+    """Inspect backup archive file list."""
+    res = await backup_manager.get_backup_contents(backup_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=404, detail=res.get("error"))
+    return res
+
+
+@app.post("/api/backups/{backup_id}/verify")
+async def api_verify_backup(backup_id: int, current_user: Dict = Depends(require_operator)):
+    """Verify archive readability and SHA256 checksum."""
+    return await backup_manager.verify_backup(backup_id)
+
+
+@app.get("/api/backups/{backup_id}/download")
+async def api_download_backup(backup_id: int, current_user: Dict = Depends(get_auth_user)):
+    """Download the compressed backup file."""
+    fpath = await backup_manager.get_backup_path(backup_id)
+    if not fpath or not os.path.isfile(fpath):
+        raise HTTPException(status_code=404, detail="Backup file not found on disk")
+    return FileResponse(fpath, media_type="application/gzip", filename=os.path.basename(fpath))
+
+
+@app.delete("/api/backups/{backup_id}")
+async def api_delete_backup(backup_id: int, current_user: Dict = Depends(require_admin)):
+    """Delete a backup archive and record."""
+    res = await backup_manager.delete_backup(backup_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+# ─── Reverse Proxy Manager (Nginx / Caddy / Apache) ───────────────────────────
+
+@app.get("/api/proxy/hosts")
+async def api_proxy_hosts(current_user: Dict = Depends(get_auth_user)):
+    """List parsed reverse proxy virtual hosts and engine status."""
+    return await proxy_manager.list_proxy_hosts()
+
+
+@app.post("/api/proxy/hosts")
+async def api_create_proxy_host(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(require_admin)):
+    """Create a new reverse proxy host with syntax verification."""
+    res = await proxy_manager.create_proxy_host(
+        domain=payload.get("domain", ""),
+        forward_host=payload.get("forward_host", "127.0.0.1"),
+        forward_port=int(payload.get("forward_port", 80)),
+        forward_scheme=payload.get("forward_scheme", "http"),
+        enable_ssl=bool(payload.get("enable_ssl", False)),
+        ssl_cert_path=payload.get("ssl_cert_path", ""),
+        ssl_key_path=payload.get("ssl_key_path", ""),
+        enable_websocket=bool(payload.get("enable_websocket", True)),
+        max_body_size=payload.get("max_body_size", "128M"),
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.post("/api/proxy/hosts/toggle")
+async def api_toggle_proxy_host(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(require_admin)):
+    """Enable or disable a virtual host file."""
+    res = await proxy_manager.toggle_proxy_host(payload.get("filename", ""))
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.delete("/api/proxy/hosts")
+async def api_delete_proxy_host(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(require_admin)):
+    """Delete a virtual host configuration."""
+    res = await proxy_manager.delete_proxy_host(payload.get("filename", ""))
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.post("/api/proxy/test")
+async def api_proxy_test(current_user: Dict = Depends(require_operator)):
+    """Run proxy configuration syntax validation test."""
+    return await proxy_manager.test_proxy_syntax()
+
+
+@app.post("/api/proxy/reload")
+async def api_proxy_reload(current_user: Dict = Depends(require_admin)):
+    """Reload reverse proxy daemon."""
+    res = await proxy_manager.reload_proxy()
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.get("/api/proxy/logs")
+async def api_proxy_logs(lines: int = Query(50), current_user: Dict = Depends(get_auth_user)):
+    """Read recent reverse proxy access and error logs."""
+    return await proxy_manager.get_proxy_logs(lines)
+
+
+# ─── SSL / TLS Certificate Manager ────────────────────────────────────────────
+
+@app.get("/api/ssl/certificates")
+async def api_ssl_certificates(current_user: Dict = Depends(get_auth_user)):
+    """Scan local host certificates."""
+    certs = ssl_manager.scan_host_certificates()
+    return {"success": True, "certificates": certs}
+
+
+@app.get("/api/ssl/monitored")
+async def api_ssl_monitored(current_user: Dict = Depends(get_auth_user)):
+    """List monitored domain endpoints."""
+    domains = ssl_manager.get_monitored_domains_sync()
+    return {"success": True, "domains": domains}
+
+
+@app.post("/api/ssl/monitored")
+async def api_ssl_add_monitored(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(require_operator)):
+    """Add a domain to the SSL monitoring watchlist."""
+    host = payload.get("host", "").strip()
+    port = int(payload.get("port", 443))
+    label = payload.get("label", "").strip()
+    return ssl_manager.add_monitored_domain_sync(host, port=port, label=label)
+
+
+@app.delete("/api/ssl/monitored/{domain_id}")
+async def api_ssl_delete_monitored(domain_id: int, current_user: Dict = Depends(require_operator)):
+    """Remove a domain from SSL monitoring."""
+    return ssl_manager.delete_monitored_domain_sync(domain_id)
+
+
+@app.post("/api/ssl/probe")
+async def api_ssl_probe(payload: Dict[str, Any] = Body(...), current_user: Dict = Depends(get_auth_user)):
+    """Live TLS probe on arbitrary host/port."""
+    host = payload.get("host", "").strip()
+    port = int(payload.get("port", 443))
+    return ssl_manager.probe_tls_endpoint(host, port=port)
+
+
+@app.get("/api/ssl/certbot")
+async def api_ssl_certbot(current_user: Dict = Depends(get_auth_user)):
+    """Check Certbot / Let's Encrypt status."""
+    return ssl_manager.check_certbot_status()
+
+
+@app.post("/api/ssl/certbot/renew")
+async def api_ssl_certbot_renew(payload: Dict[str, Any] = Body(default={}), current_user: Dict = Depends(require_admin)):
+    """Trigger Certbot renewal (dry-run or live)."""
+    dry_run = payload.get("dry_run", True)
+    res = await ssl_manager.renew_certbot(dry_run=dry_run)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+
+@app.get("/api/ssl/monitored/check-all")
+async def api_ssl_check_all(current_user: Dict = Depends(get_auth_user)):
+    """Batch probe all monitored endpoints."""
+    res = await ssl_manager.check_all_monitored_domains()
+    return {"success": True, "domains": res}
+
+
+# ─── Security Hardening & Threat Intelligence ─────────────────────────────────
+
+@app.get("/api/security/audit")
+async def api_security_audit(current_user: Dict = Depends(get_auth_user)):
+    """Run system security and hardening audit."""
+    return await security_manager.run_security_audit()
+
+
+@app.get("/api/security/fail2ban")
+async def api_security_fail2ban(current_user: Dict = Depends(get_auth_user)):
+    """Get fail2ban daemon status, jails, and banned IPs."""
+    return await security_manager.get_fail2ban_status()
 
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────

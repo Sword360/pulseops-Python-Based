@@ -39,6 +39,8 @@ try:
     import audit
     import cron_manager
     import updates_manager
+    import backup_manager
+    import proxy_manager
     ENTERPRISE_AVAILABLE = True
 except ImportError as _e:
     ENTERPRISE_AVAILABLE = False
@@ -803,6 +805,25 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 )
             return await send_json_response(writer, res_data, status=200 if res_data.get('success') else 400)
 
+        if path == '/api/security/audit' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            target_server = query_params.get('server_id') or query_params.get('serverId')
+            if target_server and target_server != 'local-master':
+                res_data, code = await proxy_to_agent(target_server, '/api/security/audit', 'GET')
+                return await send_json_response(writer, res_data, status=code)
+            res = await security_manager.run_security_audit()
+            return await send_json_response(writer, res)
+
+        if path == '/api/security/fail2ban' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            return await send_json_response(writer, await security_manager.get_fail2ban_status())
+
         # ─── SSL / TLS Certificate Manager Endpoints ─────────────────
         if path == '/api/ssl/certificates' and method == 'GET':
             if ENTERPRISE_AVAILABLE:
@@ -892,6 +913,23 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 res_data, code = await proxy_to_agent(target_server, '/api/ssl/certbot', 'GET')
                 return await send_json_response(writer, res_data, status=code)
             return await send_json_response(writer, ssl_manager.check_certbot_status())
+
+        if path == '/api/ssl/certbot/renew' and method == 'POST':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+            dry_run = json_body.get('dry_run', True)
+            res = await ssl_manager.renew_certbot(dry_run=dry_run)
+            return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+        if path == '/api/ssl/monitored/check-all' and method == 'GET':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+            res = await ssl_manager.check_all_monitored_domains()
+            return await send_json_response(writer, {'success': True, 'domains': res})
 
         # ─── Saved Commands & Runbooks Endpoints ─────────────────────
         if path == '/api/commands' and method == 'GET':
@@ -1707,6 +1745,128 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
                 limit = int(query_params.get('limit', 20))
                 return await send_json_response(writer, await updates_manager.get_update_history(limit))
+
+            # ── Backups & Disaster Recovery ───────────────────────────────────
+            if path == '/api/backups' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                return await send_json_response(writer, await backup_manager.list_backups())
+
+            if path == '/api/backups' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                backup_type = json_body.get('type', 'config')
+                custom_paths = json_body.get('custom_paths')
+                notes = json_body.get('notes', '')
+                res = await backup_manager.create_backup(backup_type, custom_paths, notes, user.get('email', 'admin'))
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+            if path.startswith('/api/backups/') and path.endswith('/contents') and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                bid = int(path.split('/')[3])
+                return await send_json_response(writer, await backup_manager.get_backup_contents(bid))
+
+            if path.startswith('/api/backups/') and path.endswith('/verify') and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Operator access required'}, 403)
+                bid = int(path.split('/')[3])
+                return await send_json_response(writer, await backup_manager.verify_backup(bid))
+
+            if path.startswith('/api/backups/') and path.endswith('/download') and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                bid = int(path.split('/')[3])
+                fpath = await backup_manager.get_backup_path(bid)
+                if not fpath or not os.path.isfile(fpath):
+                    return await send_json_response(writer, {'detail': 'Backup file not found'}, 404)
+                fname = os.path.basename(fpath)
+                fsize = os.path.getsize(fpath)
+                header_str = (
+                    f"HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: application/gzip\r\n"
+                    f"Content-Disposition: attachment; filename=\"{fname}\"\r\n"
+                    f"Content-Length: {fsize}\r\n"
+                    f"Connection: close\r\n\r\n"
+                )
+                writer.write(header_str.encode('utf-8'))
+                with open(fpath, 'rb') as f:
+                    while chunk := f.read(65536):
+                        writer.write(chunk)
+                        await writer.drain()
+                writer.close()
+                await writer.wait_closed()
+                return
+
+            if path.startswith('/api/backups/') and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                bid = int(path.split('/')[3])
+                return await send_json_response(writer, await backup_manager.delete_backup(bid))
+
+            # ── Reverse Proxy Manager (Nginx / Caddy / Apache) ─────────────────
+            if path == '/api/proxy/hosts' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                return await send_json_response(writer, await proxy_manager.list_proxy_hosts())
+
+            if path == '/api/proxy/hosts' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                res = await proxy_manager.create_proxy_host(
+                    domain=json_body.get('domain', ''),
+                    forward_host=json_body.get('forward_host', '127.0.0.1'),
+                    forward_port=int(json_body.get('forward_port', 80)),
+                    forward_scheme=json_body.get('forward_scheme', 'http'),
+                    enable_ssl=bool(json_body.get('enable_ssl', False)),
+                    ssl_cert_path=json_body.get('ssl_cert_path', ''),
+                    ssl_key_path=json_body.get('ssl_key_path', ''),
+                    enable_websocket=bool(json_body.get('enable_websocket', True)),
+                    max_body_size=json_body.get('max_body_size', '128M'),
+                )
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+            if path == '/api/proxy/hosts/toggle' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                res = await proxy_manager.toggle_proxy_host(json_body.get('filename', ''))
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+            if path == '/api/proxy/hosts' and method == 'DELETE':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                res = await proxy_manager.delete_proxy_host(json_body.get('filename', ''))
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+            if path == '/api/proxy/test' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Operator access required'}, 403)
+                return await send_json_response(writer, await proxy_manager.test_proxy_syntax())
+
+            if path == '/api/proxy/reload' and method == 'POST':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') != 'admin':
+                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                res = await proxy_manager.reload_proxy()
+                return await send_json_response(writer, res, status=200 if res.get('success') else 400)
+
+            if path == '/api/proxy/logs' and method == 'GET':
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user:
+                    return await send_json_response(writer, {'detail': 'Unauthorized'}, 401)
+                lines = int(query_params.get('lines', 50))
+                return await send_json_response(writer, await proxy_manager.get_proxy_logs(lines))
 
             # ── Audit log ─────────────────────────────────────────────────────
             if path == '/api/admin/audit' and method == 'GET':

@@ -227,6 +227,37 @@ CREATE TABLE IF NOT EXISTS ssl_monitored_domains (
     latency_ms REAL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS backups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    filepath TEXT NOT NULL,
+    backup_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    file_count INTEGER DEFAULT 0,
+    checksum TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by TEXT NOT NULL DEFAULT 'admin',
+    status TEXT NOT NULL DEFAULT 'completed',
+    notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_backups_created ON backups(created_at);
+
+CREATE TABLE IF NOT EXISTS security_audits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+    score INTEGER NOT NULL,
+    grade TEXT NOT NULL,
+    passed_checks INTEGER NOT NULL,
+    warning_checks INTEGER NOT NULL,
+    failed_checks INTEGER NOT NULL,
+    details_json TEXT,
+    triggered_by TEXT NOT NULL DEFAULT 'system'
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_audits_ts ON security_audits(timestamp);
 """
 
 DEFAULT_SETTINGS = [

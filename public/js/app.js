@@ -292,9 +292,35 @@ class PulseOpsDashboard {
         const collapseBtn = document.getElementById('sidebar-collapse-btn');
         const toggleBtn   = document.getElementById('sidebar-toggle-btn');
 
+        // Mobile drawer backdrop
+        let backdrop = document.getElementById('sidebar-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.id = 'sidebar-backdrop';
+            backdrop.className = 'sidebar-backdrop';
+            document.body.appendChild(backdrop);
+        }
+
+        const closeMobileDrawer = () => {
+            sidebar?.classList.remove('mobile-open');
+            backdrop?.classList.remove('active');
+        };
+
+        const toggleMobileDrawer = () => {
+            const isOpen = sidebar?.classList.contains('mobile-open');
+            if (isOpen) {
+                closeMobileDrawer();
+            } else {
+                sidebar?.classList.add('mobile-open');
+                backdrop?.classList.add('active');
+            }
+        };
+
+        backdrop.addEventListener('click', closeMobileDrawer);
+
         // Check stored state
         const collapsed = localStorage.getItem('pulseops-sidebar-collapsed') === 'true';
-        if (collapsed) this._collapseSidebar(true);
+        if (collapsed && window.innerWidth > 768) this._collapseSidebar(true);
 
         collapseBtn?.addEventListener('click', () => {
             const isCollapsed = sidebar.classList.contains('collapsed');
@@ -303,8 +329,12 @@ class PulseOpsDashboard {
         });
 
         toggleBtn?.addEventListener('click', () => {
-            const isCollapsed = sidebar.classList.contains('collapsed');
-            this._collapseSidebar(!isCollapsed);
+            if (window.innerWidth <= 768) {
+                toggleMobileDrawer();
+            } else {
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                this._collapseSidebar(!isCollapsed);
+            }
         });
 
         // Section navigation
@@ -327,6 +357,8 @@ class PulseOpsDashboard {
                 }
                 if (section === 'cron' && window.CronManager) window.CronManager.loadAll();
                 if (section === 'updates' && window.UpdatesManager) window.UpdatesManager.loadUpdates();
+                if (section === 'proxy' && window.ProxyManager) window.ProxyManager.init();
+                if (section === 'backups' && window.BackupManager) window.BackupManager.init();
                 if (section === 'audit' && window.AuditViewer) window.AuditViewer.loadAuditLog(1);
                 if (section === 'settings' && window.SettingsManager) window.SettingsManager.loadSettings();
 
@@ -336,8 +368,8 @@ class PulseOpsDashboard {
                     this.serverPollTimer = null;
                 }
 
-                // Mobile: collapse sidebar after nav
-                if (window.innerWidth < 768) this._collapseSidebar(true);
+                // Mobile: close drawer after nav
+                if (window.innerWidth <= 768) closeMobileDrawer();
             });
         });
 
@@ -474,6 +506,10 @@ class PulseOpsDashboard {
         if (typeof CronManager !== 'undefined') CronManager.init();
         // OS Updates & Patches
         if (typeof UpdatesManager !== 'undefined') UpdatesManager.init();
+        // Reverse Proxy Manager
+        if (typeof ProxyManager !== 'undefined') ProxyManager.init();
+        // Backup & Disaster Recovery
+        if (typeof BackupManager !== 'undefined') BackupManager.init();
         // Audit (admin only)
         if (typeof AuditViewer !== 'undefined' && this.currentUser?.role === 'admin') AuditViewer.init();
         // Settings (admin only)
