@@ -6,7 +6,7 @@
     <meta name="description" content="PulseOps Enterprise — Multi-Server Linux Operations Dashboard">
     <meta name="theme-color" content="#070a11">
     <title>PulseOps Enterprise</title>
-    <link rel="stylesheet" href="css/style.css?v=2.0.2">
+    <link rel="stylesheet" href="css/style.css?v=2.0.3">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
@@ -224,7 +224,7 @@
                     <button class="tab-btn" data-tab="processes">⚡ Processes</button>
                     <button class="tab-btn" data-tab="logs">📜 Live Logs</button>
                     <button class="tab-btn operator-only" data-tab="terminal">💻 Terminal</button>
-                    <button class="tab-btn" data-tab="vnc">🖥️ VNC</button>
+                    <button class="tab-btn operator-only" data-tab="vnc">🖥️ VNC</button>
                 </nav>
 
                 <!-- Remote Node Notice Banner -->
@@ -905,7 +905,7 @@
                 </section>
 
                 <!-- TAB: VNC Desktop -->
-                <section id="vnc-tab" class="tab-content">
+                <section id="vnc-tab" class="tab-content operator-only">
                     <div class="card vnc-container-card">
                         <!-- Top Bar: Target & Controls -->
                         <div class="vnc-header-bar">
@@ -2393,23 +2393,23 @@
     <!-- ═══════════════════════════════════════════════════════════════════════
          SCRIPTS
          ═══════════════════════════════════════════════════════════════════════ -->
-    <script src="js/auth.js?v=2.0.2"></script>
-    <script src="js/charts.js?v=2.0.2"></script>
-    <script src="js/docker.js?v=2.0.2"></script>
-    <script src="js/ports.js?v=2.0.2"></script>
-    <script src="js/firewall.js?v=2.0.2"></script>
-    <script src="js/security.js?v=2.0.2"></script>
-    <script src="js/commands.js?v=2.0.2"></script>
-    <script src="js/services.js?v=2.0.2"></script>
-    <script src="js/processes.js?v=2.0.2"></script>
-    <script src="js/logs.js?v=2.0.2"></script>
-    <script src="js/vnc.js?v=2.0.2"></script>
-    <script src="js/fleet.js?v=2.0.2"></script>
-    <script src="js/users.js?v=2.0.2"></script>
-    <script src="js/alerts.js?v=2.0.2"></script>
-    <script src="js/audit.js?v=2.0.2"></script>
-    <script src="js/settings.js?v=2.0.2"></script>
-    <script src="js/ssl.js?v=2.0.2"></script>
-    <script src="js/app.js?v=2.0.2"></script>
+    <script src="js/auth.js?v=2.0.3"></script>
+    <script src="js/charts.js?v=2.0.3"></script>
+    <script src="js/docker.js?v=2.0.3"></script>
+    <script src="js/ports.js?v=2.0.3"></script>
+    <script src="js/firewall.js?v=2.0.3"></script>
+    <script src="js/security.js?v=2.0.3"></script>
+    <script src="js/commands.js?v=2.0.3"></script>
+    <script src="js/services.js?v=2.0.3"></script>
+    <script src="js/processes.js?v=2.0.3"></script>
+    <script src="js/logs.js?v=2.0.3"></script>
+    <script src="js/vnc.js?v=2.0.3"></script>
+    <script src="js/fleet.js?v=2.0.3"></script>
+    <script src="js/users.js?v=2.0.3"></script>
+    <script src="js/alerts.js?v=2.0.3"></script>
+    <script src="js/audit.js?v=2.0.3"></script>
+    <script src="js/settings.js?v=2.0.3"></script>
+    <script src="js/ssl.js?v=2.0.3"></script>
+    <script src="js/app.js?v=2.0.3"></script>
 </body>
 </html>

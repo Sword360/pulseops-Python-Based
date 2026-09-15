@@ -1942,7 +1942,7 @@ async def websocket_vnc_proxy(
         if not auth_hdr and token:
             auth_hdr = f"Bearer {token}"
         user = await auth.get_current_user(auth_hdr)
-        if not user:
+        if not user or user.get("role") not in ("admin", "operator"):
             await websocket.close(code=1008)
             return
 

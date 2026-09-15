@@ -335,6 +335,10 @@ class PulseOpsVNCManager {
     }
 
     async launchHostDaemon() {
+        if (window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
+            if (window.showToast) window.showToast('Permission denied: Viewer accounts cannot launch VNC sessions', 'error');
+            return;
+        }
         this.log(`Starting x11vnc on ${this.targetHostname} (${this.serverId})...`);
         if (window.showToast) window.showToast(`Starting x11vnc on ${this.targetHostname}...`, 'info');
         try {
@@ -366,6 +370,10 @@ class PulseOpsVNCManager {
     }
 
     async stopHostDaemon() {
+        if (window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
+            if (window.showToast) window.showToast('Permission denied: Viewer accounts cannot stop VNC sessions', 'error');
+            return;
+        }
         this.log(`Stopping x11vnc on ${this.targetHostname}...`);
         try {
             const res = await this.authFetch('/api/vnc/stop', {
@@ -393,6 +401,10 @@ class PulseOpsVNCManager {
     // ── WebSocket Connection & RFB 3.8 Handshake ──────────────────────────
 
     connect() {
+        if (window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
+            if (window.showToast) window.showToast('Permission denied: Viewer accounts cannot launch VNC sessions', 'error');
+            return;
+        }
         if (this.nextFrameTimer) {
             clearTimeout(this.nextFrameTimer);
             this.nextFrameTimer = null;

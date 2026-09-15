@@ -175,10 +175,10 @@ class PulseOpsDashboard {
             el.style.display = isOperator ? '' : 'none';
         });
 
-        // If viewer is currently on terminal tab, switch back to overview
+        // If viewer is currently on terminal or vnc tab, switch back to overview
         if (!isOperator) {
             const currentActiveTab = document.querySelector('#section-server-dashboard .nav-tabs .tab-btn.active');
-            if (currentActiveTab && currentActiveTab.dataset.tab === 'terminal') {
+            if (currentActiveTab && (currentActiveTab.dataset.tab === 'terminal' || currentActiveTab.dataset.tab === 'vnc')) {
                 const dashBtn = document.querySelector('#section-server-dashboard .nav-tabs .tab-btn[data-tab="dashboard"]') ||
                                 document.querySelector('#section-server-dashboard .nav-tabs .tab-btn[data-tab="overview"]');
                 if (dashBtn) dashBtn.click();
@@ -372,8 +372,8 @@ class PulseOpsDashboard {
                     window.showToast && window.showToast('This module has been disabled by administrator in Settings.', 'warning');
                     return;
                 }
-                if (btn.dataset.tab === 'terminal' && window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
-                    window.showToast && window.showToast('Access denied: Web Terminal is restricted to Operators and Admins', 'error');
+                if ((btn.dataset.tab === 'terminal' || btn.dataset.tab === 'vnc') && window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
+                    window.showToast && window.showToast(`Access denied: ${btn.dataset.tab === 'vnc' ? 'Remote Desktop VNC' : 'Web Terminal'} is restricted to Operators and Admins`, 'error');
                     return;
                 }
                 container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));

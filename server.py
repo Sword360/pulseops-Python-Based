@@ -373,13 +373,15 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 if not auth_hdr and tok:
                     auth_hdr = f'Bearer {tok}'
                 user = await auth.get_current_user(auth_hdr)
-                if not user:
-                    print(f"[VNC Proxy] Unauthorized WebSocket connection rejected")
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    print(f"[VNC Proxy] Forbidden/Unauthorized WebSocket connection rejected for {user.get('email') if user else 'anonymous'}")
+                    detail = "Permission denied: Viewers cannot open VNC sessions" if user else "Unauthorized WebSocket connection"
+                    status_line = "HTTP/1.1 403 Forbidden\r\n" if user else "HTTP/1.1 401 Unauthorized\r\n"
                     resp = (
-                        "HTTP/1.1 401 Unauthorized\r\n"
+                        f"{status_line}"
                         "Content-Type: application/json\r\n"
                         "Connection: close\r\n\r\n"
-                        '{"detail":"Unauthorized WebSocket connection"}'
+                        f'{{"detail":"{detail}"}}'
                     )
                     writer.write(resp.encode('utf-8'))
                     await writer.drain()
