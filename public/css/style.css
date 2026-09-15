@@ -2656,7 +2656,12 @@ input:checked + .toggle-slider::before {
 .agent-curl-cmd {
     background:#030508; border:1px solid var(--border-color); border-radius:8px;
     padding:0.75rem 1rem; font-family:var(--font-mono); font-size:0.78rem; color:#22c55e;
-    white-space:pre-wrap; word-break:break-all; line-height:1.5;
+    white-space:pre-wrap; word-break:break-all; line-height:1.5; cursor:pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.agent-curl-cmd:hover {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 
 /* ── Toast Notifications ────────────────────────────────────────────────── */

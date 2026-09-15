@@ -345,11 +345,7 @@ class WebTerminal {
             copyBtn.addEventListener('click', () => {
                 if (this.body) {
                     const text = this.body.innerText || this.body.textContent;
-                    navigator.clipboard.writeText(text).then(() => {
-                        window.showToast && window.showToast('Terminal buffer copied to clipboard!', 'success');
-                    }).catch(() => {
-                        window.showToast && window.showToast('Failed to copy to clipboard', 'error');
-                    });
+                    window.copyToClipboard(text, 'Terminal buffer copied to clipboard!');
                 }
             });
         }

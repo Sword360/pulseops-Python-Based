@@ -64,9 +64,7 @@ class PortsManager {
                 const procName = btn.dataset.proc;
 
                 if (action === 'copy') {
-                    navigator.clipboard.writeText(portVal)
-                        .then(() => window.showToast && window.showToast(`Copied ${portVal} to clipboard!`, 'success'))
-                        .catch(() => window.showToast && window.showToast('Failed to copy', 'error'));
+                    window.copyToClipboard(portVal, `Copied ${portVal} to clipboard!`);
                 } else if (action === 'kill-pid') {
                     this.killProcess(pidVal, procName);
                 }
@@ -116,7 +114,7 @@ class PortsManager {
                             </p>
                             <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-green); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                                 <span style="word-break: break-all;">${upgradeCmd}</span>
-                                <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="navigator.clipboard.writeText('${upgradeCmd}'); window.showToast && window.showToast('Copied upgrade command to clipboard!', 'success');">Copy Command</button>
+                                <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="window.copyToClipboard('${upgradeCmd}', 'Copied upgrade command to clipboard!');">Copy Command</button>
                             </div>
                         </div>
                     </td></tr>`;
@@ -148,7 +146,7 @@ class PortsManager {
                                 </p>
                                 <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-green); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                                     <span style="word-break: break-all;">sudo systemctl restart pulseops-agent</span>
-                                    <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="navigator.clipboard.writeText('sudo systemctl restart pulseops-agent'); window.showToast && window.showToast('Copied restart command to clipboard!', 'success');">Copy Command</button>
+                                    <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="window.copyToClipboard('sudo systemctl restart pulseops-agent', 'Copied restart command to clipboard!');">Copy Command</button>
                                 </div>
                                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                                     <span style="font-size:0.78rem; color:var(--text-dim);">Or update: <code style="color:var(--accent-cyan);">curl -sSL ${window.location.origin}/api/fleet/agent-update.sh | sudo bash</code></span>
@@ -167,7 +165,7 @@ class PortsManager {
                                 </p>
                                 <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-green); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                                     <span style="word-break: break-all;">sudo systemctl restart pulseops-agent</span>
-                                    <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="navigator.clipboard.writeText('sudo systemctl restart pulseops-agent'); window.showToast && window.showToast('Copied start command to clipboard!', 'success');">Copy Command</button>
+                                    <button class="btn btn-sm btn-primary" style="white-space: nowrap;" onclick="window.copyToClipboard('sudo systemctl restart pulseops-agent', 'Copied start command to clipboard!');">Copy Command</button>
                                 </div>
                                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                                     <span style="font-size:0.78rem; color:var(--text-dim);">Or reinstall: <code style="color:var(--accent-cyan);">curl -sSL ${window.location.origin}/api/fleet/agent-update.sh | sudo bash</code></span>

@@ -679,7 +679,7 @@ const FleetManager = (() => {
 
             // Build the curl command
             const masterUrl = window.location.origin;
-            const curlCmd = `curl -sSL "${masterUrl}/api/fleet/agent-install.sh?token=${token}" | bash`;
+            const curlCmd = `curl -sSL "${masterUrl}/api/fleet/agent-install.sh?token=${token}" | sudo bash`;
 
             document.getElementById('agent-curl-cmd').textContent = curlCmd;
             document.getElementById('agent-token-display').style.display = 'block';
@@ -786,10 +786,36 @@ const FleetManager = (() => {
 
         // Copy curl command
         const copyBtn = document.getElementById('copy-curl-btn');
-        if (copyBtn) copyBtn.addEventListener('click', () => {
-            const cmd = document.getElementById('agent-curl-cmd').textContent;
-            navigator.clipboard.writeText(cmd).then(() => showToast('Copied to clipboard!', 'success'));
-        });
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const cmdEl = document.getElementById('agent-curl-cmd');
+                const cmd = cmdEl ? cmdEl.textContent.trim() : '';
+                if (cmd) {
+                    window.copyToClipboard(cmd, 'Copied install command to clipboard!');
+                    const origText = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '✅ Copied!';
+                    setTimeout(() => { copyBtn.innerHTML = origText; }, 2000);
+                }
+            });
+        }
+
+        // Also enable direct click-to-copy on the command pre container
+        const cmdEl = document.getElementById('agent-curl-cmd');
+        if (cmdEl) {
+            cmdEl.style.cursor = 'pointer';
+            cmdEl.title = 'Click to copy command';
+            cmdEl.addEventListener('click', () => {
+                const cmd = cmdEl.textContent.trim();
+                if (cmd) {
+                    window.copyToClipboard(cmd, 'Copied install command to clipboard!');
+                    if (copyBtn) {
+                        const origText = copyBtn.innerHTML;
+                        copyBtn.innerHTML = '✅ Copied!';
+                        setTimeout(() => { copyBtn.innerHTML = origText; }, 2000);
+                    }
+                }
+            });
+        }
 
         // Add server driver tabs
         document.querySelectorAll('#add-server-modal [data-driver-tab]').forEach(tabBtn => {

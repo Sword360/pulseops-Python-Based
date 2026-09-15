@@ -93,9 +93,9 @@ class SecurityManager {
                 this.unbanIp(ip);
             } else if (action === 'copy') {
                 const txt = btn.dataset.copyText || ip;
-                navigator.clipboard.writeText(txt)
-                    .then(() => window.showToast && window.showToast(`Copied ${txt} to clipboard!`, 'success'))
-                    .catch(() => window.showToast && window.showToast('Failed to copy', 'error'));
+                if (txt) {
+                    window.copyToClipboard(txt, `Copied ${txt} to clipboard!`);
+                }
             }
         };
 
@@ -184,7 +184,7 @@ class SecurityManager {
                         </p>
                         <div style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-family: monospace; font-size: 0.82rem; color: #a5f3fc; display: flex; align-items: center; justify-content: space-between;">
                             <span>sudo systemctl restart pulseops-agent</span>
-                            <button class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="navigator.clipboard.writeText('sudo systemctl restart pulseops-agent'); window.showToast && window.showToast('Copied to clipboard!', 'success');">📋 Copy</button>
+                            <button class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="window.copyToClipboard('sudo systemctl restart pulseops-agent', 'Copied restart command to clipboard!');">📋 Copy</button>
                         </div>
                         <div style="display: flex; gap: 0.75rem;">
                             <button class="btn btn-sm btn-primary" onclick="window.securityMgr.loadSecurity(true)">🔄 Retry Connection</button>

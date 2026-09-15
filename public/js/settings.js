@@ -445,7 +445,7 @@ const SettingsManager = (() => {
         `;
         container.style.display = 'block';
         window.copyBackupCodes = () => {
-            navigator.clipboard.writeText(codes.join('\n')).then(() => showToast('Backup codes copied to clipboard', 'success'));
+            window.copyToClipboard(codes.join('\n'), 'Backup codes copied to clipboard');
         };
     }
 

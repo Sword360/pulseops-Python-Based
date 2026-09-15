@@ -264,16 +264,12 @@ class PulseOpsVNCManager {
 
     copyTarget() {
         const target = `${this.targetIp}:${this.targetPort}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(target).then(() => {
-                if (window.showToast) window.showToast(`Copied ${target} for TightVNC Viewer!`, 'success');
-                this.log(`Copied connection target: ${target}`);
-            }).catch(() => {
-                this._fallbackCopy(target);
-            });
+        if (typeof window.copyToClipboard === 'function') {
+            window.copyToClipboard(target, `Copied ${target} for TightVNC Viewer!`);
         } else {
             this._fallbackCopy(target);
         }
+        this.log(`Copied connection target: ${target}`);
     }
 
     _fallbackCopy(text) {

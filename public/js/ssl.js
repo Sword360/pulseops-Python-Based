@@ -718,7 +718,7 @@ class SSLManager {
             <div class="inspect-section" style="margin-bottom:1rem;">
                 <div class="inspect-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                     <span>SHA-256 Fingerprint</span>
-                    <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('${this._escapeHtml(data.fingerprint)}'); window.showToast && window.showToast('Copied fingerprint to clipboard!', 'success');" style="font-size:0.7rem; padding:0.15rem 0.5rem;">📋 Copy</button>
+                    <button class="btn btn-sm btn-secondary" onclick="window.copyToClipboard('${this._escapeHtml(data.fingerprint)}', 'Copied fingerprint to clipboard!');" style="font-size:0.7rem; padding:0.15rem 0.5rem;">📋 Copy</button>
                 </div>
                 <div style="font-family:var(--font-mono); font-size:0.75rem; color:var(--accent-cyan); word-break:break-all; background:rgba(0,0,0,0.3); padding:0.5rem 0.75rem; border-radius:4px; border:1px solid var(--border-color);">
                     ${this._escapeHtml(data.fingerprint)}

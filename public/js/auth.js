@@ -2,8 +2,74 @@
  * auth.js — PulseOps Enterprise Authentication Client
  *
  * Handles JWT token storage/retrieval, auto-refresh, auth guard,
- * and exposes PulseOpsAuth as a global utility object.
+ * universal clipboard helper, and exposes PulseOpsAuth as a global utility object.
  */
+
+// ── Universal Clipboard Helper (works on both HTTP LAN and HTTPS) ─────────────
+window.copyToClipboard = function(text, successMsg) {
+    if (text === null || text === undefined) return Promise.resolve(false);
+    const str = String(text);
+    const msg = successMsg || 'Copied to clipboard!';
+
+    function showFeedback(ok) {
+        const toastFn = window.showToast || (typeof showToast === 'function' ? showToast : null);
+        if (toastFn) {
+            toastFn(ok ? msg : 'Failed to copy to clipboard', ok ? 'success' : 'error');
+        }
+    }
+
+    // 1. Try modern navigator.clipboard (available in Secure Contexts: HTTPS/localhost)
+    if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(str).then(() => {
+            showFeedback(true);
+            return true;
+        }).catch((err) => {
+            console.warn('[PulseOps Clipboard] navigator.clipboard failed, attempting fallback:', err);
+            return fallbackExecCopy(str, showFeedback);
+        });
+    }
+
+    // 2. Fallback to document.execCommand('copy') for HTTP LAN contexts
+    return Promise.resolve(fallbackExecCopy(str, showFeedback));
+};
+
+function fallbackExecCopy(str, showFeedback) {
+    let textArea;
+    try {
+        textArea = document.createElement('textarea');
+        textArea.value = str;
+        textArea.setAttribute('readonly', '');
+        textArea.style.position = 'fixed';
+        textArea.style.top = '-9999px';
+        textArea.style.left = '-9999px';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, str.length);
+        const success = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (success) {
+            showFeedback(true);
+            return true;
+        }
+    } catch (e) {
+        if (textArea && textArea.parentNode) {
+            document.body.removeChild(textArea);
+        }
+        console.warn('[PulseOps Clipboard] execCommand failed:', e);
+    }
+
+    // 3. Ultimate fallback: Prompt dialog
+    try {
+        window.prompt('Copy to clipboard: Ctrl+C, Enter', str);
+        showFeedback(true);
+        return true;
+    } catch {
+        showFeedback(false);
+        return false;
+    }
+}
 
 const PulseOpsAuth = (() => {
     const ACCESS_TOKEN_KEY  = 'pulseops_access_token';
