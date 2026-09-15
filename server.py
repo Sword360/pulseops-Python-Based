@@ -1043,9 +1043,28 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                 if not user or user.get('role') not in ('admin', 'operator'):
                     return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot launch VNC sessions.'}, 403)
             display = json_body.get('display', ':0')
-            vnc_port = int(json_body.get('port', 5900))
-            use_native = bool(json_body.get('use_native', json_body.get('useNative', False)))
-            res_data = await vnc.launch_vnc(display, vnc_port, use_native)
+            vnc_port = int(json_body.get('port', 0) or 0)
+            backend = json_body.get('backend', 'auto')
+            geometry = json_body.get('geometry', '1280x800')
+            res_data = await vnc.launch_vnc(display=display, port=vnc_port, backend=backend, geometry=geometry)
+            return await send_json_response(writer, res_data)
+
+        if path == '/api/vnc/stop' and method == 'POST':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot stop VNC sessions.'}, 403)
+            backend = json_body.get('backend', '')
+            res_data = await vnc.stop_vnc_backend(backend)
+            return await send_json_response(writer, res_data)
+
+        if path == '/api/vnc/install' and method == 'POST':
+            if ENTERPRISE_AVAILABLE:
+                user = await auth.get_current_user(headers.get('authorization', ''))
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Permission denied: Viewers cannot install VNC backends.'}, 403)
+            backend = json_body.get('backend', 'auto')
+            res_data = await vnc.install_backend(backend)
             return await send_json_response(writer, res_data)
 
         # Local telemetry snapshot for agent polling
@@ -2029,12 +2048,16 @@ async def main():
     asyncio.create_task(telemetry_broadcast_loop())
     asyncio.create_task(log_stream_broadcast_loop())
 
-    # ── Auto-start native Python RFB VNC server ──────────────────────────────
+    # ── VNC subsystem: report availability, don't auto-launch an X server ───
     try:
-        vnc_result = await vnc.start_built_in_vnc_server(port=5900)
-        print(f"   ➜ VNC:      rfb://0.0.0.0:5900  ({vnc_result.get('message', 'started')})")
+        vnc_status = await vnc.get_vnc_status()
+        available = [k for k, v in vnc_status['backends'].items() if v['installed']]
+        if available:
+            print(f"   ➜ VNC:      backends ready: {', '.join(available)} (launch from the VNC tab)")
+        else:
+            print(f"   ➜ VNC:      no backend installed yet. Install cmd: {vnc_status.get('installCmd')}")
     except Exception as e:
-        print(f"[Warning] VNC auto-start error: {e}")
+        print(f"[Warning] VNC status check error: {e}")
 
     async with server:
         await server.serve_forever()

@@ -1725,9 +1725,28 @@ async def api_vnc_launch(
     current_user: Dict = Depends(require_operator),
 ):
     display = payload.get("display", ":0")
-    port = int(payload.get("port", 5900))
-    use_native = bool(payload.get("useNative", False))
-    return await vnc.launch_vnc(display, port, use_native)
+    port = int(payload.get("port", 0) or 0)
+    backend = payload.get("backend", "auto")
+    geometry = payload.get("geometry", "1280x800")
+    return await vnc.launch_vnc(display=display, port=port, backend=backend, geometry=geometry)
+
+
+@app.post("/api/vnc/stop")
+async def api_vnc_stop(
+    payload: Dict[str, Any] = Body(default={}),
+    current_user: Dict = Depends(require_operator),
+):
+    backend = (payload or {}).get("backend", "")
+    return await vnc.stop_vnc_backend(backend)
+
+
+@app.post("/api/vnc/install")
+async def api_vnc_install(
+    payload: Dict[str, Any] = Body(default={}),
+    current_user: Dict = Depends(require_operator),
+):
+    backend = (payload or {}).get("backend", "auto")
+    return await vnc.install_backend(backend)
 
 
 # ─── Fleet Server Proxy Routes ────────────────────────────────────────────────

@@ -305,8 +305,9 @@ For air-gapped or pre-provisioned environments:
 * **Safety Filter**: Protects against accidental execution of destructive patterns (`rm -rf /`, `mkfs`, fork bombs).
 
 ### 5. Embedded HTML5 VNC / RFB Desktop
-* **Pure Python RFB Server**: Implements RFB 3.8 protocol handshaking and frame encoding.
-* **WebSocket Proxy**: Bi-directionally bridges browser canvas input and video frames to X11/Wayland sessions.
+* **Real VNC backends, no fake screen**: `vnc.py` manages genuine RFB servers — **TigerVNC**, **TightVNC**, and **x11vnc + Xvfb** — each starting a real virtual X11 desktop (with xterm, or a full DE if installed). There is no simulated/cartoon "screen"; whatever backend you pick is a real, standard RFB server.
+* **Backend picker in the dashboard**: choose `Auto-detect`, `TigerVNC`, `TightVNC`, or `x11vnc` from the VNC tab, install missing packages with one click (`POST /api/vnc/install`), start/stop the session (`POST /api/vnc/launch` / `POST /api/vnc/stop`), and watch live install/running status per backend (`GET /api/vnc/status`).
+* **WebSocket Proxy**: `handle_vnc_proxy` bridges the browser's HTML5 canvas RFB client to the chosen backend's raw TCP RFB port — the same wire protocol used by TightVNC Viewer / RealVNC Viewer, so you can also point any standard VNC client at the same host:port.
 
 ### 6. Alert Rules Engine & Notifications
 * Define automated rules for CPU%, Memory%, Disk%, and Agent heartbeats (`> 85% for 2 consecutive intervals`).
@@ -348,8 +349,10 @@ For air-gapped or pre-provisioned environments:
 * `GET  /api/processes` — List running processes (`?server_id=...`).
 * `POST /api/processes/kill` — Dispatch kill signal (`admin`, `operator`).
 * `POST /api/terminal/exec` — Execute shell command on target node (`admin`, `operator`).
-* `GET  /api/vnc/status` — Query VNC availability.
-* `POST /api/vnc/launch` — Launch VNC desktop session (`admin`, `operator`).
+* `GET  /api/vnc/status` — Query VNC availability and per-backend install/running status.
+* `POST /api/vnc/launch` — Launch a VNC desktop session; body: `{ "backend": "auto|tigervnc|tightvnc|x11vnc", "geometry": "1280x800" }` (`admin`, `operator`).
+* `POST /api/vnc/stop` — Stop the active (or a named) VNC backend (`admin`, `operator`).
+* `POST /api/vnc/install` — Install OS packages for a backend, e.g. `{ "backend": "tigervnc" }` (`admin`, `operator`).
 
 ### Alerts & Administration
 * `GET    /api/alerts/rules` — List active alert evaluation rules.
@@ -404,7 +407,7 @@ pulseops-Python-Based/
 ├── services.py           # Systemd unit manager and journalctl log parser
 ├── processes.py          # Process explorer and POSIX signal dispatcher
 ├── terminal.py           # Safe Web terminal subprocess runner with sudo handling
-├── vnc.py                # Pure Python embedded RFB 3.8 VNC server & TCP proxy
+├── vnc.py                # Real VNC backend manager (TigerVNC / TightVNC / x11vnc) + RFB TCP proxy target
 ├── fleet.py              # Multi-node server coordinator and remote RPC client
 ├── auth.py               # Enterprise JWT, bcrypt, TOTP 2FA, and RBAC authorization
 ├── users.py              # User authentication, credential storage, and profile management

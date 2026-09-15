@@ -58,13 +58,17 @@ class PulseOpsVNCManager {
         this.hostInput = document.getElementById('vnc-host-input');
         this.portInput = document.getElementById('vnc-port-input');
         this.passInput = document.getElementById('vnc-pass-input');
-        
+        this.backendSelect = document.getElementById('vnc-backend-select');
+
         this.connectBtn = document.getElementById('vnc-connect-btn');
         this.disconnectBtn = document.getElementById('vnc-disconnect-btn');
+        this.launchBtn = document.getElementById('vnc-launch-btn');
+        this.stopBtn = document.getElementById('vnc-stop-btn');
         this.statusDot = document.getElementById('vnc-dot');
         this.statusText = document.getElementById('vnc-status-text');
         this.overlay = document.getElementById('vnc-overlay');
         this.serverInfoBox = document.getElementById('vnc-server-info');
+        this.backendsListBox = document.getElementById('vnc-backends-list');
         this.consoleOut = document.getElementById('vnc-console-output');
         this.fpsIndicator = document.getElementById('vnc-fps-indicator');
         this.resBadge = document.getElementById('vnc-res-badge');
@@ -83,6 +87,9 @@ class PulseOpsVNCManager {
         if (ovConnect) ovConnect.addEventListener('click', () => this.connect());
         if (ovLaunch) ovLaunch.addEventListener('click', () => this.launchHostDaemon());
         if (ovDemo) ovDemo.addEventListener('click', () => this.startDemoMode());
+
+        if (this.launchBtn) this.launchBtn.addEventListener('click', () => this.launchHostDaemon());
+        if (this.stopBtn) this.stopBtn.addEventListener('click', () => this.stopHostDaemon());
 
         const demoToggle = document.getElementById('vnc-demo-toggle-btn');
         if (demoToggle) demoToggle.addEventListener('click', () => {
@@ -209,20 +216,19 @@ class PulseOpsVNCManager {
                 if (data.running) {
                     const portsStr = data.openPorts && data.openPorts.length > 0 ? data.openPorts.join(', ') : data.defaultPort;
                     this.serverInfoBox.innerHTML = `
-                        <span style="color: var(--accent-green);">✓ Active VNC Server listening on ${data.host}:${data.defaultPort}</span><br>
+                        <span style="color: var(--accent-green);">✓ Active VNC Server (${data.activeBackend || 'external'}) listening on ${data.host}:${data.defaultPort}</span><br>
                         Open ports: <strong>${portsStr}</strong> | Display: <code>${data.display}</code>
                     `;
                     if (this.portInput) this.portInput.value = data.defaultPort;
                 } else {
-                    const bins = data.installedBinaries && data.installedBinaries.length > 0 ? data.installedBinaries.join(', ') : 'None installed';
-                    const installCmd = data.installCmd || 'sudo dnf install -y tigervnc-server-minimal xorg-x11-server-Xvfb';
                     this.serverInfoBox.innerHTML = `
-                        <span style="color: var(--accent-amber);">ℹ Host VNC Status: No daemon running on 5900-5905</span><br>
-                        Installed binaries: <code>${bins}</code> | <em>Click "Detect & Start VNC Server" to launch built-in service!</em><br>
-                        <span style="font-size: 0.75rem; color: var(--text-dim);">To mirror physical X11 desktop, run: <code>${installCmd}</code></span>
+                        <span style="color: var(--accent-amber);">ℹ No VNC server currently running.</span><br>
+                        <span style="font-size: 0.75rem; color: var(--text-dim);">Pick a backend below and click "Start Local VNC Server" — it launches a real Linux desktop you can view/control, same as connecting with TightVNC Viewer or RealVNC Viewer.</span>
                     `;
                 }
             }
+
+            this.renderBackendsList(data.backends || {});
         } catch (e) {
             if (this.serverInfoBox) {
                 this.serverInfoBox.textContent = 'Unable to query host VNC server status.';
@@ -230,22 +236,80 @@ class PulseOpsVNCManager {
         }
     }
 
-    async launchHostDaemon() {
-        this.log('Attempting to start VNC server daemon...');
+    renderBackendsList(backends) {
+        if (!this.backendsListBox) return;
+        const keys = Object.keys(backends);
+        if (keys.length === 0) {
+            this.backendsListBox.innerHTML = '';
+            return;
+        }
+        this.backendsListBox.innerHTML = keys.map((key) => {
+            const b = backends[key];
+            const statusColor = b.listening ? 'var(--accent-green)' : (b.installed ? 'var(--accent-amber)' : 'var(--text-dim)');
+            const statusLabel = b.listening ? 'Running' : (b.installed ? 'Installed' : 'Not installed');
+            const actionBtn = b.installed
+                ? `<button class="btn-vnc-tool vnc-start-backend-btn" data-backend="${key}">▶ Start</button>`
+                : `<button class="btn-vnc-tool vnc-install-backend-btn" data-backend="${key}">⬇ Install</button>`;
+            return `
+                <div class="vnc-backend-row ${b.isActive ? 'active' : ''}">
+                    <div>
+                        <div class="vnc-backend-name">${b.label}</div>
+                        <div class="vnc-backend-meta" style="color:${statusColor};">${statusLabel} · port ${b.port}</div>
+                    </div>
+                    ${actionBtn}
+                </div>
+            `;
+        }).join('');
+
+        this.backendsListBox.querySelectorAll('.vnc-start-backend-btn').forEach((btn) => {
+            btn.addEventListener('click', () => this.launchHostDaemon(btn.dataset.backend));
+        });
+        this.backendsListBox.querySelectorAll('.vnc-install-backend-btn').forEach((btn) => {
+            btn.addEventListener('click', () => this.installBackend(btn.dataset.backend));
+        });
+    }
+
+    async installBackend(backend) {
+        this.log(`Installing VNC backend: ${backend}...`);
+        if (window.showToast) window.showToast(`Installing ${backend}... this can take a minute.`, 'info');
+        try {
+            const res = await this.authFetch('/api/vnc/install', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backend })
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (window.showToast) window.showToast(data.message || 'Installed.', 'success');
+                this.log(data.message || 'Install complete.');
+                this.checkHostVncStatus();
+            } else {
+                if (window.showToast) window.showToast(data.error || 'Install failed.', 'error');
+                this.log(`Install failed: ${data.error || 'unknown error'}`);
+            }
+        } catch (e) {
+            if (window.showToast) window.showToast(`Install failed: ${e.message}`, 'error');
+        }
+    }
+
+    async launchHostDaemon(backendOverride) {
+        const backend = backendOverride || (this.backendSelect ? this.backendSelect.value : 'auto');
+        this.log(`Starting VNC server (backend: ${backend})...`);
         try {
             const res = await this.authFetch('/api/vnc/launch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    port: parseInt(this.portInput ? this.portInput.value : 5900, 10),
-                    display: ':0',
-                    use_native: true
+                    backend,
+                    geometry: '1280x800'
                 })
             });
             const data = await res.json();
             if (data.success) {
                 if (window.showToast) window.showToast(data.message, 'success');
                 this.log(data.message);
+                if (data.port && this.portInput) this.portInput.value = data.port;
+                if (this.backendSelect && data.backend) this.backendSelect.value = data.backend;
                 setTimeout(() => {
                     this.checkHostVncStatus();
                     this.connect(); // Auto connect to the newly started VNC server!
@@ -253,9 +317,35 @@ class PulseOpsVNCManager {
             } else {
                 if (window.showToast) window.showToast(data.error || data.message, 'error');
                 this.log(`Launch info: ${data.error || data.message}`);
+                if (data.installCmd) {
+                    this.log(`Install with: ${data.installCmd}`);
+                }
             }
         } catch (e) {
             if (window.showToast) window.showToast(`Launch failed: ${e.message}`, 'error');
+        }
+    }
+
+    async stopHostDaemon() {
+        const backend = this.backendSelect ? this.backendSelect.value : '';
+        this.log('Stopping VNC server...');
+        try {
+            const res = await this.authFetch('/api/vnc/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backend: backend === 'auto' ? '' : backend })
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (window.showToast) window.showToast(data.message, 'success');
+                this.log(data.message);
+                this.disconnect();
+                this.checkHostVncStatus();
+            } else {
+                if (window.showToast) window.showToast(data.error || 'Stop failed.', 'error');
+            }
+        } catch (e) {
+            if (window.showToast) window.showToast(`Stop failed: ${e.message}`, 'error');
         }
     }
 

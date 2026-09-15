@@ -909,9 +909,19 @@
                     <div class="card vnc-container-card">
                         <div class="vnc-header-bar">
                             <div class="vnc-conn-inputs">
+                                <div class="input-badge"><span class="sys-label">Backend:</span>
+                                    <select id="vnc-backend-select" class="vnc-input" style="width:150px;">
+                                        <option value="auto">Auto-detect</option>
+                                        <option value="tigervnc">TigerVNC</option>
+                                        <option value="tightvnc">TightVNC</option>
+                                        <option value="x11vnc">x11vnc</option>
+                                    </select>
+                                </div>
                                 <div class="input-badge"><span class="sys-label">Host:</span><input type="text" id="vnc-host-input" class="vnc-input" value="127.0.0.1"></div>
-                                <div class="input-badge"><span class="sys-label">Port:</span><input type="number" id="vnc-port-input" class="vnc-input" value="5900" style="width:75px;"></div>
+                                <div class="input-badge"><span class="sys-label">Port:</span><input type="number" id="vnc-port-input" class="vnc-input" value="5901" style="width:75px;"></div>
                                 <div class="input-badge"><span class="sys-label">Password:</span><input type="password" id="vnc-pass-input" class="vnc-input" placeholder="Optional" style="width:100px;"></div>
+                                <button id="vnc-launch-btn" class="btn-preset secondary"><span>🚀</span> Start Server</button>
+                                <button id="vnc-stop-btn" class="btn-preset danger"><span>🛑</span> Stop Server</button>
                                 <button id="vnc-connect-btn" class="btn-preset primary"><span>🔌</span> Connect</button>
                                 <button id="vnc-disconnect-btn" class="btn-preset danger" style="display:none;"><span>⏹</span> Disconnect</button>
                             </div>
@@ -953,12 +963,13 @@
                                 <div class="vnc-overlay-card">
                                     <div class="vnc-icon-hero">🖥️</div>
                                     <h2>Remote System VNC Desktop</h2>
-                                    <p id="vnc-overlay-desc">Connect to a remote RFB/VNC server or launch the interactive demo.</p>
+                                    <p id="vnc-overlay-desc">Start a real TigerVNC / TightVNC / x11vnc server, or connect to one you already run elsewhere — just like TightVNC Viewer or RealVNC Viewer.</p>
                                     <div style="display:flex;gap:1rem;margin-top:1.2rem;flex-wrap:wrap;justify-content:center;">
                                         <button id="vnc-overlay-connect-btn" class="btn-vnc-hero primary">🔌 Connect VNC</button>
-                                        <button id="vnc-overlay-launch-btn" class="btn-vnc-hero secondary">⚙️ Detect Local VNC</button>
+                                        <button id="vnc-overlay-launch-btn" class="btn-vnc-hero secondary">⚙️ Start Local VNC Server</button>
                                         <button id="vnc-overlay-demo-btn" class="btn-vnc-hero accent">🚀 Demo Desktop</button>
                                     </div>
+                                    <div id="vnc-backends-list" class="vnc-backends-list"></div>
                                     <div id="vnc-server-info" class="vnc-server-info-box">Checking VNC availability...</div>
                                 </div>
                             </div>
