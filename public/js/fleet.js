@@ -261,7 +261,6 @@ const FleetManager = (() => {
         const mem    = srv.latest_mem != null ? srv.latest_mem.toFixed(1) : '--';
         const disk   = srv.latest_disk != null ? srv.latest_disk.toFixed(1) : '--';
         const uptime = formatUptime(srv.latest_uptime);
-        const tags   = (srv.tags || []).map(t => `<span class="server-tag">${t}</span>`).join('');
         const isMain = srv.host_ip === window.location.hostname || srv.host_ip === '127.0.0.1';
         const inMaintenance = srv.maintenance_until && new Date(srv.maintenance_until) > new Date();
 
@@ -274,71 +273,88 @@ const FleetManager = (() => {
         const distroIcon = getDistroIcon(srv.os_info, 26);
         const displayName = srv.display_name || srv.hostname;
 
+        const tagsHtml = (srv.tags || []).map(t => `<span class="server-tag">${t}</span>`).join('');
+
         return `
         <div class="server-card ${sc.cls}" data-server-id="${srv.id}" data-hostname="${srv.hostname}" tabindex="0">
             <div class="server-card-header">
-                <div class="server-status-row">
-                    <span class="server-status-dot ${sc.cls}"></span>
-                    <span class="server-status-label">${sc.label}</span>
+                <div class="server-status-cluster">
+                    <span class="server-status-pill ${srv.status}">
+                        <span class="status-dot-mini ${srv.status}"></span>
+                        <span>${sc.label}</span>
+                    </span>
                     ${driverBadge}
-                    ${inMaintenance ? '<span class="maintenance-badge" title="In Maintenance">🔧 Maint</span>' : ''}
-                    ${isMain ? '<span class="main-badge">MASTER</span>' : ''}
+                    ${inMaintenance ? '<span class="badge-maint" title="In Maintenance">🔧 Maint</span>' : ''}
+                    ${isMain ? '<span class="badge-master">MASTER</span>' : ''}
                 </div>
                 ${(window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
-                <div class="server-card-actions admin-only">
-                    <button class="server-action-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">✏️</button>
-                    ${!isMain ? `<button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${displayName}" title="Remove server">🗑️</button>` : ''}
+                <div class="server-card-actions">
+                    <button class="server-action-icon-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    </button>
+                    ${!isMain ? `
+                    <button class="server-action-icon-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${displayName}" title="Remove server">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>` : ''}
                 </div>` : ''}
             </div>
 
-            <div class="server-card-title-row">
-                <div class="server-distro-icon">${distroIcon}</div>
-                <div class="server-card-names">
-                    <div class="server-hostname">${displayName}</div>
-                    <div class="server-ip">${srv.host_ip}:${srv.agent_port}</div>
+            <div class="server-card-identity">
+                <div class="distro-avatar-box">${distroIcon}</div>
+                <div class="server-card-identity-text">
+                    <div class="server-card-name" title="${displayName}">${displayName}</div>
+                    <div class="server-card-endpoint">
+                        <span>${srv.host_ip}:${srv.agent_port}</span>
+                        ${srv.os_info ? `<span class="server-endpoint-os">• ${srv.os_info.length > 24 ? srv.os_info.substring(0,24)+'...' : srv.os_info}</span>` : ''}
+                    </div>
                 </div>
             </div>
-            ${srv.os_info ? `<div class="server-os">${srv.os_info.length > 35 ? srv.os_info.substring(0,35)+'...' : srv.os_info}</div>` : ''}
 
             ${driver === 'probe' ? `
-            <div class="server-metrics" style="padding:0.6rem 0.2rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:6px; padding:0.4rem 0.75rem;">
-                    <span style="font-size:0.75rem; color:var(--text-muted);">Round-Trip Latency:</span>
-                    <span style="font-family:var(--font-mono); font-size:0.85rem; font-weight:700; color:var(--accent-green);">${srv.latest_load != null ? srv.latest_load + ' ms' : '--'}</span>
+            <div class="server-metrics-box probe-box">
+                <div class="probe-metric-content">
+                    <span class="probe-metric-label">Round-Trip Latency</span>
+                    <span class="probe-metric-value">${srv.latest_load != null ? srv.latest_load + ' ms' : '--'}</span>
                 </div>
             </div>` : `
-            <div class="server-metrics">
-                <div class="server-metric-row">
-                    <span class="server-metric-label">CPU</span>
-                    <div class="server-metric-bar-bg">
-                        <div class="server-metric-bar-fill" style="width:${cpuWidth}%; background:${getBarColor(cpuWidth)};"></div>
+            <div class="server-metrics-box">
+                <div class="server-metric-item">
+                    <span class="metric-item-label">CPU</span>
+                    <div class="metric-item-track">
+                        <div class="metric-item-fill" style="width:${cpuWidth}%; background:${getBarColor(cpuWidth)};"></div>
                     </div>
-                    <span class="server-metric-val">${cpu}%</span>
+                    <span class="metric-item-value">${cpu}%</span>
                 </div>
-                <div class="server-metric-row">
-                    <span class="server-metric-label">RAM</span>
-                    <div class="server-metric-bar-bg">
-                        <div class="server-metric-bar-fill" style="width:${memWidth}%; background:${getBarColor(memWidth)};"></div>
+                <div class="server-metric-item">
+                    <span class="metric-item-label">RAM</span>
+                    <div class="metric-item-track">
+                        <div class="metric-item-fill" style="width:${memWidth}%; background:${getBarColor(memWidth)};"></div>
                     </div>
-                    <span class="server-metric-val">${mem}%</span>
+                    <span class="metric-item-value">${mem}%</span>
                 </div>
-                <div class="server-metric-row">
-                    <span class="server-metric-label">DISK</span>
-                    <div class="server-metric-bar-bg">
-                        <div class="server-metric-bar-fill" style="width:${diskWidth}%; background:${getBarColor(diskWidth)};"></div>
+                <div class="server-metric-item">
+                    <span class="metric-item-label">DISK</span>
+                    <div class="metric-item-track">
+                        <div class="metric-item-fill" style="width:${diskWidth}%; background:${getBarColor(diskWidth)};"></div>
                     </div>
-                    <span class="server-metric-val">${disk}%</span>
+                    <span class="metric-item-value">${disk}%</span>
                 </div>
             </div>`}
 
-            <div class="server-meta">
-                <span title="Uptime">↑ ${uptime}</span>
-                <span title="Last seen" style="color:var(--text-dim); font-size:0.72rem;">
-                    ${srv.status === 'online' ? '● Live' : 'Last: ' + (srv.last_seen ? new Date(srv.last_seen).toLocaleTimeString() : 'Never')}
-                </span>
+            <div class="server-card-footer">
+                <div class="server-card-meta-left">
+                    <span class="uptime-badge" title="Uptime">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                        <span>${uptime}</span>
+                    </span>
+                    ${tagsHtml}
+                </div>
+                <div class="server-card-meta-right">
+                    <span class="last-seen-indicator ${srv.status === 'online' ? 'live' : ''}">
+                        ${srv.status === 'online' ? '<span class="status-dot-mini online"></span> Live' : 'Last: ' + (srv.last_seen ? new Date(srv.last_seen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Never')}
+                    </span>
+                </div>
             </div>
-
-            ${tags ? `<div class="server-tags">${tags}</div>` : ''}
         </div>`;
     }
 
@@ -363,7 +379,7 @@ const FleetManager = (() => {
         return `
         <tr class="checkcle-row" data-server-id="${srv.id}" data-hostname="${srv.hostname}">
             <td>
-                <span class="checkcle-status-pill ${srv.status}">
+                <span class="server-status-pill ${srv.status}">
                     <span class="status-dot-mini ${srv.status}"></span>
                     <span>${sc.label}</span>
                 </span>
@@ -372,14 +388,14 @@ const FleetManager = (() => {
                 <div class="server-col-cell">
                     <div class="server-cell-icon">${distroIcon}</div>
                     <div class="server-cell-info">
-                        <span class="server-cell-name">${displayName} ${isMain ? '<span class="main-badge" style="font-size:0.6rem; padding:1px 4px;">MASTER</span>' : ''}</span>
+                        <span class="server-cell-name">${displayName} ${isMain ? '<span class="badge-master">MASTER</span>' : ''}</span>
                         <span class="server-cell-os">${osLabel}</span>
                     </div>
                 </div>
             </td>
             <td>
-                <div style="display:flex; align-items:center; gap:0.4rem;">
-                    <code style="font-size:0.8rem; color:var(--text);">${srv.host_ip}:${srv.agent_port}</code>
+                <div class="server-col-endpoint">
+                    <code class="endpoint-code">${srv.host_ip}:${srv.agent_port}</code>
                     ${driverBadge}
                 </div>
             </td>
@@ -408,19 +424,26 @@ const FleetManager = (() => {
                 </div>
             </td>
             <td>
-                <span style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">
+                <span class="table-latency-val">
                     ${driver === 'probe' ? (srv.latest_load != null ? srv.latest_load + ' ms' : '--') : (srv.status === 'online' ? 'Active' : '--')}
                 </span>
             </td>
             <td>
-                <span style="font-size:0.8rem; color:var(--text-muted); font-family:var(--font-mono);">${uptime}</span>
+                <span class="table-uptime-val">${uptime}</span>
             </td>
             <td style="text-align:right;">
-                <div class="table-actions-cell" style="display:inline-flex; align-items:center; gap:0.25rem;">
-                    <button class="server-action-btn" data-action="open" data-server-id="${srv.id}" data-hostname="${srv.hostname}" title="Open Dashboard">↗</button>
+                <div class="table-actions-cell">
+                    <button class="server-action-icon-btn" data-action="open" data-server-id="${srv.id}" data-hostname="${srv.hostname}" title="Open Dashboard">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </button>
                     ${(window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
-                        <button class="server-action-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">✏️</button>
-                        ${!isMain ? `<button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${displayName}" title="Delete server">🗑️</button>` : ''}
+                        <button class="server-action-icon-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </button>
+                        ${!isMain ? `
+                        <button class="server-action-icon-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${displayName}" title="Delete server">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>` : ''}
                     ` : ''}
                 </div>
             </td>
@@ -430,12 +453,12 @@ const FleetManager = (() => {
     function attachCardListeners() {
         document.querySelectorAll('.server-card').forEach(card => {
             card.addEventListener('click', (e) => {
-                if (e.target.closest('.server-action-btn') || e.target.closest('.server-card-actions')) return;
+                if (e.target.closest('.server-action-icon-btn') || e.target.closest('.server-card-actions')) return;
                 const serverId = card.dataset.serverId;
                 openServerDashboard(serverId, card.dataset.hostname);
             });
 
-            card.querySelectorAll('.server-action-btn').forEach(btn => {
+            card.querySelectorAll('.server-action-icon-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -458,13 +481,13 @@ const FleetManager = (() => {
 
         tableBody.querySelectorAll('.checkcle-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                if (e.target.closest('.server-action-btn')) return;
+                if (e.target.closest('.server-action-icon-btn') || e.target.closest('.table-actions-cell')) return;
                 const serverId = row.dataset.serverId;
                 const hostname = row.dataset.hostname;
                 openServerDashboard(serverId, hostname);
             });
 
-            row.querySelectorAll('.server-action-btn').forEach(btn => {
+            row.querySelectorAll('.server-action-icon-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -549,9 +572,22 @@ const FleetManager = (() => {
                 const newEl = newCard.firstElementChild;
                 card.replaceWith(newEl);
                 newEl.addEventListener('click', (e) => {
-                    if (!e.target.closest('.server-action-btn')) {
+                    if (!e.target.closest('.server-action-icon-btn') && !e.target.closest('.server-card-actions')) {
                         openServerDashboard(newEl.dataset.serverId, newEl.dataset.hostname);
                     }
+                });
+                newEl.querySelectorAll('.server-action-icon-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        e.preventDefault();
+                        const action = btn.dataset.action;
+                        if (action === 'delete') {
+                            confirmDeleteServer(payload.server_id, btn.dataset.hostname);
+                        } else if (action === 'edit') {
+                            openEditServerModal(payload.server_id);
+                        }
+                    });
                 });
             }
             // Update Table row if present
@@ -562,9 +598,24 @@ const FleetManager = (() => {
                 const newRow = newRowHolder.firstElementChild;
                 row.replaceWith(newRow);
                 newRow.addEventListener('click', (e) => {
-                    if (!e.target.closest('.server-action-btn')) {
+                    if (!e.target.closest('.server-action-icon-btn') && !e.target.closest('.table-actions-cell')) {
                         openServerDashboard(newRow.dataset.serverId, newRow.dataset.hostname);
                     }
+                });
+                newRow.querySelectorAll('.server-action-icon-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        e.preventDefault();
+                        const action = btn.dataset.action;
+                        if (action === 'open') {
+                            openServerDashboard(payload.server_id, btn.dataset.hostname);
+                        } else if (action === 'delete') {
+                            confirmDeleteServer(payload.server_id, btn.dataset.hostname);
+                        } else if (action === 'edit') {
+                            openEditServerModal(payload.server_id);
+                        }
+                    });
                 });
             }
             updateSummaryStats();
@@ -1033,12 +1084,14 @@ const FleetManager = (() => {
         // Search & Clear button
         const searchInput = document.getElementById('fleet-search-input');
         const clearBtn    = document.getElementById('fleet-search-clear');
+        const kbdHint     = document.getElementById('fleet-search-kbd');
         if (searchInput) {
             let debounce;
             searchInput.addEventListener('input', () => {
                 clearTimeout(debounce);
                 _searchQuery = searchInput.value.trim();
                 if (clearBtn) clearBtn.style.display = _searchQuery ? 'block' : 'none';
+                if (kbdHint)  kbdHint.style.display  = _searchQuery ? 'none' : 'block';
                 debounce = setTimeout(() => loadServers(), 250);
             });
             if (clearBtn) {
@@ -1046,6 +1099,7 @@ const FleetManager = (() => {
                     searchInput.value = '';
                     _searchQuery = '';
                     clearBtn.style.display = 'none';
+                    if (kbdHint) kbdHint.style.display = 'block';
                     loadServers();
                 });
             }

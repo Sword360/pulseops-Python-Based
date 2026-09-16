@@ -280,8 +280,11 @@
                     <!-- Toolbar Actions -->
                     <div class="fleet-toolbar">
                         <div class="search-box">
-                            <span class="search-icon">🔍</span>
-                            <input type="text" id="fleet-search-input" class="search-input" placeholder="Search servers by name, IP, tags... (Ctrl+K)">
+                            <span class="search-icon">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            </span>
+                            <input type="text" id="fleet-search-input" class="search-input" placeholder="Search servers by name, IP, driver, tags...">
+                            <kbd class="search-kbd" id="fleet-search-kbd">Ctrl K</kbd>
                             <button id="fleet-search-clear" class="search-clear-btn" style="display:none;" title="Clear search">×</button>
                         </div>
                         <div id="fleet-tag-filters" class="fleet-tag-filters"></div>
