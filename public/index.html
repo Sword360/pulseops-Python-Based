@@ -6,7 +6,7 @@
     <meta name="description" content="PulseOps Enterprise — Multi-Server Linux Operations Dashboard">
     <meta name="theme-color" content="#070a11">
     <title>PulseOps Enterprise</title>
-    <link rel="stylesheet" href="css/style.css?v=2.0.3">
+    <link rel="stylesheet" href="css/style.css?v=2.0.4">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
@@ -95,10 +95,10 @@
 
             <div class="header-center">
                 <!-- Global Health status (Fleet view) -->
-                <div class="header-health-pill" id="header-global-health">
+                <button class="header-health-pill online" id="header-global-health" type="button" title="Fleet health status (click to filter)">
                     <span class="status-dot-mini online" id="global-health-dot"></span>
                     <span id="global-health-text">All Systems Operational</span>
-                </div>
+                </button>
                 <!-- Connection status (shown when on server dashboard) -->
                 <div class="header-conn-status" id="header-conn-status" style="display:none;">
                     <span class="pulse-dot" id="connection-dot"></span>

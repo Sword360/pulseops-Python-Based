@@ -528,21 +528,49 @@ const FleetManager = (() => {
         setText('tab-count-offline',     offlineTotal);
 
         // Update Header Global Health Status Pill
+        const pill = document.getElementById('header-global-health');
         const dot = document.getElementById('global-health-dot');
         const txt = document.getElementById('global-health-text');
         if (dot && txt) {
+            if (pill) pill.classList.remove('online', 'degraded', 'offline');
             if (offlineTotal > 0) {
+                if (pill) pill.classList.add('offline');
                 dot.className = 'status-dot-mini offline';
                 txt.textContent = `${offlineTotal} Server${offlineTotal > 1 ? 's' : ''} Down`;
             } else if ((counts.degraded || 0) > 0) {
+                if (pill) pill.classList.add('degraded');
                 dot.className = 'status-dot-mini degraded';
                 txt.textContent = `${counts.degraded} Server${counts.degraded > 1 ? 's' : ''} Degraded`;
             } else if (total > 0) {
+                if (pill) pill.classList.add('online');
                 dot.className = 'status-dot-mini online';
                 txt.textContent = 'All Systems Operational';
             } else {
                 dot.className = 'status-dot-mini';
-                txt.textContent = 'No Servers Monitored';
+                txt.textContent = 'No Servers';
+            }
+
+            // Make interactive button
+            if (pill && !pill.dataset.boundClick) {
+                pill.dataset.boundClick = 'true';
+                pill.setAttribute('role', 'button');
+                pill.setAttribute('tabindex', '0');
+                pill.title = 'Click to filter servers by status';
+                pill.addEventListener('click', () => {
+                    if (typeof window.showSection === 'function') window.showSection('fleet');
+                    const curOffline = parseInt(document.getElementById('fleet-stat-offline')?.textContent || '0', 10);
+                    const curDegraded = parseInt(document.getElementById('fleet-stat-degraded')?.textContent || '0', 10);
+                    if (curOffline > 0) {
+                        const tab = document.querySelector('.checkcle-tab-btn[data-status="offline"]');
+                        if (tab) tab.click();
+                    } else if (curDegraded > 0) {
+                        const tab = document.querySelector('.checkcle-tab-btn[data-status="degraded"]');
+                        if (tab) tab.click();
+                    } else {
+                        const tab = document.querySelector('.checkcle-tab-btn[data-status="all"]');
+                        if (tab) tab.click();
+                    }
+                });
             }
         }
     }
