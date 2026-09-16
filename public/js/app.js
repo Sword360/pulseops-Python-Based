@@ -492,7 +492,12 @@ class PulseOpsDashboard {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('pulseops-theme', theme);
         document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-            btn.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+            const icon = btn.querySelector('.theme-icon-indicator');
+            if (icon) {
+                icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+            } else {
+                btn.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+            }
         });
     }
 
@@ -566,6 +571,19 @@ class PulseOpsDashboard {
         }
         if (os) {
             this._setText('server-identity-os', os);
+            const avatarIcon = document.getElementById('server-identity-os-icon');
+            if (avatarIcon && window.getDistroIcon) {
+                avatarIcon.innerHTML = window.getDistroIcon(os, 28);
+            }
+        }
+        const statusBadge = document.getElementById('server-detail-status-badge');
+        const statusText  = document.getElementById('server-detail-status-text');
+        const sStatus     = isMaster ? 'online' : (fleetServer?.status || 'online');
+        if (statusBadge) {
+            statusBadge.className = `checkcle-status-badge ${sStatus}`;
+        }
+        if (statusText) {
+            statusText.textContent = sStatus === 'online' ? 'UP' : sStatus.toUpperCase();
         }
         this._setText('header-hostname', displayHost);
 
@@ -995,10 +1013,23 @@ class PulseOpsDashboard {
         const idIp   = document.getElementById('server-identity-ip');
         const idDot  = document.getElementById('server-identity-dot');
         const idOs   = document.getElementById('server-identity-os');
+        const idAvatar = document.getElementById('server-identity-os-icon');
+        const idSpecs  = document.getElementById('server-identity-specs-chip');
+        const statusBadge = document.getElementById('server-detail-status-badge');
+        const statusText  = document.getElementById('server-detail-status-text');
+
         if (idHost) idHost.textContent = (sys.hostname || 'mail.sword.local') + ' (Master)';
         if (idIp) idIp.textContent = window.location.host;
         if (idDot) idDot.className = 'pulse-dot connected';
         if (idOs) idOs.textContent = sys.osName || 'Linux';
+        if (idAvatar && window.getDistroIcon) {
+            idAvatar.innerHTML = window.getDistroIcon(sys.osName || 'Linux', 28);
+        }
+        if (idSpecs && sys.coreCount) {
+            idSpecs.textContent = `${sys.coreCount} Cores • ${sys.arch || 'x64'}`;
+        }
+        if (statusBadge) statusBadge.className = 'checkcle-status-badge online';
+        if (statusText)  statusText.textContent = 'UP';
 
         // Disk list
         this._renderDiskList(disks);

@@ -94,6 +94,11 @@
             </div>
 
             <div class="header-center">
+                <!-- Global Health status (Fleet view) -->
+                <div class="header-health-pill" id="header-global-health">
+                    <span class="status-dot-mini online" id="global-health-dot"></span>
+                    <span id="global-health-text">All Systems Operational</span>
+                </div>
                 <!-- Connection status (shown when on server dashboard) -->
                 <div class="header-conn-status" id="header-conn-status" style="display:none;">
                     <span class="pulse-dot" id="connection-dot"></span>
@@ -104,6 +109,11 @@
             </div>
 
             <div class="header-right">
+                <!-- Quick Theme Toggle -->
+                <button class="header-icon-btn theme-toggle-btn" id="header-quick-theme-btn" title="Toggle Light/Dark Mode">
+                    <span class="theme-icon-indicator">☀️</span>
+                </button>
+
                 <!-- Alert Bell -->
                 <div class="alert-bell-container" id="alert-bell-container">
                     <button class="alert-bell-btn" id="alert-bell-btn" title="Alerts">
@@ -163,69 +173,207 @@
 
             <!-- ── SECTION: Fleet Overview ───────────────────────────────── -->
             <section id="section-fleet" class="app-section active">
-                <!-- Summary Stats Row -->
+                <!-- Checkcle-style Summary Stat Cards -->
                 <div class="fleet-stats-row">
-                    <div class="fleet-stat-card">
-                        <div class="fleet-stat-value" id="fleet-stat-total">0</div>
-                        <div class="fleet-stat-label">Total Servers</div>
+                    <!-- Total Monitored Servers -->
+                    <div class="fleet-stat-card card-total" data-status-filter="all" title="Click to view all servers">
+                        <div class="stat-card-grid-overlay"></div>
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">Total Servers</span>
+                            <div class="stat-card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                            </div>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="fleet-stat-value" id="fleet-stat-total">0</div>
+                            <span class="stat-card-sub">All monitored nodes</span>
+                        </div>
+                        <div class="stat-card-footer">
+                            <span class="stat-card-pill pill-total">⚡ Infrastructure</span>
+                            <span class="stat-card-link">View All →</span>
+                        </div>
                     </div>
-                    <div class="fleet-stat-card online">
-                        <div class="fleet-stat-value" id="fleet-stat-online">0</div>
-                        <div class="fleet-stat-label">● Online</div>
+
+                    <!-- Online / Operational -->
+                    <div class="fleet-stat-card card-online online" data-status-filter="online" title="Click to view online servers">
+                        <div class="stat-card-grid-overlay"></div>
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">Online</span>
+                            <div class="stat-card-icon icon-online">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                            </div>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="fleet-stat-value text-online" id="fleet-stat-online">0</div>
+                            <span class="stat-card-sub">Healthy &amp; responding</span>
+                        </div>
+                        <div class="stat-card-footer">
+                            <span class="stat-card-pill pill-online"><span class="pulse-dot-mini online"></span> UP</span>
+                            <span class="stat-card-link">Filter →</span>
+                        </div>
                     </div>
-                    <div class="fleet-stat-card degraded">
-                        <div class="fleet-stat-value" id="fleet-stat-degraded">0</div>
-                        <div class="fleet-stat-label">⚠ Degraded</div>
+
+                    <!-- Degraded / Warning -->
+                    <div class="fleet-stat-card card-degraded degraded" data-status-filter="degraded" title="Click to view degraded servers">
+                        <div class="stat-card-grid-overlay"></div>
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">Degraded</span>
+                            <div class="stat-card-icon icon-degraded">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            </div>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="fleet-stat-value text-degraded" id="fleet-stat-degraded">0</div>
+                            <span class="stat-card-sub">High load / latency</span>
+                        </div>
+                        <div class="stat-card-footer">
+                            <span class="stat-card-pill pill-degraded">⚠ WARNING</span>
+                            <span class="stat-card-link">Filter →</span>
+                        </div>
                     </div>
-                    <div class="fleet-stat-card offline">
-                        <div class="fleet-stat-value" id="fleet-stat-offline">0</div>
-                        <div class="fleet-stat-label">✗ Offline</div>
+
+                    <!-- Offline / Down -->
+                    <div class="fleet-stat-card card-offline offline" data-status-filter="offline" title="Click to view offline servers">
+                        <div class="stat-card-grid-overlay"></div>
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">Offline</span>
+                            <div class="stat-card-icon icon-offline">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                            </div>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="fleet-stat-value text-offline" id="fleet-stat-offline">0</div>
+                            <span class="stat-card-sub">Unreachable / down</span>
+                        </div>
+                        <div class="stat-card-footer">
+                            <span class="stat-card-pill pill-offline">✗ DOWN</span>
+                            <span class="stat-card-link">Filter →</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Fleet Toolbar -->
-                <div class="fleet-toolbar">
-                    <div class="search-box" style="flex:1; max-width:400px;">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="fleet-search-input" class="search-input" placeholder="Search servers by hostname, IP, tags...">
+                <!-- Checkcle-style Filter Tabs & Action Toolbar -->
+                <div class="checkcle-toolbar-wrapper">
+                    <!-- Status Filter Tabs -->
+                    <div class="checkcle-status-nav" id="fleet-status-tabs" role="tablist">
+                        <button class="checkcle-tab-btn active" data-status="all">
+                            <span>All Servers</span>
+                            <span class="checkcle-tab-badge" id="tab-count-all">0</span>
+                        </button>
+                        <button class="checkcle-tab-btn" data-status="online">
+                            <span class="status-dot-mini online"></span>
+                            <span>Online</span>
+                            <span class="checkcle-tab-badge online" id="tab-count-online">0</span>
+                        </button>
+                        <button class="checkcle-tab-btn" data-status="degraded">
+                            <span class="status-dot-mini degraded"></span>
+                            <span>Degraded</span>
+                            <span class="checkcle-tab-badge degraded" id="tab-count-degraded">0</span>
+                        </button>
+                        <button class="checkcle-tab-btn" data-status="offline">
+                            <span class="status-dot-mini offline"></span>
+                            <span>Offline</span>
+                            <span class="checkcle-tab-badge offline" id="tab-count-offline">0</span>
+                        </button>
                     </div>
-                    <div id="fleet-tag-filters" class="fleet-tag-filters"></div>
-                    <div style="display:flex; gap:0.75rem; align-items:center; flex-shrink:0;">
-                        <select id="fleet-sort-select" class="search-input" style="width:140px; padding-left:0.75rem;">
-                            <option value="status">Sort: Status</option>
-                            <option value="cpu">Sort: CPU</option>
-                            <option value="mem">Sort: Memory</option>
-                            <option value="name">Sort: Name</option>
-                        </select>
-                        <button class="btn-primary admin-only" id="fleet-add-server-btn" data-open-modal="add-server-modal" onclick="window.openAddServerModal && window.openAddServerModal()">+ Add Server</button>
+
+                    <!-- Toolbar Actions -->
+                    <div class="fleet-toolbar">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="fleet-search-input" class="search-input" placeholder="Search servers by name, IP, tags... (Ctrl+K)">
+                            <button id="fleet-search-clear" class="search-clear-btn" style="display:none;" title="Clear search">×</button>
+                        </div>
+                        <div id="fleet-tag-filters" class="fleet-tag-filters"></div>
+                        <div class="toolbar-controls">
+                            <!-- View Switcher -->
+                            <div class="checkcle-view-toggle">
+                                <button class="view-toggle-btn active" id="fleet-view-grid" title="Cards View" data-view="grid">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                                    <span>Cards</span>
+                                </button>
+                                <button class="view-toggle-btn" id="fleet-view-table" title="Table View" data-view="table">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                                    <span>Table</span>
+                                </button>
+                            </div>
+                            <select id="fleet-sort-select" class="search-input sort-select">
+                                <option value="status">Sort: Status</option>
+                                <option value="cpu">Sort: CPU %</option>
+                                <option value="mem">Sort: Memory %</option>
+                                <option value="name">Sort: Name</option>
+                            </select>
+                            <button class="btn-primary admin-only" id="fleet-add-server-btn" data-open-modal="add-server-modal" onclick="window.openAddServerModal && window.openAddServerModal()">
+                                <span>+</span> Add Server
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Server Grid -->
+                <!-- Server Views: Grid & Table -->
                 <div class="fleet-grid" id="fleet-grid">
                     <div class="fleet-loading">
                         <div class="loading-spinner"></div>
                         <span>Loading fleet servers...</span>
                     </div>
                 </div>
+                <div class="fleet-table-wrapper" id="fleet-table-container" style="display:none;">
+                    <table class="checkcle-table" id="fleet-table">
+                        <thead>
+                            <tr>
+                                <th style="width:130px;">Status</th>
+                                <th>Server / Node</th>
+                                <th>IP Address &amp; Driver</th>
+                                <th style="width:140px;">CPU Load</th>
+                                <th style="width:140px;">Memory</th>
+                                <th style="width:140px;">Disk</th>
+                                <th style="width:130px;">Network / Latency</th>
+                                <th style="width:110px;">Uptime</th>
+                                <th style="width:100px; text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fleet-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <!-- ── SECTION: Server Dashboard (per-server) ────────────────── -->
             <section id="section-server-dashboard" class="app-section">
-                <!-- Server identity pill -->
+                <!-- Checkcle-style Server Detail Hero Header -->
                 <div class="server-identity-bar" id="server-identity-bar">
                     <div class="server-identity-left">
-                        <span class="pulse-dot" id="server-identity-dot"></span>
-                        <div class="server-identity-meta">
-                            <span class="server-identity-title" id="server-identity-hostname">--</span>
-                            <span class="server-identity-ip-badge" id="server-identity-ip">--</span>
+                        <div class="server-identity-os-avatar" id="server-identity-avatar">
+                            <span id="server-identity-os-icon">🐧</span>
                         </div>
-                        <span id="server-identity-os" class="server-os-badge">--</span>
+                        <div class="server-identity-meta">
+                            <div class="server-identity-title-row">
+                                <h2 class="server-identity-title" id="server-identity-hostname">--</h2>
+                                <span class="checkcle-status-badge online" id="server-detail-status-badge">
+                                    <span class="pulse-dot connected" id="server-identity-dot"></span>
+                                    <span id="server-detail-status-text">UP</span>
+                                </span>
+                            </div>
+                            <div class="server-identity-chips">
+                                <span class="server-identity-ip-badge" id="server-identity-ip">--</span>
+                                <span id="server-identity-os" class="server-os-badge">Linux</span>
+                                <span id="server-identity-specs-chip" class="server-specs-chip">--</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="server-identity-right">
-                        <button class="btn-back-fleet" onclick="showSection('fleet')">← Back to Fleet</button>
-                        <button class="btn-primary admin-only" data-open-modal="add-server-modal" onclick="window.openAddServerModal && window.openAddServerModal()" style="font-size:0.8rem; padding:0.45rem 0.95rem;">+ Add Server</button>
-                        <button id="btn-dashboard-remove-server" class="btn-danger-action admin-only" style="display:none;" title="Remove this remote server from fleet">🗑️ Remove Server</button>
+                        <button class="btn-back-fleet" onclick="showSection('fleet')">
+                            <span>←</span> Back to Servers
+                        </button>
+                        <button class="btn-secondary-action" onclick="window.PulseOpsApp && window.PulseOpsApp.loadServerHistory && window.PulseOpsApp.loadServerHistory()" title="Refresh telemetry">
+                            <span>🔄</span> Refresh
+                        </button>
+                        <button class="btn-secondary-action operator-only" onclick="window.PulseOpsApp && window.PulseOpsApp.switchTab && window.PulseOpsApp.switchTab('terminal')" title="Open web shell">
+                            <span>💻</span> Terminal
+                        </button>
+                        <button class="btn-primary admin-only" data-open-modal="add-server-modal" onclick="window.openAddServerModal && window.openAddServerModal()">+ Add Server</button>
+                        <button id="btn-dashboard-remove-server" class="btn-danger-action admin-only" style="display:none;" title="Remove this remote server from fleet">🗑️ Remove</button>
                     </div>
                 </div>
 
@@ -253,9 +401,12 @@
                 <section id="dashboard-tab" class="tab-content active">
                     <div class="metrics-grid">
                         <div class="metric-card metric-card-cpu">
+                            <div class="stat-card-grid-overlay"></div>
                             <div class="metric-header">
                                 <span class="metric-title">CPU Utilization</span>
-                                <div class="metric-icon" style="color:var(--accent-cyan);">⚡</div>
+                                <div class="metric-icon icon-cpu">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                                </div>
                             </div>
                             <div class="metric-body">
                                 <div class="metric-value" id="metric-cpu-val">0.0%</div>
@@ -266,9 +417,12 @@
                             </div>
                         </div>
                         <div class="metric-card metric-card-mem">
+                            <div class="stat-card-grid-overlay"></div>
                             <div class="metric-header">
                                 <span class="metric-title">Memory Usage</span>
-                                <div class="metric-icon" style="color:var(--accent-purple);">🧠</div>
+                                <div class="metric-icon icon-mem">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3"></path><path d="M10 19v-3"></path><path d="M14 19v-3"></path><path d="M18 19v-3"></path><path d="M6 5v3"></path><path d="M10 5v3"></path><path d="M14 5v3"></path><path d="M18 5v3"></path><rect x="2" y="8" width="20" height="8" rx="1"></rect></svg>
+                                </div>
                             </div>
                             <div class="metric-body">
                                 <div class="metric-value" id="metric-mem-val">0.0%</div>
@@ -279,9 +433,12 @@
                             </div>
                         </div>
                         <div class="metric-card metric-card-disk">
+                            <div class="stat-card-grid-overlay"></div>
                             <div class="metric-header">
                                 <span class="metric-title">Disk Mount (Root)</span>
-                                <div class="metric-icon" style="color:var(--accent-amber);">💾</div>
+                                <div class="metric-icon icon-disk">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="12" x2="2" y2="12"></line><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path><line x1="6" y1="16" x2="6.01" y2="16"></line><line x1="10" y1="16" x2="10.01" y2="16"></line></svg>
+                                </div>
                             </div>
                             <div class="metric-body">
                                 <div class="metric-value" id="metric-disk-val">0.0%</div>
@@ -292,9 +449,12 @@
                             </div>
                         </div>
                         <div class="metric-card metric-card-net">
+                            <div class="stat-card-grid-overlay"></div>
                             <div class="metric-header">
                                 <span class="metric-title">Network I/O</span>
-                                <div class="metric-icon" style="color:var(--accent-green);">🌐</div>
+                                <div class="metric-icon icon-net">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                </div>
                             </div>
                             <div class="metric-body">
                                 <div class="metric-value" id="metric-net-val">0.0 KB/s</div>

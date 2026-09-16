@@ -7,11 +7,110 @@
  */
 
 const FleetManager = (() => {
-    let _servers     = [];
-    let _searchQuery = '';
-    let _sortBy      = 'status';
-    let _activeTag   = '';
-    let _isLoaded    = false;
+    let _servers      = [];
+    let _searchQuery  = '';
+    let _sortBy       = 'status';
+    let _activeTag    = '';
+    let _statusFilter = 'all';
+    let _viewMode     = localStorage.getItem('pulseops-fleet-view') || 'grid';
+    let _isLoaded     = false;
+
+    // ── Distro OS Logos (SVG) ──────────────────────────────────────────────────
+
+    function getDistroIcon(osInfo, size = 22) {
+        const os = (osInfo || '').toLowerCase();
+        if (os.includes('ubuntu')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#E95420"/>
+                <circle cx="12" cy="5.2" r="1.6" fill="#fff"/>
+                <circle cx="6.1" cy="15.4" r="1.6" fill="#fff"/>
+                <circle cx="17.9" cy="15.4" r="1.6" fill="#fff"/>
+                <path d="M12 7.6a4.4 4.4 0 0 1 3.8 2.2" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M7.4 14.5a4.4 4.4 0 0 1 0-5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M12 16.4a4.4 4.4 0 0 1-3.8-2.2" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>`;
+        }
+        if (os.includes('debian')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#A80030"/>
+                <path d="M12 6c-3.3 0-6 2.7-6 6 0 2.2 1.2 4.1 3 5.1-.3-.6-.5-1.3-.5-2.1 0-2.2 1.8-4 4-4s4 1.8 4 4c0 1.1-.4 2.1-1.2 2.8.8-.4 1.5-1 2-1.8.8-1.2 1.2-2.6 1.2-4 0-3.3-2.9-6-6.5-6z" fill="#fff"/>
+            </svg>`;
+        }
+        if (os.includes('fedora')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#294172"/>
+                <path d="M14.5 7.5a3 3 0 0 0-3 3v2h-2v2h2v4h2.5v-4h2v-2h-2v-2a1 1 0 0 1 1-1h1v-2h-1.5z" fill="#fff"/>
+            </svg>`;
+        }
+        if (os.includes('arch')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#1793D1"/>
+                <path d="M12 5.5l5.5 11.5-2.2-1.5-3.3-4.5-3.3 4.5-2.2 1.5L12 5.5z" fill="#fff"/>
+            </svg>`;
+        }
+        if (os.includes('centos')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#262523"/>
+                <path d="M12 6v6h-6v-6z" fill="#932279"/>
+                <path d="M18 6v6h-6v-6z" fill="#ECA72C"/>
+                <path d="M6 12v6h6v-6z" fill="#2285C5"/>
+                <path d="M12 12v6h6v-6z" fill="#78B936"/>
+            </svg>`;
+        }
+        if (os.includes('alpine')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#0D597F"/>
+                <path d="M7 16l4-7 4 7H7zm6-4l2.5-4.5 3.5 6.5h-3.5L13 12z" fill="#fff"/>
+            </svg>`;
+        }
+        if (os.includes('red hat') || os.includes('rhel')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#EE0000"/>
+                <path d="M6 14.5c1-1 3-1.5 6-1.5s5 .5 6 1.5c-1 1-3 1.5-6 1.5s-5-.5-6-1.5z" fill="#111"/>
+                <path d="M8 13.5c.5-3 2-5 4-5s3.5 2 4 5c-1-.5-2.5-.7-4-.7s-3 .2-4 .7z" fill="#fff"/>
+            </svg>`;
+        }
+        if (os.includes('windows')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <rect x="2" y="2" width="20" height="20" rx="4" fill="#0078D4"/>
+                <path d="M5 6.2l5.7-.8v5.6H5V6.2zm0 6.6h5.7v5.6L5 17.6v-4.8zm6.7-7.6l7.3-1v6.6h-7.3V5.2zm0 7.6h7.3v6.6l-7.3-1v-5.6z" fill="#fff"/>
+            </svg>`;
+        }
+        if (os.includes('darwin') || os.includes('mac') || os.includes('apple')) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="#333"/>
+                <path d="M14.8 12.3c0-1.8 1.4-2.6 1.5-2.7-0.8-1.2-2.1-1.4-2.5-1.4-1.1-.1-2.1.6-2.7.6-.5 0-1.4-.6-2.3-.6-1.2 0-2.3.7-2.9 1.8-1.3 2.1-.3 5.3 0.9 7.1.6.9 1.3 1.8 2.3 1.8.9 0 1.3-.6 2.4-.6s1.4.6 2.4.6c1 0 1.6-.8 2.2-1.7.7-1 1-2 1-2.1-.1 0-1.9-.7-1.9-2.8z" fill="#fff"/>
+                <path d="M13.6 7.4c.5-.6.8-1.5.7-2.4-.8 0-1.6.5-2.1 1.1-.4.5-.8 1.4-.7 2.3.9.1 1.7-.4 2.1-1z" fill="#fff"/>
+            </svg>`;
+        }
+        // Default Linux Tux Penguin
+        return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" fill="#2d3748"/>
+            <ellipse cx="12" cy="12.5" rx="4.5" ry="6" fill="#fff"/>
+            <circle cx="12" cy="8" r="3.5" fill="#2d3748"/>
+            <circle cx="10.8" cy="7.8" r="0.6" fill="#fff"/>
+            <circle cx="13.2" cy="7.8" r="0.6" fill="#fff"/>
+            <polygon points="12,9 10.5,10.2 13.5,10.2" fill="#F59E0B"/>
+            <ellipse cx="9" cy="18" rx="2" ry="1" fill="#F59E0B"/>
+            <ellipse cx="15" cy="18" rx="2" ry="1" fill="#F59E0B"/>
+        </svg>`;
+    }
+
+    // ── Driver Badge Helper ────────────────────────────────────────────────────
+
+    function getDriverBadge(driver) {
+        driver = (driver || 'agent').toLowerCase();
+        if (driver === 'snmp') {
+            return '<span class="driver-badge driver-snmp" style="background:rgba(245,158,11,0.15); color:#fbbf24; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(245,158,11,0.3);" title="SNMP Polled Device">📡 SNMP</span>';
+        } else if (driver === 'ssh') {
+            return '<span class="driver-badge driver-ssh" style="background:rgba(168,85,247,0.15); color:#c084fc; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(168,85,247,0.3);" title="Agentless SSH Node">🔑 SSH</span>';
+        } else if (driver === 'probe') {
+            return '<span class="driver-badge driver-probe" style="background:rgba(16,185,129,0.15); color:#34d399; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3);" title="Network TCP Probe">🌐 PROBE</span>';
+        } else if (driver === 'prometheus') {
+            return '<span class="driver-badge driver-prom" style="background:rgba(239,68,68,0.15); color:#f87171; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(239,68,68,0.3);" title="Prometheus Node Exporter">📊 EXPORTER</span>';
+        }
+        return '<span class="driver-badge driver-agent" style="background:rgba(59,130,246,0.15); color:#60a5fa; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(59,130,246,0.3);" title="PulseOps Native Agent">⚡ AGENT</span>';
+    }
 
     // ── Status helpers ─────────────────────────────────────────────────────────
 
@@ -68,15 +167,54 @@ const FleetManager = (() => {
         }
     }
 
-    // ── Render Fleet Grid ─────────────────────────────────────────────────────
+    // ── Status Filter & View Mode Controls ────────────────────────────────────
+
+    function setStatusFilter(status) {
+        _statusFilter = status;
+        document.querySelectorAll('#fleet-status-tabs .checkcle-tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.status === status);
+        });
+        renderFleet();
+    }
+
+    function setViewMode(mode) {
+        _viewMode = mode;
+        localStorage.setItem('pulseops-fleet-view', mode);
+        document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.view === mode);
+        });
+        renderFleet();
+    }
+
+    // ── Render Fleet (Cards vs Table) ─────────────────────────────────────────
 
     function renderFleet() {
-        const container = document.getElementById('fleet-grid');
-        if (!container) return;
+        const gridContainer  = document.getElementById('fleet-grid');
+        const tableContainer = document.getElementById('fleet-table-container');
+        const tableBody      = document.getElementById('fleet-table-body');
 
+        // Apply View Mode layout toggle
+        if (_viewMode === 'table') {
+            if (gridContainer)  gridContainer.style.display  = 'none';
+            if (tableContainer) tableContainer.style.display = 'block';
+        } else {
+            if (gridContainer)  gridContainer.style.display  = 'grid';
+            if (tableContainer) tableContainer.style.display = 'none';
+        }
+
+        // Apply Tag Filter
         let filtered = _servers;
         if (_activeTag) {
             filtered = filtered.filter(s => (s.tags || []).includes(_activeTag));
+        }
+
+        // Apply Status Filter
+        if (_statusFilter && _statusFilter !== 'all') {
+            if (_statusFilter === 'offline') {
+                filtered = filtered.filter(s => s.status === 'offline' || s.status === 'unreachable');
+            } else {
+                filtered = filtered.filter(s => s.status === _statusFilter);
+            }
         }
 
         // Sort
@@ -90,22 +228,31 @@ const FleetManager = (() => {
         });
 
         if (filtered.length === 0) {
-            container.innerHTML = `
+            const emptyHtml = `
                 <div class="fleet-empty">
                     <div style="font-size:3rem; margin-bottom:1rem;">🖥️</div>
                     <h3 style="color:var(--text-muted); margin-bottom:0.5rem;">No servers found</h3>
                     <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:1.25rem;">
-                        ${_searchQuery ? 'Try a different search query.' : 'Add your first server to get started with fleet monitoring.'}
+                        ${_searchQuery || _statusFilter !== 'all' ? 'Try adjusting your search query or status filter.' : 'Add your first server to get started with fleet monitoring.'}
                     </p>
-                    ${(!_searchQuery && window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
+                    ${(!_searchQuery && _statusFilter === 'all' && window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
                     <button class="btn-primary admin-only" onclick="window.openAddServerModal && window.openAddServerModal()">+ Add Server</button>
                     ` : ''}
                 </div>`;
+            if (gridContainer) gridContainer.innerHTML = emptyHtml;
+            if (tableBody) tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:3rem 1rem; color:var(--text-dim); font-size:0.9rem;">No servers found matching current filters</td></tr>`;
             return;
         }
 
-        container.innerHTML = filtered.map(srv => buildServerCard(srv)).join('');
-        attachCardListeners();
+        if (gridContainer) {
+            gridContainer.innerHTML = filtered.map(srv => buildServerCard(srv)).join('');
+            attachCardListeners();
+        }
+
+        if (tableBody) {
+            tableBody.innerHTML = filtered.map(srv => buildServerTableRow(srv)).join('');
+            attachTableListeners();
+        }
     }
 
     function buildServerCard(srv) {
@@ -114,28 +261,18 @@ const FleetManager = (() => {
         const mem    = srv.latest_mem != null ? srv.latest_mem.toFixed(1) : '--';
         const disk   = srv.latest_disk != null ? srv.latest_disk.toFixed(1) : '--';
         const uptime = formatUptime(srv.latest_uptime);
-        const lastSeen = srv.last_seen ? new Date(srv.last_seen).toLocaleString() : 'Never';
         const tags   = (srv.tags || []).map(t => `<span class="server-tag">${t}</span>`).join('');
         const isMain = srv.host_ip === window.location.hostname || srv.host_ip === '127.0.0.1';
         const inMaintenance = srv.maintenance_until && new Date(srv.maintenance_until) > new Date();
 
-        const cpuWidth  = srv.latest_cpu  != null ? srv.latest_cpu.toFixed(0) : 0;
-        const memWidth  = srv.latest_mem  != null ? srv.latest_mem.toFixed(0) : 0;
-        const diskWidth = srv.latest_disk != null ? srv.latest_disk.toFixed(0) : 0;
+        const cpuWidth  = srv.latest_cpu  != null ? Math.min(100, Math.max(0, srv.latest_cpu)).toFixed(0) : 0;
+        const memWidth  = srv.latest_mem  != null ? Math.min(100, Math.max(0, srv.latest_mem)).toFixed(0) : 0;
+        const diskWidth = srv.latest_disk != null ? Math.min(100, Math.max(0, srv.latest_disk)).toFixed(0) : 0;
 
         const driver = (srv.driver_type || 'agent').toLowerCase();
-        let driverBadge = '';
-        if (driver === 'snmp') {
-            driverBadge = '<span class="driver-badge driver-snmp" style="background:rgba(245,158,11,0.15); color:#fbbf24; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(245,158,11,0.3);" title="SNMP Polled Device">📡 SNMP</span>';
-        } else if (driver === 'ssh') {
-            driverBadge = '<span class="driver-badge driver-ssh" style="background:rgba(168,85,247,0.15); color:#c084fc; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(168,85,247,0.3);" title="Agentless SSH Node">🔑 SSH</span>';
-        } else if (driver === 'probe') {
-            driverBadge = '<span class="driver-badge driver-probe" style="background:rgba(16,185,129,0.15); color:#34d399; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3);" title="Network TCP Probe">🌐 PROBE</span>';
-        } else if (driver === 'prometheus') {
-            driverBadge = '<span class="driver-badge driver-prom" style="background:rgba(239,68,68,0.15); color:#f87171; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(239,68,68,0.3);" title="Prometheus Node Exporter">📊 EXPORTER</span>';
-        } else {
-            driverBadge = '<span class="driver-badge driver-agent" style="background:rgba(59,130,246,0.15); color:#60a5fa; font-size:0.68rem; font-weight:700; padding:2px 6px; border-radius:4px; border:1px solid rgba(59,130,246,0.3);" title="PulseOps Native Agent">⚡ AGENT</span>';
-        }
+        const driverBadge = getDriverBadge(driver);
+        const distroIcon = getDistroIcon(srv.os_info, 26);
+        const displayName = srv.display_name || srv.hostname;
 
         return `
         <div class="server-card ${sc.cls}" data-server-id="${srv.id}" data-hostname="${srv.hostname}" tabindex="0">
@@ -144,18 +281,23 @@ const FleetManager = (() => {
                     <span class="server-status-dot ${sc.cls}"></span>
                     <span class="server-status-label">${sc.label}</span>
                     ${driverBadge}
-                    ${inMaintenance ? '<span class="maintenance-badge" title="In Maintenance">🔧 Maintenance</span>' : ''}
+                    ${inMaintenance ? '<span class="maintenance-badge" title="In Maintenance">🔧 Maint</span>' : ''}
                     ${isMain ? '<span class="main-badge">MASTER</span>' : ''}
                 </div>
                 ${(window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
                 <div class="server-card-actions admin-only">
                     <button class="server-action-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">✏️</button>
-                    ${!isMain ? `<button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${srv.display_name || srv.hostname}" title="Remove server">🗑️</button>` : ''}
+                    ${!isMain ? `<button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${displayName}" title="Remove server">🗑️</button>` : ''}
                 </div>` : ''}
             </div>
 
-            <div class="server-hostname">${srv.display_name || srv.hostname}</div>
-            <div class="server-ip">${srv.host_ip}:${srv.agent_port}</div>
+            <div class="server-card-title-row">
+                <div class="server-distro-icon">${distroIcon}</div>
+                <div class="server-card-names">
+                    <div class="server-hostname">${displayName}</div>
+                    <div class="server-ip">${srv.host_ip}:${srv.agent_port}</div>
+                </div>
+            </div>
             ${srv.os_info ? `<div class="server-os">${srv.os_info.length > 35 ? srv.os_info.substring(0,35)+'...' : srv.os_info}</div>` : ''}
 
             ${driver === 'probe' ? `
@@ -200,16 +342,99 @@ const FleetManager = (() => {
         </div>`;
     }
 
+    function buildServerTableRow(srv) {
+        const sc          = getStatusConfig(srv.status);
+        const cpu         = srv.latest_cpu != null ? srv.latest_cpu.toFixed(1) : '--';
+        const mem         = srv.latest_mem != null ? srv.latest_mem.toFixed(1) : '--';
+        const disk        = srv.latest_disk != null ? srv.latest_disk.toFixed(1) : '--';
+        const uptime      = formatUptime(srv.latest_uptime);
+        const isMain      = srv.host_ip === window.location.hostname || srv.host_ip === '127.0.0.1';
+        const driver      = (srv.driver_type || 'agent').toLowerCase();
+        const driverBadge = getDriverBadge(driver);
+        const distroIcon  = getDistroIcon(srv.os_info, 20);
+
+        const cpuNum  = srv.latest_cpu  != null ? Math.min(100, Math.max(0, srv.latest_cpu)) : 0;
+        const memNum  = srv.latest_mem  != null ? Math.min(100, Math.max(0, srv.latest_mem)) : 0;
+        const diskNum = srv.latest_disk != null ? Math.min(100, Math.max(0, srv.latest_disk)) : 0;
+
+        const displayName = srv.display_name || srv.hostname;
+        const osLabel     = srv.os_info ? (srv.os_info.length > 28 ? srv.os_info.substring(0, 28) + '...' : srv.os_info) : 'Linux';
+
+        return `
+        <tr class="checkcle-row" data-server-id="${srv.id}" data-hostname="${srv.hostname}">
+            <td>
+                <span class="checkcle-status-pill ${srv.status}">
+                    <span class="status-dot-mini ${srv.status}"></span>
+                    <span>${sc.label}</span>
+                </span>
+            </td>
+            <td>
+                <div class="server-col-cell">
+                    <div class="server-cell-icon">${distroIcon}</div>
+                    <div class="server-cell-info">
+                        <span class="server-cell-name">${displayName} ${isMain ? '<span class="main-badge" style="font-size:0.6rem; padding:1px 4px;">MASTER</span>' : ''}</span>
+                        <span class="server-cell-os">${osLabel}</span>
+                    </div>
+                </div>
+            </td>
+            <td>
+                <div style="display:flex; align-items:center; gap:0.4rem;">
+                    <code style="font-size:0.8rem; color:var(--text);">${srv.host_ip}:${srv.agent_port}</code>
+                    ${driverBadge}
+                </div>
+            </td>
+            <td>
+                <div class="table-metric-cell">
+                    <div class="table-bar-track">
+                        <div class="table-bar-fill" style="width:${cpuNum}%; background:${getBarColor(cpuNum)};"></div>
+                    </div>
+                    <span class="table-metric-val">${cpu}%</span>
+                </div>
+            </td>
+            <td>
+                <div class="table-metric-cell">
+                    <div class="table-bar-track">
+                        <div class="table-bar-fill" style="width:${memNum}%; background:${getBarColor(memNum)};"></div>
+                    </div>
+                    <span class="table-metric-val">${mem}%</span>
+                </div>
+            </td>
+            <td>
+                <div class="table-metric-cell">
+                    <div class="table-bar-track">
+                        <div class="table-bar-fill" style="width:${diskNum}%; background:${getBarColor(diskNum)};"></div>
+                    </div>
+                    <span class="table-metric-val">${disk}%</span>
+                </div>
+            </td>
+            <td>
+                <span style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">
+                    ${driver === 'probe' ? (srv.latest_load != null ? srv.latest_load + ' ms' : '--') : (srv.status === 'online' ? 'Active' : '--')}
+                </span>
+            </td>
+            <td>
+                <span style="font-size:0.8rem; color:var(--text-muted); font-family:var(--font-mono);">${uptime}</span>
+            </td>
+            <td style="text-align:right;">
+                <div class="table-actions-cell" style="display:inline-flex; align-items:center; gap:0.25rem;">
+                    <button class="server-action-btn" data-action="open" data-server-id="${srv.id}" data-hostname="${srv.hostname}" title="Open Dashboard">↗</button>
+                    ${(window.PulseOpsAuth && window.PulseOpsAuth.isAdmin()) ? `
+                        <button class="server-action-btn" data-action="edit" data-server-id="${srv.id}" title="Edit server">✏️</button>
+                        ${!isMain ? `<button class="server-action-btn danger" data-action="delete" data-server-id="${srv.id}" data-hostname="${displayName}" title="Delete server">🗑️</button>` : ''}
+                    ` : ''}
+                </div>
+            </td>
+        </tr>`;
+    }
+
     function attachCardListeners() {
         document.querySelectorAll('.server-card').forEach(card => {
-            // Card click → open server dashboard
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.server-action-btn') || e.target.closest('.server-card-actions')) return;
                 const serverId = card.dataset.serverId;
                 openServerDashboard(serverId, card.dataset.hostname);
             });
 
-            // Action buttons
             card.querySelectorAll('.server-action-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -227,6 +452,37 @@ const FleetManager = (() => {
         });
     }
 
+    function attachTableListeners() {
+        const tableBody = document.getElementById('fleet-table-body');
+        if (!tableBody) return;
+
+        tableBody.querySelectorAll('.checkcle-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('.server-action-btn')) return;
+                const serverId = row.dataset.serverId;
+                const hostname = row.dataset.hostname;
+                openServerDashboard(serverId, hostname);
+            });
+
+            row.querySelectorAll('.server-action-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                    const action   = btn.dataset.action;
+                    const serverId = btn.dataset.serverId;
+                    if (action === 'open') {
+                        openServerDashboard(serverId, btn.dataset.hostname);
+                    } else if (action === 'delete') {
+                        confirmDeleteServer(serverId, btn.dataset.hostname);
+                    } else if (action === 'edit') {
+                        openEditServerModal(serverId);
+                    }
+                });
+            });
+        });
+    }
+
     // ── Summary Stats ─────────────────────────────────────────────────────────
 
     function updateSummaryStats() {
@@ -234,14 +490,38 @@ const FleetManager = (() => {
         _servers.forEach(s => { counts[s.status] = (counts[s.status] || 0) + 1; });
 
         const total = _servers.length;
+        const offlineTotal = (counts.offline || 0) + (counts.unreachable || 0);
+
+        // Update Stat Cards
         setText('fleet-stat-total',      total);
-        setText('fleet-stat-online',     counts.online);
-        setText('fleet-stat-degraded',   counts.degraded);
-        setText('fleet-stat-offline',    counts.offline + counts.unreachable);
-        setText('fleet-count-total',     total);
-        setText('fleet-count-online',    counts.online);
-        setText('fleet-count-degraded',  counts.degraded);
-        setText('fleet-count-offline',   counts.offline + counts.unreachable);
+        setText('fleet-stat-online',     counts.online || 0);
+        setText('fleet-stat-degraded',   counts.degraded || 0);
+        setText('fleet-stat-offline',    offlineTotal);
+
+        // Update Status Filter Tabs
+        setText('tab-count-all',         total);
+        setText('tab-count-online',      counts.online || 0);
+        setText('tab-count-degraded',    counts.degraded || 0);
+        setText('tab-count-offline',     offlineTotal);
+
+        // Update Header Global Health Status Pill
+        const dot = document.getElementById('global-health-dot');
+        const txt = document.getElementById('global-health-text');
+        if (dot && txt) {
+            if (offlineTotal > 0) {
+                dot.className = 'status-dot-mini offline';
+                txt.textContent = `${offlineTotal} Server${offlineTotal > 1 ? 's' : ''} Down`;
+            } else if ((counts.degraded || 0) > 0) {
+                dot.className = 'status-dot-mini degraded';
+                txt.textContent = `${counts.degraded} Server${counts.degraded > 1 ? 's' : ''} Degraded`;
+            } else if (total > 0) {
+                dot.className = 'status-dot-mini online';
+                txt.textContent = 'All Systems Operational';
+            } else {
+                dot.className = 'status-dot-mini';
+                txt.textContent = 'No Servers Monitored';
+            }
+        }
     }
 
     function setText(id, val) {
@@ -254,14 +534,14 @@ const FleetManager = (() => {
     function handleFleetUpdate(payload) {
         const idx = _servers.findIndex(s => s.id === payload.server_id);
         if (idx !== -1) {
-            _servers[idx].status     = payload.status;
+            _servers[idx].status = payload.status;
             if (payload.snapshot) {
-                _servers[idx].latest_cpu  = payload.snapshot.cpu_percent;
-                _servers[idx].latest_mem  = payload.snapshot.mem_percent;
-                _servers[idx].latest_disk = payload.snapshot.disk_percent;
+                _servers[idx].latest_cpu    = payload.snapshot.cpu_percent;
+                _servers[idx].latest_mem    = payload.snapshot.mem_percent;
+                _servers[idx].latest_disk   = payload.snapshot.disk_percent;
                 _servers[idx].latest_uptime = payload.snapshot.uptime;
             }
-            // Re-render only the affected card for efficiency
+            // Update Card if present
             const card = document.querySelector(`.server-card[data-server-id="${payload.server_id}"]`);
             if (card) {
                 const newCard = document.createElement('div');
@@ -271,6 +551,19 @@ const FleetManager = (() => {
                 newEl.addEventListener('click', (e) => {
                     if (!e.target.closest('.server-action-btn')) {
                         openServerDashboard(newEl.dataset.serverId, newEl.dataset.hostname);
+                    }
+                });
+            }
+            // Update Table row if present
+            const row = document.querySelector(`.checkcle-row[data-server-id="${payload.server_id}"]`);
+            if (row) {
+                const newRowHolder = document.createElement('tbody');
+                newRowHolder.innerHTML = buildServerTableRow(_servers[idx]);
+                const newRow = newRowHolder.firstElementChild;
+                row.replaceWith(newRow);
+                newRow.addEventListener('click', (e) => {
+                    if (!e.target.closest('.server-action-btn')) {
+                        openServerDashboard(newRow.dataset.serverId, newRow.dataset.hostname);
                     }
                 });
             }
@@ -737,15 +1030,67 @@ const FleetManager = (() => {
     // ── Init ──────────────────────────────────────────────────────────────────
 
     function init() {
-        // Search
+        // Search & Clear button
         const searchInput = document.getElementById('fleet-search-input');
+        const clearBtn    = document.getElementById('fleet-search-clear');
         if (searchInput) {
             let debounce;
             searchInput.addEventListener('input', () => {
                 clearTimeout(debounce);
-                _searchQuery = searchInput.value;
-                debounce = setTimeout(() => loadServers(), 300);
+                _searchQuery = searchInput.value.trim();
+                if (clearBtn) clearBtn.style.display = _searchQuery ? 'block' : 'none';
+                debounce = setTimeout(() => loadServers(), 250);
             });
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    searchInput.value = '';
+                    _searchQuery = '';
+                    clearBtn.style.display = 'none';
+                    loadServers();
+                });
+            }
+        }
+
+        // Global Ctrl+K / Cmd+K shortcut to focus search when on Fleet view
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                const targetSec = document.getElementById('section-fleet');
+                if (targetSec && targetSec.classList.contains('active')) {
+                    e.preventDefault();
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                }
+            }
+        });
+
+        // Checkcle Status Filter Tabs
+        document.querySelectorAll('#fleet-status-tabs .checkcle-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                setStatusFilter(btn.dataset.status);
+            });
+        });
+
+        // Checkcle Stat Cards click-to-filter
+        document.querySelectorAll('.fleet-stat-card[data-status-filter]').forEach(card => {
+            card.addEventListener('click', () => {
+                setStatusFilter(card.dataset.statusFilter);
+            });
+        });
+
+        // Checkcle View Mode Switcher (Cards vs Table)
+        const viewGridBtn  = document.getElementById('fleet-view-grid');
+        const viewTableBtn = document.getElementById('fleet-view-table');
+        if (viewGridBtn)  viewGridBtn.addEventListener('click',  () => setViewMode('grid'));
+        if (viewTableBtn) viewTableBtn.addEventListener('click', () => setViewMode('table'));
+
+        if (_viewMode === 'table') {
+            if (viewTableBtn) viewTableBtn.classList.add('active');
+            if (viewGridBtn)  viewGridBtn.classList.remove('active');
+        } else {
+            if (viewGridBtn)  viewGridBtn.classList.add('active');
+            if (viewTableBtn) viewTableBtn.classList.remove('active');
         }
 
         // Sort
@@ -890,11 +1235,16 @@ const FleetManager = (() => {
         openAddServerModal,
         openServerDashboard,
         confirmDeleteServer,
+        setStatusFilter,
+        setViewMode,
+        getDistroIcon,
         getServers: () => _servers,
     };
     window.PulseOpsFleet = api;
+    window.getDistroIcon = getDistroIcon;
     window.openAddServerModal = openAddServerModal;
     window.openServerDashboard = openServerDashboard;
     window.confirmDeleteFleetServer = confirmDeleteServer;
     return api;
 })();
+

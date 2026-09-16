@@ -322,32 +322,70 @@ body {
     background: var(--bg-card);
     backdrop-filter: blur(16px);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 1.35rem;
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 16px;
+    padding: 1.35rem 1.45rem;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
     position: relative;
     overflow: hidden;
     box-shadow: var(--shadow-card);
 }
 
-.metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
-    opacity: 0.85;
+.metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.5);
 }
 
-.metric-card-cpu::before  { background: linear-gradient(90deg, #38bdf8, #0284c7); }
-.metric-card-mem::before  { background: linear-gradient(90deg, #a855f7, #6366f1); }
-.metric-card-disk::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
-.metric-card-net::before  { background: linear-gradient(90deg, #10b981, #06b6d4); }
+.metric-card-cpu {
+    background: linear-gradient(135deg, rgba(14, 28, 45, 0.95) 0%, rgba(14, 38, 55, 0.85) 50%, rgba(14, 165, 233, 0.25) 100%);
+    border-color: rgba(56, 189, 248, 0.3);
+}
+.metric-card-cpu:hover {
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 10px 30px -4px rgba(56, 189, 248, 0.25);
+}
 
-.metric-card:hover {
-    border-color: var(--border-color-glow);
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-soft), var(--shadow-glow);
+.metric-card-mem {
+    background: linear-gradient(135deg, rgba(25, 20, 48, 0.95) 0%, rgba(38, 25, 65, 0.85) 50%, rgba(168, 85, 247, 0.25) 100%);
+    border-color: rgba(168, 85, 247, 0.3);
+}
+.metric-card-mem:hover {
+    border-color: rgba(168, 85, 247, 0.6);
+    box-shadow: 0 10px 30px -4px rgba(168, 85, 247, 0.25);
+}
+
+.metric-card-disk {
+    background: linear-gradient(135deg, rgba(38, 28, 18, 0.95) 0%, rgba(55, 38, 20, 0.85) 50%, rgba(245, 158, 11, 0.25) 100%);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+.metric-card-disk:hover {
+    border-color: rgba(245, 158, 11, 0.6);
+    box-shadow: 0 10px 30px -4px rgba(245, 158, 11, 0.25);
+}
+
+.metric-card-net {
+    background: linear-gradient(135deg, rgba(14, 34, 26, 0.95) 0%, rgba(18, 48, 35, 0.85) 50%, rgba(34, 197, 94, 0.25) 100%);
+    border-color: rgba(34, 197, 94, 0.3);
+}
+.metric-card-net:hover {
+    border-color: rgba(34, 197, 94, 0.6);
+    box-shadow: 0 10px 30px -4px rgba(34, 197, 94, 0.25);
+}
+
+[data-theme="light"] .metric-card-cpu {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 50%, #bae6fd 100%);
+    border-color: rgba(56, 189, 248, 0.25);
+}
+[data-theme="light"] .metric-card-mem {
+    background: linear-gradient(135deg, #ffffff 0%, #faf5ff 50%, #e9d5ff 100%);
+    border-color: rgba(168, 85, 247, 0.25);
+}
+[data-theme="light"] .metric-card-disk {
+    background: linear-gradient(135deg, #ffffff 0%, #fffbeb 50%, #fde68a 100%);
+    border-color: rgba(245, 158, 11, 0.25);
+}
+[data-theme="light"] .metric-card-net {
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 50%, #bbf7d0 100%);
+    border-color: rgba(34, 197, 94, 0.25);
 }
 
 .metric-header {
@@ -1949,237 +1987,601 @@ body { display: flex; min-height: 100vh; overflow: hidden; }
 .app-section { display:none; }
 .app-section.active { display:block; }
 
-/* ── Fleet Stats ────────────────────────────────────────────────────────── */
-.fleet-stats-row, .user-stats-row { display:flex; gap:1rem; margin-bottom:1.25rem; }
-.fleet-stat-card {
-    flex: 1;
-    background: var(--bg-card);
-    backdrop-filter: blur(16px);
+/* ── Checkcle Header Additions ─────────────────────────────────────────── */
+.header-health-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.28);
+    color: #4ade80;
+    padding: 0.32rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: var(--transition);
+}
+
+.header-health-pill.degraded {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+}
+
+.header-health-pill.offline {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.header-icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 1.25rem 1.5rem;
-    text-align: center;
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: var(--shadow-card);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 1.05rem;
+}
+
+.header-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--text-main);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
+}
+
+/* ── Checkcle-Style Fleet Stat Cards ────────────────────────────────────── */
+.fleet-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.fleet-stat-card {
     position: relative;
+    border-radius: 16px;
+    padding: 1.35rem 1.45rem;
     overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 156px;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
 }
 
 .fleet-stat-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--border-color-glow);
-    box-shadow: var(--shadow-soft);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.6);
 }
 
-.fleet-stat-card::before {
-    content: '';
+.fleet-stat-card.active-filter {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+/* Specific Checkcle Gradients */
+.fleet-stat-card.card-total {
+    background: linear-gradient(135deg, rgba(30, 36, 52, 0.95) 0%, rgba(65, 59, 55, 0.85) 50%, rgba(160, 82, 45, 0.55) 100%);
+    border: 1px solid rgba(160, 82, 45, 0.4);
+}
+.fleet-stat-card.card-total:hover {
+    border-color: rgba(160, 82, 45, 0.7);
+    box-shadow: 0 10px 30px -4px rgba(160, 82, 45, 0.35);
+}
+
+.fleet-stat-card.card-online {
+    background: linear-gradient(135deg, rgba(16, 36, 28, 0.95) 0%, rgba(20, 60, 42, 0.85) 50%, rgba(34, 197, 94, 0.45) 100%);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+}
+.fleet-stat-card.card-online:hover {
+    border-color: rgba(34, 197, 94, 0.7);
+    box-shadow: 0 10px 30px -4px rgba(34, 197, 94, 0.35);
+}
+
+.fleet-stat-card.card-degraded {
+    background: linear-gradient(135deg, rgba(38, 30, 18, 0.95) 0%, rgba(65, 48, 22, 0.85) 50%, rgba(245, 158, 11, 0.45) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.fleet-stat-card.card-degraded:hover {
+    border-color: rgba(245, 158, 11, 0.7);
+    box-shadow: 0 10px 30px -4px rgba(245, 158, 11, 0.35);
+}
+
+.fleet-stat-card.card-offline {
+    background: linear-gradient(135deg, rgba(38, 18, 22, 0.95) 0%, rgba(68, 24, 30, 0.85) 50%, rgba(239, 68, 68, 0.45) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.fleet-stat-card.card-offline:hover {
+    border-color: rgba(239, 68, 68, 0.7);
+    box-shadow: 0 10px 30px -4px rgba(239, 68, 68, 0.35);
+}
+
+/* Light Theme overrides for Stat Cards */
+[data-theme="light"] .fleet-stat-card.card-total {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #fed7aa 100%);
+    border-color: rgba(160, 82, 45, 0.25);
+}
+[data-theme="light"] .fleet-stat-card.card-online {
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 50%, #bbf7d0 100%);
+    border-color: rgba(34, 197, 94, 0.28);
+}
+[data-theme="light"] .fleet-stat-card.card-degraded {
+    background: linear-gradient(135deg, #ffffff 0%, #fffbeb 50%, #fde68a 100%);
+    border-color: rgba(245, 158, 11, 0.28);
+}
+[data-theme="light"] .fleet-stat-card.card-offline {
+    background: linear-gradient(135deg, #ffffff 0%, #fef2f2 50%, #fecaca 100%);
+    border-color: rgba(239, 68, 68, 0.28);
+}
+
+/* Subtle Geometric Background Grid Overlay (Signature Checkcle styling) */
+.stat-card-grid-overlay {
     position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 16px 16px;
+    pointer-events: none;
     opacity: 0.85;
+    z-index: 1;
 }
 
-.fleet-stat-card.online::before   { background: linear-gradient(90deg, #10b981, #06b6d4); }
-.fleet-stat-card.degraded::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
-.fleet-stat-card.offline::before  { background: linear-gradient(90deg, #ef4444, #dc2626); }
+[data-theme="light"] .stat-card-grid-overlay {
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+}
+
+.stat-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+
+.stat-card-title {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="light"] .stat-card-title {
+    color: #475569;
+}
+
+.stat-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .stat-card-icon {
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #0f172a;
+}
+
+.stat-card-body {
+    position: relative;
+    z-index: 2;
+    margin: 0.55rem 0 0.45rem;
+}
 
 .fleet-stat-value {
-    font-size: 2.2rem;
+    font-size: 2.35rem;
     font-weight: 800;
-    color: var(--text-main);
+    color: #ffffff;
     line-height: 1.1;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.2rem;
     letter-spacing: -0.03em;
     font-family: var(--font-sans);
     font-feature-settings: "tnum" on, "zero" on;
 }
 
-.fleet-stat-label {
-    font-size: 0.76rem;
-    color: var(--text-dim);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+[data-theme="light"] .fleet-stat-value {
+    color: #0f172a;
 }
 
-/* ── Fleet Toolbar ──────────────────────────────────────────────────────── */
-.fleet-toolbar {
+.stat-card-sub {
+    font-size: 0.76rem;
+    color: rgba(255, 255, 255, 0.65);
+    font-weight: 500;
+}
+
+[data-theme="light"] .stat-card-sub {
+    color: #64748b;
+}
+
+.stat-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+    z-index: 2;
+}
+
+[data-theme="light"] .stat-card-footer {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.stat-card-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-mono);
+}
+
+.pill-total {
+    background: rgba(160, 82, 45, 0.25);
+    color: #fdba74;
+    border: 1px solid rgba(160, 82, 45, 0.4);
+}
+.pill-online {
+    background: rgba(34, 197, 94, 0.22);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.38);
+}
+.pill-degraded {
+    background: rgba(245, 158, 11, 0.22);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.38);
+}
+.pill-offline {
+    background: rgba(239, 68, 68, 0.22);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.38);
+}
+
+.stat-card-link {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 600;
+    transition: color 0.15s ease;
+}
+
+.fleet-stat-card:hover .stat-card-link {
+    color: #ffffff;
+}
+
+/* Mini glowing pulse dots */
+.pulse-dot-mini {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.pulse-dot-mini.online {
+    background: #22c55e;
+    box-shadow: 0 0 6px #22c55e;
+}
+.pulse-dot-mini.degraded {
+    background: #f59e0b;
+    box-shadow: 0 0 6px #f59e0b;
+}
+.pulse-dot-mini.offline {
+    background: #ef4444;
+    box-shadow: 0 0 6px #ef4444;
+}
+
+/* ── Checkcle Toolbar & Status Filter Tabs ──────────────────────────────── */
+.checkcle-toolbar-wrapper {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.checkcle-status-nav {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 4px;
 }
 
-.fleet-tag-filters {
-    display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-}
-
-.btn-tag-filter {
-    padding: 0.25rem 0.75rem;
+.checkcle-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
     color: var(--text-dim);
-    font-size: 0.78rem;
+    font-size: 0.82rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
 }
 
-.btn-tag-filter:hover, .btn-tag-filter.active {
+.checkcle-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-main);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.checkcle-tab-btn.active {
     background: rgba(56, 189, 248, 0.12);
-    border-color: rgba(56, 189, 248, 0.35);
+    color: #ffffff;
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.15);
+}
+
+[data-theme="light"] .checkcle-tab-btn {
+    background: #ffffff;
+    color: #475569;
+    border-color: rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .checkcle-tab-btn.active {
+    background: rgba(2, 132, 199, 0.1);
+    color: #0284c7;
+    border-color: rgba(2, 132, 199, 0.4);
+}
+
+.checkcle-tab-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.checkcle-tab-btn.active .checkcle-tab-badge {
+    background: rgba(56, 189, 248, 0.25);
     color: #38bdf8;
 }
 
-/* ── Fleet Grid ─────────────────────────────────────────────────────────── */
+.status-dot-mini {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.status-dot-mini.online { background: #22c55e; }
+.status-dot-mini.degraded { background: #f59e0b; }
+.status-dot-mini.offline { background: #ef4444; }
+
+.fleet-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    max-width: 420px;
+    min-width: 240px;
+}
+
+.search-box .search-icon {
+    position: absolute;
+    left: 0.85rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+
+.search-box .search-input {
+    width: 100%;
+    padding: 0.52rem 2.2rem 0.52rem 2.4rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-main);
+    font-size: 0.85rem;
+    transition: var(--transition);
+}
+
+.search-box .search-input:focus {
+    border-color: rgba(56, 189, 248, 0.45);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+    outline: none;
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 0.65rem;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0.1rem 0.3rem;
+}
+
+.toolbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.sort-select {
+    width: 140px;
+    padding: 0.52rem 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-main);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+/* View Mode Switcher (Cards / Table) */
+.checkcle-view-toggle {
+    display: inline-flex;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 3px;
+}
+
+[data-theme="light"] .checkcle-view-toggle {
+    background: #e2e8f0;
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+.view-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.38rem 0.75rem;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.view-toggle-btn:hover {
+    color: var(--text-main);
+}
+
+.view-toggle-btn.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .view-toggle-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Checkcle Server Card ────────────────────────────────────────────────── */
 .fleet-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
-    gap: 1.15rem;
+    grid-template-columns: repeat(auto-fill, minmax(295px, 1fr));
+    gap: 1.25rem;
 }
 
-.fleet-loading, .fleet-empty {
-    grid-column: 1/-1;
-    text-align: center;
-    padding: 3rem;
-    color: var(--text-dim);
-}
-
-.loading-spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(56, 189, 248, 0.2);
-    border-top-color: #38bdf8;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 1rem;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Server Card ────────────────────────────────────────────────────────── */
 .server-card {
     background: var(--bg-card);
     backdrop-filter: blur(16px);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 1.25rem;
+    border-radius: 16px;
+    padding: 1.35rem;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
     position: relative;
     outline: none;
     box-shadow: var(--shadow-card);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .server-card:hover {
-    border-color: rgba(56, 189, 248, 0.4);
+    border-color: rgba(56, 189, 248, 0.45);
     background: var(--bg-card-hover);
     transform: translateY(-3px);
-    box-shadow: var(--shadow-soft), 0 0 20px rgba(56, 189, 248, 0.12);
+    box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.12);
 }
 
-.server-card:focus-visible {
-    outline: 2px solid #38bdf8;
-    outline-offset: 2px;
-}
-
-.server-card.status-online      { border-left: 4px solid var(--status-online); }
-.server-card.status-degraded    { border-left: 4px solid var(--status-degraded); }
-.server-card.status-offline     { border-left: 4px solid var(--status-offline); }
-.server-card.status-unreachable { border-left: 4px solid var(--status-unreachable); }
-
-.server-card-header {
+.server-card-top {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 0.65rem;
+    align-items: center;
+    margin-bottom: 0.95rem;
 }
 
-.server-status-row {
+.server-card-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+}
+
+.server-card-status-pill.online {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.server-card-status-pill.degraded {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.server-card-status-pill.offline,
+.server-card-status-pill.unreachable {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.server-card-identity {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
 }
 
-.server-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+.distro-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
 }
 
-.status-online    .server-status-dot { background: var(--status-online); animation: pulse-online 2s infinite; }
-.status-degraded  .server-status-dot { background: var(--status-degraded); }
-.status-offline   .server-status-dot { background: var(--status-offline); }
-.status-unreachable .server-status-dot { background: var(--status-unreachable); }
-
-@keyframes pulse-online {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
-    50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
-}
-
-.server-status-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--text-dim);
-}
-
-.maintenance-badge {
-    font-size: 0.62rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    font-weight: 700;
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-}
-
-.main-badge {
-    font-size: 0.62rem;
-    padding: 0.1rem 0.45rem;
-    border-radius: 4px;
-    font-weight: 700;
-    background: rgba(56, 189, 248, 0.15);
-    color: #38bdf8;
-    letter-spacing: 0.02em;
-}
-
-.server-card-actions {
-    display: flex;
-    gap: 0.35rem;
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.server-card:hover .server-card-actions {
-    opacity: 1;
-}
-
-.server-action-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 0.25rem 0.45rem;
-    cursor: pointer;
-    font-size: 0.82rem;
-    transition: all 0.15s;
-    color: var(--text-muted);
-}
-
-.server-action-btn:hover {
-    background: rgba(56, 189, 248, 0.15);
-    color: #fff;
-    border-color: rgba(56, 189, 248, 0.3);
-}
-
-.server-action-btn.danger:hover {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.35);
-    color: #f87171;
+.server-card-title-meta {
+    flex: 1;
+    min-width: 0;
 }
 
 .server-hostname {
@@ -2193,136 +2595,384 @@ body { display: flex; min-height: 100vh; overflow: hidden; }
     letter-spacing: -0.01em;
 }
 
-.server-ip {
+.server-ip-line {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.76rem;
     color: var(--text-dim);
-    margin-bottom: 0.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
 }
 
-.server-os {
-    font-size: 0.74rem;
-    color: var(--text-muted);
-    margin-bottom: 0.85rem;
-}
-
-.server-metrics {
+/* Checkcle-style 3 Metric Bars */
+.server-metrics-stack {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    margin-bottom: 0.85rem;
-}
-
-.server-metric-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.server-metric-label {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: var(--text-dim);
-    width: 32px;
-    font-family: var(--font-mono);
-}
-
-.server-metric-bar-bg {
-    flex: 1;
-    height: 5px;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.server-metric-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.5s ease;
-}
-
-.server-metric-val {
-    font-size: 0.72rem;
-    font-family: var(--font-mono);
-    color: var(--text-muted);
-    width: 40px;
-    text-align: right;
-    font-weight: 600;
-}
-
-.server-meta {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.74rem;
-    color: var(--text-muted);
-}
-
-.server-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.6rem;
-}
-
-.server-tag {
-    font-size: 0.65rem;
-    padding: 0.12rem 0.45rem;
-    background: rgba(56, 189, 248, 0.08);
-    border: 1px solid rgba(56, 189, 248, 0.18);
+    gap: 0.55rem;
+    margin-bottom: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.75rem 0.85rem;
     border-radius: 10px;
-    color: var(--text-dim);
-    font-family: var(--font-mono);
+    border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-/* ── Server Identity Bar ────────────────────────────────────────────────── */
-.server-identity-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-    padding: 0.8rem 1.35rem;
-    background: var(--bg-card);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-card);
-    flex-wrap: wrap;
-    transition: var(--transition);
+[data-theme="light"] .server-metrics-stack {
+    background: #f8fafc;
+    border-color: rgba(0, 0, 0, 0.06);
 }
 
-.server-identity-bar:hover {
-    border-color: rgba(255, 255, 255, 0.12);
-}
-
-.server-identity-left {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    flex-wrap: wrap;
-}
-
-.server-identity-meta {
+.server-metric-item {
     display: flex;
     align-items: center;
     gap: 0.6rem;
 }
 
+.server-metric-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    width: 36px;
+    font-family: var(--font-mono);
+}
+
+.server-metric-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="light"] .server-metric-track {
+    background: #e2e8f0;
+}
+
+.server-metric-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.4s ease;
+}
+
+.server-metric-fill.green  { background: linear-gradient(90deg, #22c55e, #10b981); }
+.server-metric-fill.yellow { background: linear-gradient(90deg, #f59e0b, #eab308); }
+.server-metric-fill.red    { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+.server-metric-val {
+    font-size: 0.74rem;
+    font-family: var(--font-mono);
+    color: var(--text-main);
+    width: 44px;
+    text-align: right;
+    font-weight: 700;
+}
+
+.server-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Checkcle Table View ────────────────────────────────────────────────── */
+.fleet-table-wrapper {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+}
+
+.checkcle-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.82rem;
+}
+
+.checkcle-table th {
+    background: rgba(15, 23, 42, 0.85);
+    padding: 0.85rem 1.1rem;
+    color: var(--text-dim);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+[data-theme="light"] .checkcle-table th {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.checkcle-table td {
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+}
+
+[data-theme="light"] .checkcle-table td {
+    border-bottom-color: rgba(0, 0, 0, 0.05);
+    color: #0f172a;
+}
+
+.checkcle-table tbody tr {
+    transition: background 0.15s ease;
+    cursor: pointer;
+}
+
+.checkcle-table tbody tr:hover {
+    background: rgba(56, 189, 248, 0.06);
+}
+
+[data-theme="light"] .checkcle-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.server-col-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.server-cell-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.server-cell-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.server-cell-name {
+    font-weight: 700;
+    color: var(--text-main);
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.server-cell-os {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+}
+
+.checkcle-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    font-family: var(--font-mono);
+}
+
+.checkcle-status-pill.online {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.checkcle-status-pill.degraded {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.checkcle-status-pill.offline,
+.checkcle-status-pill.unreachable {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.table-metric-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 100px;
+}
+
+.table-bar-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+[data-theme="light"] .table-bar-track {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.table-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.table-metric-val {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-weight: 600;
+    width: 42px;
+    text-align: right;
+    color: var(--text-main);
+}
+
+.server-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.server-distro-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.server-card-names {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+
+/* ── Checkcle Server Detail Hero Header ─────────────────────────────────── */
+.server-identity-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    padding: 1.1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    flex-wrap: wrap;
+    transition: var(--transition);
+}
+
+[data-theme="light"] .server-identity-bar {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+.server-identity-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.server-identity-os-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.server-identity-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.server-identity-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
 .server-identity-title {
-    font-size: 1.15rem;
+    font-size: 1.25rem;
     font-weight: 800;
     color: var(--text-main);
     letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.checkcle-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.22rem 0.7rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+}
+
+.checkcle-status-badge.online {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.checkcle-status-badge.degraded {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.checkcle-status-badge.offline {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.server-identity-chips {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .server-identity-ip-badge {
     font-family: var(--font-mono);
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     color: var(--text-muted);
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     padding: 2px 8px;
     border-radius: 6px;
 }
@@ -2331,20 +2981,50 @@ body { display: flex; min-height: 100vh; overflow: hidden; }
     background: rgba(56, 189, 248, 0.12);
     color: #38bdf8;
     border: 1px solid rgba(56, 189, 248, 0.28);
-    font-size: 0.75rem;
+    font-size: 0.74rem;
     font-family: var(--font-mono);
     padding: 2px 9px;
     border-radius: 6px;
     font-weight: 600;
-    letter-spacing: 0.02em;
+}
+
+.server-specs-chip {
+    font-size: 0.74rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 2px 8px;
+    border-radius: 6px;
 }
 
 .server-identity-right {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.65rem;
     margin-left: auto;
     flex-wrap: wrap;
+}
+
+.btn-secondary-action {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    border-radius: 8px;
+    padding: 0.45rem 0.95rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.btn-secondary-action:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .btn-back-fleet {
@@ -2357,7 +3037,7 @@ body { display: flex; min-height: 100vh; overflow: hidden; }
     font-size: 0.82rem;
     font-weight: 600;
     transition: var(--transition);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.35rem;
 }

@@ -161,6 +161,17 @@ async def get_login():
     return HTMLResponse("<h1>Login</h1>")
 
 
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for container orchestrators, monitoring agents, and uptime probes."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "2.0.3"
+    }
+
+
 # ─── Auth Endpoints ───────────────────────────────────────────────────────────
 
 @app.post("/api/auth/login")
