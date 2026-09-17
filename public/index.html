@@ -118,8 +118,8 @@
 
             <div class="header-right">
                 <!-- Quick Theme Toggle -->
-                <button class="header-icon-btn theme-toggle-btn" id="header-quick-theme-btn" title="Switch to Light Mode" aria-label="Toggle Light or Dark Mode">
-                    <span class="theme-icon-indicator">☀️</span>
+                <button class="header-icon-btn" id="header-quick-theme-btn" type="button" title="Switch to Light Mode" aria-label="Switch to Light Mode">
+                    <span class="theme-icon-indicator" id="header-theme-indicator">☀️</span>
                 </button>
 
                 <!-- Alert Bell -->
@@ -167,7 +167,7 @@
                         <div class="user-dropdown-divider"></div>
                         <button class="user-dropdown-item operator-only" onclick="showSection('audit')">📋 Audit Log</button>
                         <button class="user-dropdown-item admin-only" onclick="showSection('settings')">⚙️ Settings</button>
-                        <button class="user-dropdown-item theme-toggle-btn" id="header-theme-toggle-btn">☀️ Light Mode</button>
+                        <button class="user-dropdown-item" id="header-theme-toggle-btn" type="button">☀️ Light Mode</button>
                         <div class="user-dropdown-divider"></div>
                         <button class="user-dropdown-item danger" onclick="PulseOpsAuth.logout()">🚪 Sign Out</button>
                     </div>
@@ -2597,7 +2597,7 @@
 
                         <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border-color);">
                             <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Appearance &amp; Theme</div>
-                            <button class="btn-secondary theme-toggle-btn" id="settings-theme-toggle-btn" style="width:100%; justify-content:center;">☀️ Switch to Light Mode</button>
+                            <button class="btn-secondary" id="settings-theme-toggle-btn" type="button" style="width:100%; justify-content:center;">☀️ Switch to Light Mode</button>
                         </div>
                     </div>
                 </div>

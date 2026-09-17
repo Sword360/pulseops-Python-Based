@@ -563,19 +563,45 @@ class PulseOpsDashboard {
 
     // ── Theme Persistence ─────────────────────────────────────────────────────
 
+    toggleTheme() {
+        const current = localStorage.getItem('pulseops-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        this.applyTheme(next);
+        showToast(`${next === 'dark' ? 'Dark' : 'Light'} mode enabled`, 'info', 2500);
+        return next;
+    }
+
     initTheme() {
         const saved = localStorage.getItem('pulseops-theme') || 'dark';
         this.applyTheme(saved);
 
-        document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+        // Header quick icon button
+        const quickBtn = document.getElementById('header-quick-theme-btn');
+        if (quickBtn) {
+            quickBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                const current = localStorage.getItem('pulseops-theme') || 'dark';
-                const next = current === 'dark' ? 'light' : 'dark';
-                this.applyTheme(next);
-                showToast(`${next === 'dark' ? 'Dark' : 'Light'} mode enabled`, 'info');
+                e.stopPropagation();
+                this.toggleTheme();
             });
-        });
+        }
+
+        // Dropdown menu item
+        const dropdownBtn = document.getElementById('header-theme-toggle-btn');
+        if (dropdownBtn) {
+            dropdownBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleTheme();
+            });
+        }
+
+        // Settings page button
+        const settingsBtn = document.getElementById('settings-theme-toggle-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleTheme();
+            });
+        }
     }
 
     applyTheme(theme) {
@@ -588,21 +614,29 @@ class PulseOpsDashboard {
             metaTheme.setAttribute('content', theme === 'dark' ? '#070a11' : '#ffffff');
         }
 
-        document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-            const icon = btn.querySelector('.theme-icon-indicator');
-            if (icon) {
-                icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-            }
-            if (btn.id === 'header-quick-theme-btn') {
-                const titleText = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-                btn.title = titleText;
-                btn.setAttribute('aria-label', titleText);
-            } else if (btn.id === 'settings-theme-toggle-btn') {
-                btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
-            } else if (!icon) {
-                btn.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-            }
-        });
+        const isDark = theme === 'dark';
+        const iconChar = isDark ? '☀️' : '🌙';
+        const quickTitle = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+
+        // 1. Header quick icon button (ONLY renders icon, never raw text)
+        const quickBtn = document.getElementById('header-quick-theme-btn');
+        if (quickBtn) {
+            quickBtn.innerHTML = `<span class="theme-icon-indicator" id="header-theme-indicator">${iconChar}</span>`;
+            quickBtn.title = quickTitle;
+            quickBtn.setAttribute('aria-label', quickTitle);
+        }
+
+        // 2. Dropdown button
+        const dropdownBtn = document.getElementById('header-theme-toggle-btn');
+        if (dropdownBtn) {
+            dropdownBtn.innerHTML = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
+        }
+
+        // 3. Settings page button
+        const settingsBtn = document.getElementById('settings-theme-toggle-btn');
+        if (settingsBtn) {
+            settingsBtn.innerHTML = isDark ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+        }
 
         // Broadcast theme change for interactive components & charts
         document.dispatchEvent(new CustomEvent('pulseops:theme:changed', { detail: { theme } }));

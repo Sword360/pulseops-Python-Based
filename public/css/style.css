@@ -2234,7 +2234,13 @@ body {
     justify-content: center;
     cursor: pointer;
     transition: var(--transition);
-    font-size: 1.05rem;
+    font-size: 1.15rem;
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 0;
+    flex-shrink: 0;
+    user-select: none;
+    line-height: 1;
 }
 
 .header-icon-btn:hover {

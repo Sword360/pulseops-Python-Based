@@ -452,19 +452,31 @@ const SettingsManager = (() => {
     // ── Theme Toggle ──────────────────────────────────────────────────────────
 
     function initThemeToggle() {
+        const themeBtn = document.getElementById('settings-theme-toggle-btn');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (window.PulseOpsApp && typeof window.PulseOpsApp.toggleTheme === 'function') {
+                    window.PulseOpsApp.toggleTheme();
+                } else {
+                    const current = localStorage.getItem('pulseops-theme') || 'dark';
+                    applyTheme(current === 'dark' ? 'light' : 'dark');
+                }
+            });
+        }
         const current = localStorage.getItem('pulseops-theme') || 'dark';
         applyTheme(current);
-        document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-            btn.textContent = current === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
-        });
     }
 
     function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('pulseops-theme', theme);
-        document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-            btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
-        });
+        if (window.PulseOpsApp && typeof window.PulseOpsApp.applyTheme === 'function') {
+            window.PulseOpsApp.applyTheme(theme);
+        } else {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('pulseops-theme', theme);
+            const btn = document.getElementById('settings-theme-toggle-btn');
+            if (btn) btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+        }
     }
 
     // ── Init ──────────────────────────────────────────────────────────────────
