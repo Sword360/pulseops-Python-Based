@@ -236,6 +236,12 @@ const SettingsManager = (() => {
     function initCategoryNav() {
         const nav = document.getElementById('settings-tab-nav');
         if (!nav) return;
+        nav.addEventListener('wheel', (e) => {
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                nav.scrollLeft += e.deltaY * 0.85;
+            }
+        }, { passive: false });
 
         nav.addEventListener('click', (e) => {
             const btn = e.target.closest('.settings-tab-btn');

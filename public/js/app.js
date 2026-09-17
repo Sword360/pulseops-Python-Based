@@ -514,6 +514,17 @@ class PulseOpsDashboard {
         const container = document.getElementById('section-server-dashboard');
         if (!container) return;
 
+        // Smooth horizontal scrolling on mouse wheel
+        const navTabs = container.querySelector('.nav-tabs');
+        if (navTabs) {
+            navTabs.addEventListener('wheel', (e) => {
+                if (e.deltaY !== 0) {
+                    e.preventDefault();
+                    navTabs.scrollLeft += e.deltaY * 0.85;
+                }
+            }, { passive: false });
+        }
+
         container.querySelectorAll('.nav-tabs .tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (btn.getAttribute('data-nav-disabled') === 'true') {
