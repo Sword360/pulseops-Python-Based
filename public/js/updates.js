@@ -13,7 +13,11 @@ const UpdatesManager = (() => {
     function switchTab(tabKey) {
         _activeTab = tabKey;
         document.querySelectorAll('[data-updates-tab]').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.updatesTab === tabKey);
+            const isActive = btn.dataset.updatesTab === tabKey;
+            btn.classList.toggle('active', isActive);
+            if (isActive) {
+                btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }
         });
         document.querySelectorAll('.updates-tab-panel').forEach(panel => {
             panel.style.display = 'none';

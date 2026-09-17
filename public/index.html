@@ -1373,7 +1373,7 @@
                 </div>
 
                 <!-- Navigation Tabs -->
-                <div class="tabs-nav" style="margin:1rem 0 1.5rem 0; display:flex; gap:0.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                <nav class="nav-tabs" aria-label="Alerts Sections">
                     <button class="tab-btn active" id="alerts-tab-btn-active" data-alert-tab="active">
                         ⚡ Active Incidents <span class="badge" id="alerts-badge-active-count" style="margin-left:0.35rem; background:#ef4444; color:#fff; padding:0.1rem 0.45rem; border-radius:10px; font-size:0.7rem; display:none;">0</span>
                     </button>
@@ -1386,7 +1386,7 @@
                     <button class="tab-btn" id="alerts-tab-btn-integrations" data-alert-tab="integrations">
                         🔔 Webhooks &amp; Simulator
                     </button>
-                </div>
+                </nav>
 
                 <!-- Tab 1: Active Incidents -->
                 <div id="alerts-view-active" class="alert-tab-panel">
@@ -1559,7 +1559,7 @@
                 </div>
 
                 <!-- Navigation Tabs -->
-                <div class="tabs-nav" style="margin:1rem 0 1.5rem 0; display:flex; gap:0.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                <nav class="nav-tabs" aria-label="Cron and Timers Sections">
                     <button class="tab-btn active" id="cron-tab-btn-cron" data-cron-tab="cron">
                         📅 Scheduled Cron Jobs
                     </button>
@@ -1569,7 +1569,7 @@
                     <button class="tab-btn" id="cron-tab-btn-history" data-cron-tab="history">
                         📜 Execution History Log
                     </button>
-                </div>
+                </nav>
 
                 <!-- Tab 1: Cron Jobs -->
                 <div id="cron-view-cron" class="cron-tab-panel">
@@ -1691,14 +1691,14 @@
                 </div>
 
                 <!-- Navigation Tabs -->
-                <div class="tabs-nav" style="margin:1rem 0 1.5rem 0; display:flex; gap:0.5rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+                <nav class="nav-tabs" aria-label="OS Updates Sections">
                     <button class="tab-btn active" id="updates-tab-btn-packages" data-updates-tab="packages">
                         📦 Upgradable Packages List
                     </button>
                     <button class="tab-btn" id="updates-tab-btn-history" data-updates-tab="history">
                         📜 Upgrade Session History
                     </button>
-                </div>
+                </nav>
 
                 <!-- Tab 1: Upgradable Packages -->
                 <div id="updates-view-packages" class="updates-tab-panel">

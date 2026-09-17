@@ -690,7 +690,11 @@ const AlertsManager = (() => {
     function switchTab(tabKey) {
         _activeTab = tabKey;
         document.querySelectorAll('[data-alert-tab]').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.alertTab === tabKey);
+            const isActive = btn.dataset.alertTab === tabKey;
+            btn.classList.toggle('active', isActive);
+            if (isActive) {
+                btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }
         });
         document.querySelectorAll('.alert-tab-panel').forEach(panel => {
             panel.style.display = 'none';
@@ -719,6 +723,10 @@ const AlertsManager = (() => {
         const panel = document.getElementById('alert-dropdown');
         if (!panel) return;
         _dropdownOpen = !_dropdownOpen;
+        if (_dropdownOpen) {
+            const userDd = document.getElementById('user-dropdown');
+            if (userDd) userDd.style.display = 'none';
+        }
         panel.style.display = _dropdownOpen ? 'block' : 'none';
         if (_dropdownOpen) {
             _unreadCount = 0;

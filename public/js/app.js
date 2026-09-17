@@ -9,19 +9,73 @@
 /* ─── Global helpers (used by other modules) ─────────────────────────────────
    These are defined before any module code executes.                          */
 
+const SECTION_LABELS = {
+    'fleet': 'Fleet Overview',
+    'server-dashboard': 'Server Dashboard',
+    'users': 'User Management',
+    'alerts': 'Alerts & Incident Center',
+    'cron': 'Cron Jobs & Timers',
+    'updates': 'OS Updates & Patches',
+    'proxy': 'Reverse Proxy Manager',
+    'backups': 'Backups & Recovery',
+    'audit': 'Audit Log',
+    'settings': 'Settings'
+};
+
 function showSection(name) {
     document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
     const target = document.getElementById(`section-${name}`);
     if (target) target.classList.add('active');
 
     // Update sidebar active state
-    document.querySelectorAll('.sidebar-btn').forEach(btn => {
+    document.querySelectorAll('.sidebar-btn[data-section]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.section === name);
     });
 
-    // Show/hide server-specific header
+    // Show/hide server-specific header vs global health badge
     const connStatus = document.getElementById('header-conn-status');
-    if (connStatus) connStatus.style.display = name === 'server-dashboard' ? 'flex' : 'none';
+    const globalHealth = document.getElementById('header-global-health');
+    if (name === 'server-dashboard') {
+        if (connStatus) connStatus.style.display = 'flex';
+        if (globalHealth) globalHealth.style.display = 'none';
+    } else {
+        if (connStatus) connStatus.style.display = 'none';
+        if (globalHealth) globalHealth.style.display = '';
+        // If navigating away from server dashboard, clear remote poll timer
+        if (window.PulseOpsApp && window.PulseOpsApp.serverPollTimer) {
+            clearInterval(window.PulseOpsApp.serverPollTimer);
+            window.PulseOpsApp.serverPollTimer = null;
+        }
+    }
+
+    // Auto-update breadcrumb for non-server sections (server-dashboard manages its own host breadcrumbs)
+    if (name !== 'server-dashboard') {
+        const label = SECTION_LABELS[name] || (name.charAt(0).toUpperCase() + name.slice(1));
+        updateBreadcrumb([{ label }]);
+    }
+
+    // Trigger data loader for destination section
+    if (name === 'fleet' && window.PulseOpsFleet && typeof window.PulseOpsFleet.loadServers === 'function') {
+        window.PulseOpsFleet.loadServers();
+    } else if (name === 'users' && window.UsersManager && typeof window.UsersManager.loadUsers === 'function') {
+        window.UsersManager.loadUsers();
+    } else if (name === 'alerts' && window.AlertsManager) {
+        if (typeof window.AlertsManager.loadActiveAlerts === 'function') window.AlertsManager.loadActiveAlerts();
+        if (typeof window.AlertsManager.loadAlertRules === 'function') window.AlertsManager.loadAlertRules();
+    } else if (name === 'cron' && window.CronManager && typeof window.CronManager.loadAll === 'function') {
+        window.CronManager.loadAll();
+    } else if (name === 'updates' && window.UpdatesManager && typeof window.UpdatesManager.loadUpdates === 'function') {
+        window.UpdatesManager.loadUpdates();
+    } else if (name === 'proxy' && window.ProxyManager && typeof window.ProxyManager.init === 'function') {
+        window.ProxyManager.init();
+    } else if (name === 'backups' && window.BackupManager && typeof window.BackupManager.init === 'function') {
+        window.BackupManager.init();
+    } else if (name === 'audit' && window.AuditViewer) {
+        if (typeof window.AuditViewer.init === 'function') window.AuditViewer.init();
+        else if (typeof window.AuditViewer.loadAuditLog === 'function') window.AuditViewer.loadAuditLog(1);
+    } else if (name === 'settings' && window.SettingsManager && typeof window.SettingsManager.loadSettings === 'function') {
+        window.SettingsManager.loadSettings();
+    }
 
     // If opening server dashboard, ensure charts are properly sized and hydrated
     if (name === 'server-dashboard') {
@@ -31,6 +85,14 @@ function showSection(name) {
                 if (typeof window.PulseOpsApp.loadServerHistory === 'function') window.PulseOpsApp.loadServerHistory();
             }
         }, 50);
+    }
+
+    // Mobile: auto-close drawer on navigation
+    if (window.innerWidth <= 768) {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        sidebar?.classList.remove('mobile-open');
+        backdrop?.classList.remove('active');
     }
 }
 
@@ -337,6 +399,20 @@ class PulseOpsDashboard {
             }
         });
 
+        // Close mobile drawer on desktop resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                closeMobileDrawer();
+            }
+        });
+
+        // Add Server button on mobile should close drawer
+        document.querySelectorAll('.sidebar-add-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.innerWidth <= 768) closeMobileDrawer();
+            });
+        });
+
         // Section navigation
         document.querySelectorAll('.sidebar-btn[data-section]').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -346,33 +422,6 @@ class PulseOpsDashboard {
                 }
                 const section = btn.dataset.section;
                 showSection(section);
-                updateBreadcrumb([{ label: btn.querySelector('.sidebar-label')?.textContent || section }]);
-
-                // Refresh data for target section
-                if (section === 'fleet' && window.PulseOpsFleet) window.PulseOpsFleet.loadServers();
-                if (section === 'users' && window.UsersManager) window.UsersManager.loadUsers();
-                if (section === 'alerts' && window.AlertsManager) {
-                    window.AlertsManager.loadActiveAlerts();
-                    window.AlertsManager.loadAlertRules();
-                }
-                if (section === 'cron' && window.CronManager) window.CronManager.loadAll();
-                if (section === 'updates' && window.UpdatesManager) window.UpdatesManager.loadUpdates();
-                if (section === 'proxy' && window.ProxyManager) window.ProxyManager.init();
-                if (section === 'backups' && window.BackupManager) window.BackupManager.init();
-                if (section === 'audit' && window.AuditViewer) {
-                    if (typeof window.AuditViewer.init === 'function') window.AuditViewer.init();
-                    else window.AuditViewer.loadAuditLog(1);
-                }
-                if (section === 'settings' && window.SettingsManager) window.SettingsManager.loadSettings();
-
-                // If navigating away from server dashboard, pause remote polling
-                if (section !== 'server-dashboard' && this.serverPollTimer) {
-                    clearInterval(this.serverPollTimer);
-                    this.serverPollTimer = null;
-                }
-
-                // Mobile: close drawer after nav
-                if (window.innerWidth <= 768) closeMobileDrawer();
             });
         });
 
@@ -454,8 +503,30 @@ class PulseOpsDashboard {
                         setTimeout(() => window.webTerminal.input.focus(), 80);
                     }
                 }
+
+                // Scroll active tab into view smoothly
+                btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
             });
         });
+    }
+
+    // ── Programmatic Tab Switching & Control ─────────────────────────────────
+
+    switchTab(tabName) {
+        if (!tabName) return;
+        const currentActive = document.querySelector('.app-section.active');
+        if (!currentActive || currentActive.id !== 'section-server-dashboard') {
+            showSection('server-dashboard');
+        }
+        const btn = document.querySelector(`#section-server-dashboard .nav-tabs .tab-btn[data-tab="${tabName}"]`);
+        if (btn) {
+            btn.click();
+            btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+        }
+    }
+
+    async restartServer() {
+        return this.quickSystemAction('reboot');
     }
 
     // ── User Menu Dropdown ────────────────────────────────────────────────────
@@ -467,6 +538,8 @@ class PulseOpsDashboard {
 
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
+            const alertDd = document.getElementById('alert-dropdown');
+            if (alertDd) alertDd.style.display = 'none';
             dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         });
         document.addEventListener('click', () => { dropdown.style.display = 'none'; });
@@ -875,6 +948,12 @@ class PulseOpsDashboard {
                 const sId = btn.dataset.serverId;
                 const hName = btn.dataset.hostname;
                 this.selectServer(sId, hName);
+                if (window.innerWidth <= 768) {
+                    const sidebar = document.getElementById('sidebar');
+                    const backdrop = document.getElementById('sidebar-backdrop');
+                    sidebar?.classList.remove('mobile-open');
+                    backdrop?.classList.remove('active');
+                }
             });
         });
     }
@@ -1198,13 +1277,21 @@ class PulseOpsDashboard {
             }
         });
 
-        // Close on Escape key
+        // Close on Escape key (modals, dropdowns, mobile drawer)
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal-overlay').forEach(modal => {
                     modal.classList.remove('active');
                     modal.style.display = 'none';
                 });
+                const userDd = document.getElementById('user-dropdown');
+                if (userDd) userDd.style.display = 'none';
+                const alertDd = document.getElementById('alert-dropdown');
+                if (alertDd) alertDd.style.display = 'none';
+                const sidebar = document.getElementById('sidebar');
+                const backdrop = document.getElementById('sidebar-backdrop');
+                sidebar?.classList.remove('mobile-open');
+                backdrop?.classList.remove('active');
             }
         });
     }

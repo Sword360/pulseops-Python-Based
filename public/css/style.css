@@ -114,7 +114,8 @@
     color: #e6edf3;
 }
 
-[data-theme="light"] .nav-tabs {
+[data-theme="light"] .nav-tabs,
+[data-theme="light"] .tabs-nav {
     background: #e2e8f0;
     border-color: rgba(0, 0, 0, 0.08);
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -248,7 +249,8 @@ body {
 }
 
 /* Nav Tabs - Modern Segmented Control Bar */
-.nav-tabs {
+.nav-tabs,
+.tabs-nav {
     display: flex;
     gap: 0.35rem;
     margin-bottom: 1.5rem;
@@ -257,11 +259,13 @@ body {
     border-radius: var(--radius-md);
     padding: 0.35rem;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     backdrop-filter: blur(16px);
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
     scrollbar-width: none;
 }
-.nav-tabs::-webkit-scrollbar {
+.nav-tabs::-webkit-scrollbar,
+.tabs-nav::-webkit-scrollbar {
     display: none;
 }
 
@@ -300,9 +304,14 @@ body {
 .tab-content {
     display: none;
 }
+.tab-content.active,
+.alert-tab-panel,
+.cron-tab-panel,
+.updates-tab-panel {
+    animation: fadeIn 0.25s ease-out;
+}
 .tab-content.active {
     display: block;
-    animation: fadeIn 0.25s ease-out;
 }
 
 @keyframes fadeIn {
@@ -815,16 +824,21 @@ canvas {
     box-shadow: 0 1px 6px rgba(56, 189, 248, 0.1);
 }
 
-.data-table-wrapper {
+.data-table-wrapper,
+.table-responsive {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     background: rgba(5, 8, 16, 0.5);
     backdrop-filter: blur(12px);
+    width: 100%;
+    max-width: 100%;
 }
 
 .data-table {
     width: 100%;
+    min-width: 620px;
     border-collapse: collapse;
     text-align: left;
     font-size: 0.88rem;
@@ -1181,6 +1195,9 @@ canvas {
     border-radius: var(--radius-md);
     width: 90%;
     max-width: 600px;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-sizing: border-box;
     padding: 1.5rem;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
 }
@@ -1849,6 +1866,13 @@ body {
 .sidebar.collapsed .server-item-text {
     display: none !important;
 }
+.sidebar.collapsed .sidebar-server-item {
+    justify-content: center;
+    padding: 0.65rem 0;
+}
+.sidebar.collapsed .sidebar-server-dot {
+    margin: 0;
+}
 .sidebar.collapsed .sidebar-footer {
     padding: 0.75rem 0;
     display: flex;
@@ -2093,7 +2117,8 @@ body {
 }
 
 /* ── Checkcle-Style Fleet Stat Cards ────────────────────────────────────── */
-.fleet-stats-row {
+.fleet-stats-row,
+.user-stats-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1.25rem;
@@ -2105,13 +2130,25 @@ body {
     border-radius: 16px;
     padding: 1.35rem 1.45rem;
     overflow: hidden;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 156px;
+    min-height: 120px;
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
+}
+
+.fleet-stat-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 .fleet-stat-card:hover {
@@ -3795,7 +3832,8 @@ input:checked + .toggle-slider::before {
 }
 
 @media (max-width: 1200px) {
-    .fleet-stats-row {
+    .fleet-stats-row,
+    .user-stats-row {
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
     }
@@ -3825,7 +3863,9 @@ input:checked + .toggle-slider::before {
         height: 100vh;
         z-index: 1200;
         transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        background: var(--bg-card);
+        background: var(--bg-surface);
+        backdrop-filter: blur(20px);
+        border-right: 1px solid var(--border-color);
         box-shadow: none;
     }
     .sidebar.mobile-open {
@@ -3854,7 +3894,7 @@ input:checked + .toggle-slider::before {
         width: 100% !important;
         max-width: 100vw !important;
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: visible;
         justify-content: space-between;
     }
     .header-left {
@@ -3906,6 +3946,7 @@ input:checked + .toggle-slider::before {
     .header-right {
         flex: 0 0 auto;
         gap: 0.35rem;
+        position: relative;
     }
     .header-icon-btn,
     .alert-bell-btn {
@@ -3934,8 +3975,11 @@ input:checked + .toggle-slider::before {
     }
     .user-dropdown,
     .alert-dropdown {
-        width: min(300px, 90vw);
+        width: min(340px, calc(100vw - 16px));
+        max-width: calc(100vw - 16px);
         right: 0;
+        top: calc(100% + 8px);
+        z-index: 1500;
     }
     .content-area {
         padding: 1rem 0.85rem;
@@ -3949,7 +3993,8 @@ input:checked + .toggle-slider::before {
         max-width: 100% !important;
         min-width: 0 !important;
     }
-    .fleet-stats-row {
+    .fleet-stats-row,
+    .user-stats-row {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.65rem;
         margin-bottom: 1.15rem;
@@ -4076,19 +4121,22 @@ input:checked + .toggle-slider::before {
     .form-row {
         grid-template-columns: 1fr;
     }
-    .nav-tabs {
+    .nav-tabs,
+    .tabs-nav {
         display: flex;
         flex-wrap: nowrap;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         gap: 0.35rem;
-        padding-bottom: 0.35rem;
+        padding: 0.35rem;
         scrollbar-width: none;
     }
-    .nav-tabs::-webkit-scrollbar {
+    .nav-tabs::-webkit-scrollbar,
+    .tabs-nav::-webkit-scrollbar {
         display: none;
     }
-    .nav-tabs .tab-btn {
+    .nav-tabs .tab-btn,
+    .tabs-nav .tab-btn {
         flex-shrink: 0;
         white-space: nowrap;
         font-size: 0.78rem;
@@ -4124,16 +4172,28 @@ input:checked + .toggle-slider::before {
     .server-identity-right {
         width: 100%;
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
         gap: 0.5rem;
     }
-    .server-identity-right .btn-secondary,
-    .server-identity-right .btn-primary,
-    .server-identity-right .btn-danger {
+    .server-identity-right > button,
+    .server-identity-right .btn-back-fleet,
+    .server-identity-right .btn-secondary-action,
+    .server-identity-right .btn-danger-action,
+    .server-identity-right .btn-primary {
         width: 100%;
         justify-content: center;
         padding: 0.45rem 0.6rem;
         font-size: 0.78rem;
+        min-height: 36px;
+        box-sizing: border-box;
+    }
+    .setting-row:not(:has(.toggle-switch)) {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.4rem;
+    }
+    .setting-row:not(:has(.toggle-switch)) .setting-label {
+        min-width: unset;
     }
     .modal-card {
         width: 95vw !important;
@@ -4175,7 +4235,9 @@ input:checked + .toggle-slider::before {
     .card {
         padding: 0.95rem;
     }
-    .fleet-stats-row {
+    .fleet-stats-row,
+    .user-stats-row {
+        grid-template-columns: 1fr;
         gap: 0.5rem;
     }
     .fleet-stat-card {

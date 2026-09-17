@@ -15,7 +15,11 @@ const CronManager = (() => {
     function switchTab(tabKey) {
         _activeTab = tabKey;
         document.querySelectorAll('[data-cron-tab]').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.cronTab === tabKey);
+            const isActive = btn.dataset.cronTab === tabKey;
+            btn.classList.toggle('active', isActive);
+            if (isActive) {
+                btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }
         });
         document.querySelectorAll('.cron-tab-panel').forEach(panel => {
             panel.style.display = 'none';
