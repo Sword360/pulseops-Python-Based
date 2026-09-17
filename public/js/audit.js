@@ -63,13 +63,24 @@ const AuditViewer = (() => {
 
         try {
             const resp = await PulseOpsAuth.apiFetch(`/api/admin/audit?${params.toString()}`);
-            if (!resp || !resp.ok) return;
+            if (!resp || !resp.ok) {
+                const tbody = document.getElementById('audit-table-body');
+                if (tbody) {
+                    const statusMsg = resp ? `HTTP ${resp.status} ${resp.statusText || ''}` : 'Network error';
+                    tbody.innerHTML = `<tr><td colspan="7" class="empty-table-cell" style="color:var(--accent-red); padding:2rem; text-align:center;">⚠️ Unable to retrieve audit logs (${statusMsg}). Please verify permissions or network status.</td></tr>`;
+                }
+                return;
+            }
             const data = await resp.json();
             _totalPages = data.pages || 1;
             renderAuditTable(data.entries, data.total);
             renderPagination(data.total);
         } catch (e) {
             console.error('[Audit] Load error:', e);
+            const tbody = document.getElementById('audit-table-body');
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-table-cell" style="color:var(--accent-red); padding:2rem; text-align:center;">⚠️ Connection error loading audit logs: ${e.message || e}</td></tr>`;
+            }
         } finally {
             _isLoading = false;
         }
@@ -85,7 +96,11 @@ const AuditViewer = (() => {
         if (totalEl) totalEl.textContent = total;
 
         if (!entries || entries.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-table-cell">No audit log entries found</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="empty-table-cell" style="text-align:center; padding:2.5rem 1rem; color:var(--text-dim);">
+                <div style="font-size:1.6rem; margin-bottom:0.4rem;">📋</div>
+                <div style="font-weight:600; color:var(--text-main); margin-bottom:0.25rem;">No audit log entries found</div>
+                <div style="font-size:0.8rem;">Adjust your filter criteria or perform administrative operations to record activity.</div>
+            </td></tr>`;
             return;
         }
 
@@ -227,8 +242,13 @@ const AuditViewer = (() => {
 
         loadAuditLog(1);
 
-        // Auto-refresh every 60s
-        setInterval(() => loadAuditLog(_currentPage), 60000);
+        // Auto-refresh every 60s if section is currently active
+        setInterval(() => {
+            const sec = document.getElementById('section-audit');
+            if (sec && sec.classList.contains('active')) {
+                loadAuditLog(_currentPage);
+            }
+        }, 60000);
     }
 
     const api = {

@@ -1871,8 +1871,8 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
             # ── Audit log ─────────────────────────────────────────────────────
             if path == '/api/admin/audit' and method == 'GET':
                 user = await auth.get_current_user(headers.get('authorization', ''))
-                if not user or user.get('role') != 'admin':
-                    return await send_json_response(writer, {'detail': 'Admin access required'}, 403)
+                if not user or user.get('role') not in ('admin', 'operator'):
+                    return await send_json_response(writer, {'detail': 'Admin or operator access required'}, 403)
                 page = int(query_params.get('page', 1))
                 page_size = int(query_params.get('page_size', 50))
                 result = await audit.get_audit_log(
@@ -1881,6 +1881,8 @@ async def handle_http_request(reader: asyncio.StreamReader, writer: asyncio.Stre
                     action_filter=query_params.get('action_filter'),
                     resource_type_filter=query_params.get('resource_type'),
                     result_filter=query_params.get('result_filter'),
+                    date_from=query_params.get('date_from'),
+                    date_to=query_params.get('date_to'),
                 )
                 return await send_json_response(writer, result)
 

@@ -25,7 +25,10 @@ const SECTION_LABELS = {
 function showSection(name) {
     document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
     const target = document.getElementById(`section-${name}`);
-    if (target) target.classList.add('active');
+    if (target) {
+        target.classList.add('active');
+        target.style.removeProperty('display');
+    }
 
     // Update sidebar active state
     document.querySelectorAll('.sidebar-btn[data-section]').forEach(btn => {
@@ -231,10 +234,18 @@ class PulseOpsDashboard {
         const isOperator = ['admin', 'operator'].includes(user.role);
 
         document.querySelectorAll('.admin-only').forEach(el => {
-            el.style.display = isAdmin ? '' : 'none';
+            if (isAdmin) {
+                el.style.removeProperty('display');
+            } else {
+                el.style.setProperty('display', 'none', 'important');
+            }
         });
         document.querySelectorAll('.operator-only').forEach(el => {
-            el.style.display = isOperator ? '' : 'none';
+            if (isOperator) {
+                el.style.removeProperty('display');
+            } else {
+                el.style.setProperty('display', 'none', 'important');
+            }
         });
 
         // If viewer is currently on terminal or vnc tab, switch back to overview
@@ -321,13 +332,18 @@ class PulseOpsDashboard {
                 }
             } else {
                 el.removeAttribute('data-nav-disabled');
-                // Check role restrictions
-                const isOpOnly = el.classList.contains('operator-only');
-                const isAdminOnly = el.classList.contains('admin-only');
-                if (isOpOnly && window.PulseOpsAuth && !window.PulseOpsAuth.isOperator()) {
-                    el.style.setProperty('display', 'none', 'important');
-                } else if (isAdminOnly && window.PulseOpsAuth && !window.PulseOpsAuth.isAdmin()) {
-                    el.style.setProperty('display', 'none', 'important');
+                // Check role restrictions only if auth user is loaded
+                const authUser = window.PulseOpsAuth && typeof window.PulseOpsAuth.getCurrentUser === 'function' ? window.PulseOpsAuth.getCurrentUser() : this.currentUser;
+                if (authUser) {
+                    const isOpOnly = el.classList.contains('operator-only');
+                    const isAdminOnly = el.classList.contains('admin-only');
+                    if (isOpOnly && !['admin', 'operator'].includes(authUser.role)) {
+                        el.style.setProperty('display', 'none', 'important');
+                    } else if (isAdminOnly && authUser.role !== 'admin') {
+                        el.style.setProperty('display', 'none', 'important');
+                    } else {
+                        el.style.removeProperty('display');
+                    }
                 } else {
                     el.style.removeProperty('display');
                 }
@@ -552,7 +568,8 @@ class PulseOpsDashboard {
         this.applyTheme(saved);
 
         document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
                 const current = localStorage.getItem('pulseops-theme') || 'dark';
                 const next = current === 'dark' ? 'light' : 'dark';
                 this.applyTheme(next);
@@ -564,14 +581,31 @@ class PulseOpsDashboard {
     applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('pulseops-theme', theme);
+
+        // Update meta theme-color for browser chrome
+        const metaTheme = document.getElementById('meta-theme-color') || document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) {
+            metaTheme.setAttribute('content', theme === 'dark' ? '#070a11' : '#ffffff');
+        }
+
         document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
             const icon = btn.querySelector('.theme-icon-indicator');
             if (icon) {
                 icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-            } else {
+            }
+            if (btn.id === 'header-quick-theme-btn') {
+                const titleText = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+                btn.title = titleText;
+                btn.setAttribute('aria-label', titleText);
+            } else if (btn.id === 'settings-theme-toggle-btn') {
+                btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+            } else if (!icon) {
                 btn.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
             }
         });
+
+        // Broadcast theme change for interactive components & charts
+        document.dispatchEvent(new CustomEvent('pulseops:theme:changed', { detail: { theme } }));
     }
 
     // ── Modules Initialization ────────────────────────────────────────────────
@@ -591,8 +625,8 @@ class PulseOpsDashboard {
         if (typeof ProxyManager !== 'undefined') ProxyManager.init();
         // Backup & Disaster Recovery
         if (typeof BackupManager !== 'undefined') BackupManager.init();
-        // Audit (admin only)
-        if (typeof AuditViewer !== 'undefined' && this.currentUser?.role === 'admin') AuditViewer.init();
+        // Audit (admin & operator)
+        if (typeof AuditViewer !== 'undefined' && ['admin', 'operator'].includes(this.currentUser?.role)) AuditViewer.init();
         // Settings (admin only)
         if (typeof SettingsManager !== 'undefined' && this.currentUser?.role === 'admin') SettingsManager.init();
 

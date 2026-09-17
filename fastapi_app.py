@@ -1271,7 +1271,7 @@ async def api_audit_log(
     result_filter: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
-    current_user: Dict = Depends(require_admin),
+    current_user: Dict = Depends(require_operator),
 ):
     """Return paginated audit log with filters."""
     if not ENTERPRISE_AVAILABLE:

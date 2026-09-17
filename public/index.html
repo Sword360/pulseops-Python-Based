@@ -4,8 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="PulseOps Enterprise — Multi-Server Linux Operations Dashboard">
-    <meta name="theme-color" content="#070a11">
+    <meta name="theme-color" content="#070a11" id="meta-theme-color">
     <title>PulseOps Enterprise</title>
+    <script>
+        (function() {
+            try {
+                var t = localStorage.getItem('pulseops-theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', t);
+            } catch(e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="css/style.css?v=2.0.4">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
@@ -63,7 +71,7 @@
                 <span class="sidebar-icon">💾</span>
                 <span class="sidebar-label">Backups</span>
             </button>
-            <button class="sidebar-btn admin-only" data-section="audit" title="Audit Log">
+            <button class="sidebar-btn operator-only" data-section="audit" id="sidebar-btn-audit" title="Audit Log">
                 <span class="sidebar-icon">📋</span>
                 <span class="sidebar-label">Audit Log</span>
             </button>
@@ -110,7 +118,7 @@
 
             <div class="header-right">
                 <!-- Quick Theme Toggle -->
-                <button class="header-icon-btn theme-toggle-btn" id="header-quick-theme-btn" title="Toggle Light/Dark Mode">
+                <button class="header-icon-btn theme-toggle-btn" id="header-quick-theme-btn" title="Switch to Light Mode" aria-label="Toggle Light or Dark Mode">
                     <span class="theme-icon-indicator">☀️</span>
                 </button>
 
@@ -157,7 +165,8 @@
                             </div>
                         </div>
                         <div class="user-dropdown-divider"></div>
-                        <button class="user-dropdown-item" onclick="showSection('settings')">⚙️ Settings</button>
+                        <button class="user-dropdown-item operator-only" onclick="showSection('audit')">📋 Audit Log</button>
+                        <button class="user-dropdown-item admin-only" onclick="showSection('settings')">⚙️ Settings</button>
                         <button class="user-dropdown-item theme-toggle-btn" id="header-theme-toggle-btn">☀️ Light Mode</button>
                         <div class="user-dropdown-divider"></div>
                         <button class="user-dropdown-item danger" onclick="PulseOpsAuth.logout()">🚪 Sign Out</button>
@@ -1917,7 +1926,7 @@
             </section>
 
             <!-- ── SECTION: Audit Log ─────────────────────────────────────── -->
-            <section id="section-audit" class="app-section admin-only">
+            <section id="section-audit" class="app-section operator-only">
                 <div class="section-header">
                     <div>
                         <h2 class="section-title">📋 Audit Log</h2>
@@ -2569,7 +2578,7 @@
                             </div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-top:0.75rem; padding-top:0.75rem; border-top:1px dashed rgba(255,255,255,0.06); font-size:0.78rem;">
                                 <div>Snapshots: <strong id="db-stat-snapshots" style="color:var(--text-main);">-</strong></div>
-                                <div>Audit Logs: <strong id="db-stat-logs" style="color:var(--text-main);">-</strong></div>
+                                <div>Audit Logs: <strong id="db-stat-logs" style="color:var(--text-main);">-</strong> <button type="button" class="btn-see-all" onclick="showSection('audit')" style="margin-left:4px; font-size:0.75rem; text-decoration:underline; cursor:pointer;" title="View Audit Log">View →</button></div>
                                 <div>Fleet Nodes: <strong id="db-stat-servers" style="color:var(--text-main);">-</strong></div>
                                 <div>Monitored SSL: <strong id="db-stat-ssl" style="color:var(--text-main);">-</strong></div>
                             </div>
