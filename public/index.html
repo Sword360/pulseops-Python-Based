@@ -2012,6 +2012,10 @@
                         <span class="tab-icon">🏠</span>
                         <span class="tab-label">General</span>
                     </button>
+                    <button type="button" class="settings-tab-btn" data-category="appearance" role="tab" aria-selected="false">
+                        <span class="tab-icon">🎨</span>
+                        <span class="tab-label">Appearance &amp; Themes</span>
+                    </button>
                     <button type="button" class="settings-tab-btn" data-category="observability" role="tab" aria-selected="false">
                         <span class="tab-icon">📊</span>
                         <span class="tab-label">Observability</span>
@@ -2052,6 +2056,128 @@
 
                 <!-- Settings Cards Grid -->
                 <div class="settings-grid" id="settings-cards-grid">
+                    <!-- Appearance & Multiple Themes Card -->
+                    <div class="card settings-card" id="settings-appearance-section" data-card-category="general appearance">
+                        <div class="card-header-clean">
+                            <div class="card-title">
+                                <span class="card-title-icon">🎨</span>
+                                <span>Appearance &amp; Multiple Themes</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <button class="btn btn-secondary" id="settings-theme-toggle-btn" type="button" style="font-size:0.75rem; padding:4px 10px;">
+                                    ☀️ Toggle Light / Dark
+                                </button>
+                                <span class="badge badge-info">Themes</span>
+                            </div>
+                        </div>
+                        <div class="settings-form">
+                            <div class="setting-hint" style="margin-bottom:0.75rem; font-size:0.83rem;">
+                                Select your preferred UI aesthetic. Themes apply dynamically across all fleet dashboards, charts, terminal consoles, and system modules.
+                            </div>
+                            <div class="settings-theme-gallery" id="settings-theme-gallery">
+                                <!-- Theme 1: Midnight Cyber (Default Dark) -->
+                                <div class="theme-card-tile active" data-theme-id="dark" data-search-terms="dark theme midnight cyber onyx neon cyan default">
+                                    <div class="theme-card-preview" style="background:#070a11;">
+                                        <div class="theme-card-swatches">
+                                            <span class="theme-swatch" style="background:#070a11;"></span>
+                                            <span class="theme-swatch" style="background:#0d111c;"></span>
+                                            <span class="theme-swatch" style="background:#38bdf8;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-info">
+                                        <div class="theme-card-title">🌌 Midnight Cyber</div>
+                                        <div class="theme-card-desc">Deep onyx with high-contrast electric cyan (Default Dark)</div>
+                                    </div>
+                                    <span class="theme-card-badge">Active</span>
+                                </div>
+
+                                <!-- Theme 2: Clean Enterprise (Light) -->
+                                <div class="theme-card-tile" data-theme-id="light" data-search-terms="light theme clean enterprise white slate ocean blue day mode">
+                                    <div class="theme-card-preview" style="background:#f8fafc; border-color:#cbd5e1;">
+                                        <div class="theme-card-swatches">
+                                            <span class="theme-swatch" style="background:#ffffff; border-color:#cbd5e1;"></span>
+                                            <span class="theme-swatch" style="background:#f1f5f9; border-color:#cbd5e1;"></span>
+                                            <span class="theme-swatch" style="background:#0284c7;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-info">
+                                        <div class="theme-card-title">☀️ Clean Enterprise</div>
+                                        <div class="theme-card-desc">Crisp slate, polished light contrast, and deep ocean blue accents</div>
+                                    </div>
+                                    <span class="theme-card-badge">Select</span>
+                                </div>
+
+                                <!-- Theme 3: Neon Synthwave -->
+                                <div class="theme-card-tile" data-theme-id="synthwave" data-search-terms="synthwave purple neon cyberpunk violet fuchsia dracula">
+                                    <div class="theme-card-preview" style="background:#0f0c1b; border-color:rgba(168,85,247,0.3);">
+                                        <div class="theme-card-swatches">
+                                            <span class="theme-swatch" style="background:#0f0c1b;"></span>
+                                            <span class="theme-swatch" style="background:#161228;"></span>
+                                            <span class="theme-swatch" style="background:#c084fc;"></span>
+                                            <span class="theme-swatch" style="background:#d946ef;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-info">
+                                        <div class="theme-card-title">🟣 Neon Synthwave</div>
+                                        <div class="theme-card-desc">Cyberpunk deep violet with vivid fuchsia and purple neon</div>
+                                    </div>
+                                    <span class="theme-card-badge">Select</span>
+                                </div>
+
+                                <!-- Theme 4: Nordic Forest -->
+                                <div class="theme-card-tile" data-theme-id="forest" data-search-terms="forest green nordic emerald pine jade dark matrix">
+                                    <div class="theme-card-preview" style="background:#08130f; border-color:rgba(52,211,153,0.3);">
+                                        <div class="theme-card-swatches">
+                                            <span class="theme-swatch" style="background:#08130f;"></span>
+                                            <span class="theme-swatch" style="background:#0d1f19;"></span>
+                                            <span class="theme-swatch" style="background:#34d399;"></span>
+                                            <span class="theme-swatch" style="background:#10b981;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-info">
+                                        <div class="theme-card-title">🌲 Nordic Forest</div>
+                                        <div class="theme-card-desc">Dark pine canvas paired with soothing emerald and jade accents</div>
+                                    </div>
+                                    <span class="theme-card-badge">Select</span>
+                                </div>
+
+                                <!-- Theme 5: Deep Ocean -->
+                                <div class="theme-card-tile" data-theme-id="ocean" data-search-terms="ocean navy blue sapphire maritime ice cyan cobalt">
+                                    <div class="theme-card-preview" style="background:#060f1e; border-color:rgba(59,130,246,0.3);">
+                                        <div class="theme-card-swatches">
+                                            <span class="theme-swatch" style="background:#060f1e;"></span>
+                                            <span class="theme-swatch" style="background:#0c1b33;"></span>
+                                            <span class="theme-swatch" style="background:#38bdf8;"></span>
+                                            <span class="theme-swatch" style="background:#3b82f6;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-info">
+                                        <div class="theme-card-title">🌊 Deep Ocean</div>
+                                        <div class="theme-card-desc">Maritime navy backdrop with ice cyan and cobalt sapphire</div>
+                                    </div>
+                                    <span class="theme-card-badge">Select</span>
+                                </div>
+
+                                <!-- Theme 6: Sunset Amber -->
+                                <div class="theme-card-tile" data-theme-id="amber" data-search-terms="amber solar orange sunset warm carbon gold flame">
+                                    <div class="theme-card-preview" style="background:#120c06; border-color:rgba(245,158,11,0.3);">
+                                        <div class="theme-card-swatches">
+                                            <span class="theme-swatch" style="background:#120c06;"></span>
+                                            <span class="theme-swatch" style="background:#1c140b;"></span>
+                                            <span class="theme-swatch" style="background:#f59e0b;"></span>
+                                            <span class="theme-swatch" style="background:#fb923c;"></span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-info">
+                                        <div class="theme-card-title">🌅 Sunset Amber</div>
+                                        <div class="theme-card-desc">Warm carbon night mode infused with solar amber and gold</div>
+                                    </div>
+                                    <span class="theme-card-badge">Select</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 1. General & System Branding -->
                     <div class="card settings-card" id="settings-general-section" data-card-category="general">
                         <div class="card-header-clean">
@@ -2949,14 +3075,6 @@
                             <div class="danger-zone-desc">Restoring factory settings resets alert thresholds and channels. Server configurations and user accounts are preserved.</div>
                             <button class="btn-danger-action" id="btn-reset-defaults" style="width:100%; justify-content:center; margin-top:0.75rem;">
                                 <span>🔄</span> Reset Settings to Factory Defaults
-                            </button>
-                        </div>
-
-                        <!-- Theme Quick Switch -->
-                        <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border-color);">
-                            <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Appearance &amp; Theme</div>
-                            <button class="btn btn-secondary" id="settings-theme-toggle-btn" type="button" style="width:100%; justify-content:center;">
-                                ☀️ Switch to Light Mode
                             </button>
                         </div>
                     </div>

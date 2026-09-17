@@ -622,9 +622,21 @@ class PulseOpsDashboard {
 
     toggleTheme() {
         const current = localStorage.getItem('pulseops-theme') || 'dark';
-        const next = current === 'dark' ? 'light' : 'dark';
+        // If on light mode, restore previous dark/custom theme; otherwise toggle to light
+        const next = current === 'light' ? (localStorage.getItem('pulseops-prev-custom-theme') || 'dark') : 'light';
+        if (current !== 'light') {
+            localStorage.setItem('pulseops-prev-custom-theme', current);
+        }
         this.applyTheme(next);
-        showToast(`${next === 'dark' ? 'Dark' : 'Light'} mode enabled`, 'info', 2500);
+        const themeLabels = {
+            dark: 'Midnight Cyber',
+            light: 'Clean Enterprise',
+            synthwave: 'Neon Synthwave',
+            forest: 'Nordic Forest',
+            ocean: 'Deep Ocean',
+            amber: 'Sunset Amber'
+        };
+        showToast(`${themeLabels[next] || next} theme enabled`, 'info', 2500);
         return next;
     }
 
@@ -651,7 +663,7 @@ class PulseOpsDashboard {
             });
         }
 
-        // Settings page button
+        // Settings page button (if present)
         const settingsBtn = document.getElementById('settings-theme-toggle-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', (e) => {
@@ -664,16 +676,28 @@ class PulseOpsDashboard {
     applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('pulseops-theme', theme);
+        if (theme !== 'light') {
+            localStorage.setItem('pulseops-prev-custom-theme', theme);
+        }
+
+        const themeColors = {
+            dark: '#070a11',
+            light: '#f8fafc',
+            synthwave: '#0f0c1b',
+            forest: '#08130f',
+            ocean: '#060f1e',
+            amber: '#120c06',
+        };
 
         // Update meta theme-color for browser chrome
         const metaTheme = document.getElementById('meta-theme-color') || document.querySelector('meta[name="theme-color"]');
         if (metaTheme) {
-            metaTheme.setAttribute('content', theme === 'dark' ? '#070a11' : '#ffffff');
+            metaTheme.setAttribute('content', themeColors[theme] || '#070a11');
         }
 
-        const isDark = theme === 'dark';
-        const iconChar = isDark ? '☀️' : '🌙';
-        const quickTitle = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+        const isLight = theme === 'light';
+        const iconChar = isLight ? '🌙' : '☀️';
+        const quickTitle = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
 
         // 1. Header quick icon button (ONLY renders icon, never raw text)
         const quickBtn = document.getElementById('header-quick-theme-btn');
@@ -686,14 +710,22 @@ class PulseOpsDashboard {
         // 2. Dropdown button
         const dropdownBtn = document.getElementById('header-theme-toggle-btn');
         if (dropdownBtn) {
-            dropdownBtn.innerHTML = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
+            dropdownBtn.innerHTML = isLight ? '🌙 Dark Mode' : '☀️ Light Mode';
         }
 
-        // 3. Settings page button
+        // 3. Settings page button (if present)
         const settingsBtn = document.getElementById('settings-theme-toggle-btn');
         if (settingsBtn) {
-            settingsBtn.innerHTML = isDark ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+            settingsBtn.innerHTML = isLight ? '🌙 Switch to Dark Mode' : '☀️ Switch to Light Mode';
         }
+
+        // 4. Sync Settings Theme Gallery active tile
+        document.querySelectorAll('.theme-card-tile').forEach(tile => {
+            const isMatch = tile.dataset.themeId === theme;
+            tile.classList.toggle('active', isMatch);
+            const badge = tile.querySelector('.theme-card-badge');
+            if (badge) badge.textContent = isMatch ? 'Active' : 'Select';
+        });
 
         // Broadcast theme change for interactive components & charts
         document.dispatchEvent(new CustomEvent('pulseops:theme:changed', { detail: { theme } }));

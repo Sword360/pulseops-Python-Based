@@ -341,6 +341,278 @@
     color: #475569;
 }
 
+/* =============================================================================
+   MULTI-THEME SUITE: Synthwave, Forest, Ocean, Amber
+   ============================================================================= */
+
+/* ── 1. Neon Synthwave Theme ─────────────────────────────────────────────── */
+[data-theme="synthwave"] {
+    --bg-base: #0f0c1b;
+    --bg-surface: #161228;
+    --bg-card: rgba(22, 18, 40, 0.75);
+    --bg-card-hover: rgba(32, 26, 58, 0.85);
+    --bg-glass: rgba(22, 18, 40, 0.65);
+
+    --border-color: rgba(168, 85, 247, 0.18);
+    --border-color-glow: rgba(168, 85, 247, 0.45);
+    --border-subtle: rgba(168, 85, 247, 0.08);
+
+    --accent-cyan: #c084fc;
+    --accent-cyan-glow: rgba(192, 132, 252, 0.35);
+    --accent-blue: #818cf8;
+    --accent-purple: #d946ef;
+    --accent-purple-glow: rgba(217, 70, 239, 0.35);
+    --accent-green: #34d399;
+    --accent-green-glow: rgba(52, 211, 153, 0.28);
+    --accent-amber: #f59e0b;
+    --accent-amber-glow: rgba(245, 158, 11, 0.28);
+    --accent-red: #f43f5e;
+    --accent-red-glow: rgba(244, 63, 94, 0.28);
+
+    --text-main: #f5f3ff;
+    --text-primary: var(--text-main);
+    --text-muted: #c4b5fd;
+    --text-dim: #8b5cf6;
+
+    --shadow-glow: 0 0 24px -2px rgba(192, 132, 252, 0.25);
+}
+[data-theme="synthwave"] body {
+    background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -15%, rgba(192, 132, 252, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 85%, rgba(217, 70, 239, 0.1) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 10% 65%, rgba(129, 140, 248, 0.08) 0%, transparent 50%);
+}
+
+/* ── 2. Nordic Forest Theme ──────────────────────────────────────────────── */
+[data-theme="forest"] {
+    --bg-base: #08130f;
+    --bg-surface: #0d1f19;
+    --bg-card: rgba(13, 31, 25, 0.75);
+    --bg-card-hover: rgba(19, 44, 36, 0.85);
+    --bg-glass: rgba(13, 31, 25, 0.65);
+
+    --border-color: rgba(52, 211, 153, 0.18);
+    --border-color-glow: rgba(52, 211, 153, 0.45);
+    --border-subtle: rgba(52, 211, 153, 0.08);
+
+    --accent-cyan: #34d399;
+    --accent-cyan-glow: rgba(52, 211, 153, 0.35);
+    --accent-blue: #38bdf8;
+    --accent-purple: #a78bfa;
+    --accent-purple-glow: rgba(167, 139, 250, 0.28);
+    --accent-green: #10b981;
+    --accent-green-glow: rgba(16, 185, 129, 0.35);
+    --accent-amber: #fbbf24;
+    --accent-amber-glow: rgba(251, 191, 36, 0.28);
+    --accent-red: #f87171;
+    --accent-red-glow: rgba(248, 113, 113, 0.28);
+
+    --text-main: #ecfdf5;
+    --text-primary: var(--text-main);
+    --text-muted: #a7f3d0;
+    --text-dim: #6ee7b7;
+
+    --shadow-glow: 0 0 24px -2px rgba(52, 211, 153, 0.25);
+}
+[data-theme="forest"] body {
+    background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -15%, rgba(52, 211, 153, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 85%, rgba(16, 185, 129, 0.09) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 10% 65%, rgba(56, 189, 248, 0.06) 0%, transparent 50%);
+}
+
+/* ── 3. Deep Ocean Theme ─────────────────────────────────────────────────── */
+[data-theme="ocean"] {
+    --bg-base: #060f1e;
+    --bg-surface: #0c1b33;
+    --bg-card: rgba(12, 27, 51, 0.75);
+    --bg-card-hover: rgba(18, 38, 71, 0.85);
+    --bg-glass: rgba(12, 27, 51, 0.65);
+
+    --border-color: rgba(59, 130, 246, 0.18);
+    --border-color-glow: rgba(59, 130, 246, 0.45);
+    --border-subtle: rgba(59, 130, 246, 0.08);
+
+    --accent-cyan: #38bdf8;
+    --accent-cyan-glow: rgba(56, 189, 248, 0.35);
+    --accent-blue: #3b82f6;
+    --accent-purple: #818cf8;
+    --accent-purple-glow: rgba(129, 140, 248, 0.28);
+    --accent-green: #10b981;
+    --accent-green-glow: rgba(16, 185, 129, 0.28);
+    --accent-amber: #f59e0b;
+    --accent-amber-glow: rgba(245, 158, 11, 0.28);
+    --accent-red: #ef4444;
+    --accent-red-glow: rgba(239, 68, 68, 0.28);
+
+    --text-main: #f0f9ff;
+    --text-primary: var(--text-main);
+    --text-muted: #bae6fd;
+    --text-dim: #7dd3fc;
+
+    --shadow-glow: 0 0 24px -2px rgba(59, 130, 246, 0.25);
+}
+[data-theme="ocean"] body {
+    background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -15%, rgba(56, 189, 248, 0.14) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 85%, rgba(59, 130, 246, 0.1) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 10% 65%, rgba(129, 140, 248, 0.06) 0%, transparent 50%);
+}
+
+/* ── 4. Sunset Amber Theme ───────────────────────────────────────────────── */
+[data-theme="amber"] {
+    --bg-base: #120c06;
+    --bg-surface: #1c140b;
+    --bg-card: rgba(28, 20, 11, 0.75);
+    --bg-card-hover: rgba(38, 27, 16, 0.85);
+    --bg-glass: rgba(28, 20, 11, 0.65);
+
+    --border-color: rgba(245, 158, 11, 0.18);
+    --border-color-glow: rgba(245, 158, 11, 0.45);
+    --border-subtle: rgba(245, 158, 11, 0.08);
+
+    --accent-cyan: #f59e0b;
+    --accent-cyan-glow: rgba(245, 158, 11, 0.35);
+    --accent-blue: #fb923c;
+    --accent-purple: #c084fc;
+    --accent-purple-glow: rgba(192, 132, 252, 0.28);
+    --accent-green: #84cc16;
+    --accent-green-glow: rgba(132, 204, 22, 0.28);
+    --accent-amber: #fbbf24;
+    --accent-amber-glow: rgba(251, 191, 36, 0.35);
+    --accent-red: #f43f5e;
+    --accent-red-glow: rgba(244, 63, 94, 0.28);
+
+    --text-main: #fffbeb;
+    --text-primary: var(--text-main);
+    --text-muted: #fde68a;
+    --text-dim: #d97706;
+
+    --shadow-glow: 0 0 24px -2px rgba(245, 158, 11, 0.25);
+}
+[data-theme="amber"] body {
+    background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -15%, rgba(245, 158, 11, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 85%, rgba(249, 115, 22, 0.09) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 10% 65%, rgba(192, 132, 252, 0.06) 0%, transparent 50%);
+}
+
+/* ── Settings Theme Gallery UI ───────────────────────────────────────────── */
+.settings-theme-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.15rem;
+    margin-top: 1rem;
+}
+
+.theme-card-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1.1rem;
+    border-radius: var(--radius-md, 14px);
+    border: 2px solid var(--border-color);
+    background: var(--bg-surface);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    box-shadow: var(--shadow-card);
+}
+
+.theme-card-tile:hover {
+    transform: translateY(-3px);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 10px 28px -4px rgba(0, 0, 0, 0.45);
+}
+
+.theme-card-tile.active {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 2px var(--accent-cyan-glow), 0 12px 30px -4px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), transparent);
+}
+
+.theme-card-preview {
+    height: 58px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.theme-card-swatches {
+    display: flex;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.theme-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.theme-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.theme-card-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.theme-card-desc {
+    font-size: 0.77rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.theme-card-badge {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-dim);
+    border: 1px solid var(--border-color);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.theme-card-tile.active .theme-card-badge {
+    background: var(--accent-cyan);
+    color: #070a11;
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 10px var(--accent-cyan-glow);
+}
+
+[data-theme="light"] .theme-card-tile {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.09);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+[data-theme="light"] .theme-card-tile.active {
+    background: #f0f9ff;
+    border-color: var(--accent-cyan);
+}
+[data-theme="light"] .theme-card-tile.active .theme-card-badge {
+    color: #ffffff;
+}
+
 * {
     margin: 0;
     padding: 0;

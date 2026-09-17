@@ -272,11 +272,11 @@ const SettingsManager = (() => {
         if (emptyState) emptyState.style.display = 'none';
 
         cards.forEach(card => {
-            const cat = card.dataset.cardCategory;
-            const matches = _activeCategory === 'all' || cat === _activeCategory;
+            const cat = card.dataset.cardCategory || '';
+            const matches = _activeCategory === 'all' || cat.split(/\s+/).includes(_activeCategory);
             card.classList.toggle('card-hidden', !matches);
             // Restore all items within visible cards
-            card.querySelectorAll('.setting-item, .settings-module-tile').forEach(item => {
+            card.querySelectorAll('.setting-item, .settings-module-tile, .theme-card-tile').forEach(item => {
                 item.classList.remove('item-hidden');
             });
         });
@@ -287,6 +287,8 @@ const SettingsManager = (() => {
     function initSearch() {
         const input = document.getElementById('settings-search-input');
         const clearBtn = document.getElementById('settings-search-clear');
+        const emptyState = document.getElementById('settings-search-empty');
+        const emptyQueryText = document.getElementById('settings-search-query-text');
         const emptyClearBtn = document.getElementById('btn-clear-settings-search');
 
         if (!input) return;
@@ -321,6 +323,17 @@ const SettingsManager = (() => {
                 card.querySelectorAll('.settings-module-tile').forEach(tile => {
                     const title = (tile.querySelector('.module-tile-title')?.textContent || '').toLowerCase();
                     const desc = (tile.querySelector('.module-tile-desc')?.textContent || '').toLowerCase();
+                    const searchTerms = (tile.dataset.searchTerms || '').toLowerCase();
+                    const isMatch = title.includes(query) || desc.includes(query) || searchTerms.includes(query);
+
+                    tile.classList.toggle('item-hidden', !isMatch);
+                    if (isMatch) visibleInCard++;
+                });
+
+                // Match theme-card-tile rows
+                card.querySelectorAll('.theme-card-tile').forEach(tile => {
+                    const title = (tile.querySelector('.theme-card-title')?.textContent || '').toLowerCase();
+                    const desc = (tile.querySelector('.theme-card-desc')?.textContent || '').toLowerCase();
                     const searchTerms = (tile.dataset.searchTerms || '').toLowerCase();
                     const isMatch = title.includes(query) || desc.includes(query) || searchTerms.includes(query);
 
@@ -703,13 +716,12 @@ const SettingsManager = (() => {
         };
     }
 
-    // ── Theme Toggle ──────────────────────────────────────────────────────────
+    // ── Theme Toggle & Gallery ───────────────────────────────────────────────
 
     function initThemeToggle() {
         const themeBtn = document.getElementById('settings-theme-toggle-btn');
         if (themeBtn) {
-            // PulseOpsApp already binds a click handler to #settings-theme-toggle-btn.
-            // Only bind standalone fallback if PulseOpsApp is absent to prevent double-toggle!
+            // Standalone fallback if PulseOpsApp is absent
             if (!window.PulseOpsApp) {
                 themeBtn.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -719,15 +731,37 @@ const SettingsManager = (() => {
             }
         }
 
-        // Listen for global theme changes to keep button label synced
+        // Theme Gallery tile clicks
+        document.querySelectorAll('.theme-card-tile').forEach(tile => {
+            tile.addEventListener('click', () => {
+                const themeId = tile.dataset.themeId;
+                if (!themeId) return;
+                applyTheme(themeId);
+                const title = tile.querySelector('.theme-card-title')?.textContent || themeId;
+                showToast(`Theme switched to ${title}`, 'success', 2000);
+            });
+        });
+
+        // Listen for global theme changes to keep button & gallery tiles synced
         document.addEventListener('pulseops:theme:changed', (e) => {
             const theme = e.detail?.theme || 'dark';
             const btn = document.getElementById('settings-theme-toggle-btn');
-            if (btn) btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+            if (btn) btn.textContent = theme === 'light' ? '🌙 Switch to Dark Mode' : '☀️ Switch to Light Mode';
+            syncThemeGallery(theme);
         });
 
         const current = localStorage.getItem('pulseops-theme') || 'dark';
         applyTheme(current);
+        syncThemeGallery(current);
+    }
+
+    function syncThemeGallery(theme) {
+        document.querySelectorAll('.theme-card-tile').forEach(tile => {
+            const isMatch = tile.dataset.themeId === theme;
+            tile.classList.toggle('active', isMatch);
+            const badge = tile.querySelector('.theme-card-badge');
+            if (badge) badge.textContent = isMatch ? 'Active' : 'Select';
+        });
     }
 
     function applyTheme(theme) {
@@ -737,7 +771,8 @@ const SettingsManager = (() => {
             document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem('pulseops-theme', theme);
             const btn = document.getElementById('settings-theme-toggle-btn');
-            if (btn) btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+            if (btn) btn.textContent = theme === 'light' ? '🌙 Switch to Dark Mode' : '☀️ Switch to Light Mode';
+            syncThemeGallery(theme);
         }
     }
 
