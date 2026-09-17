@@ -1977,627 +1977,987 @@
 
             <!-- ── SECTION: Settings ──────────────────────────────────────── -->
             <section id="section-settings" class="app-section admin-only">
-                <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
-                    <div>
-                        <h2 class="section-title" style="display:flex; align-items:center; gap:0.5rem; margin:0;">
-                            <span>⚙️</span> Enterprise System Configuration &amp; Policies
-                        </h2>
-                        <p style="color:var(--text-dim); font-size:0.85rem; margin:0.35rem 0 0;">Manage global observability parameters, alerting webhooks, security governance, and database health.</p>
+                <!-- Settings Header & Toolbar -->
+                <div class="settings-header-banner">
+                    <div class="settings-header-left">
+                        <div class="settings-header-icon-box">⚙️</div>
+                        <div>
+                            <h2 class="section-title">Enterprise System Configuration</h2>
+                            <p class="section-desc">Manage global observability parameters, alerting channels, security governance, and database operations.</p>
+                        </div>
                     </div>
-                    <div style="display:flex; gap:0.5rem; align-items:center;">
-                        <button class="btn btn-secondary" id="btn-refresh-settings" style="font-size:0.8rem; padding:0.4rem 0.85rem;">🔄 Reload Settings</button>
+                    <div class="settings-header-right">
+                        <!-- Quick Search Input -->
+                        <div class="settings-search-box">
+                            <span class="settings-search-icon">🔍</span>
+                            <input type="text" id="settings-search-input" class="settings-search-input" placeholder="Search settings (e.g., timeout, webhook, poll, 2fa)..." autocomplete="off" spellcheck="false">
+                            <button type="button" id="settings-search-clear" class="settings-search-clear" title="Clear search" style="display:none;">✕</button>
+                        </div>
+                        <button class="btn btn-primary" id="btn-save-all-settings" style="display:none;">
+                            <span>💾</span> Save Changes (<span id="dirty-count-badge">0</span>)
+                        </button>
+                        <button class="btn btn-secondary" id="btn-refresh-settings" title="Reload settings from database">
+                            <span>🔄</span> Reload
+                        </button>
                     </div>
                 </div>
 
-                <div class="settings-grid">
+                <!-- Settings Category Navigation Tabs -->
+                <div class="settings-tab-nav" id="settings-tab-nav" role="tablist" aria-label="Settings Categories">
+                    <button type="button" class="settings-tab-btn active" data-category="all" role="tab" aria-selected="true">
+                        <span class="tab-icon">📑</span>
+                        <span class="tab-label">All Settings</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="general" role="tab" aria-selected="false">
+                        <span class="tab-icon">🏠</span>
+                        <span class="tab-label">General</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="observability" role="tab" aria-selected="false">
+                        <span class="tab-icon">📊</span>
+                        <span class="tab-label">Observability</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="fleet" role="tab" aria-selected="false">
+                        <span class="tab-icon">🖥️</span>
+                        <span class="tab-label">Fleet &amp; Thresholds</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="alerts" role="tab" aria-selected="false">
+                        <span class="tab-icon">🔔</span>
+                        <span class="tab-label">Alert Channels</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="security" role="tab" aria-selected="false">
+                        <span class="tab-icon">🛡️</span>
+                        <span class="tab-label">Security &amp; 2FA</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="terminal" role="tab" aria-selected="false">
+                        <span class="tab-icon">💻</span>
+                        <span class="tab-label">Console &amp; Terminal</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="navigation" role="tab" aria-selected="false">
+                        <span class="tab-icon">🧭</span>
+                        <span class="tab-label">Navigation &amp; Modules</span>
+                    </button>
+                    <button type="button" class="settings-tab-btn" data-category="database" role="tab" aria-selected="false">
+                        <span class="tab-icon">💾</span>
+                        <span class="tab-label">Database &amp; System</span>
+                    </button>
+                </div>
+
+                <!-- Empty Search Results Placeholder -->
+                <div id="settings-search-empty" class="settings-empty-state" style="display:none;">
+                    <div class="settings-empty-icon">🔍</div>
+                    <div class="settings-empty-title">No Matching Settings</div>
+                    <div class="settings-empty-desc">No configurations match "<span id="settings-search-query-text"></span>". Try another search keyword.</div>
+                    <button type="button" class="btn btn-secondary" id="btn-clear-settings-search" style="margin-top:1rem;">Clear Search</button>
+                </div>
+
+                <!-- Settings Cards Grid -->
+                <div class="settings-grid" id="settings-cards-grid">
                     <!-- 1. General & System Branding -->
-                    <div class="card" id="settings-general-section">
+                    <div class="card settings-card" id="settings-general-section" data-card-category="general">
                         <div class="card-header-clean">
-                            <div class="card-title">🏠 General &amp; Branding</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">🏠</span>
+                                <span>General &amp; Branding</span>
+                            </div>
                             <span class="badge badge-info">Core</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row">
-                                <label class="setting-label">Application Name</label>
-                                <input type="text" id="setting-app-name" class="form-input" data-setting-key="app_name" placeholder="PulseOps Enterprise">
+                            <div class="setting-item" data-search-terms="application name branding title label pulseops">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-app-name">Application Name</label>
+                                    <span class="setting-hint">Master branding label displayed in sidebar and browser title</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-app-name" class="form-input" data-setting-key="app_name" placeholder="PulseOps Enterprise">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Session Timeout (hours)</label>
-                                <input type="number" id="setting-session-timeout" class="form-input" data-setting-key="session_timeout_hours" min="1" max="720">
+                            <div class="setting-item" data-search-terms="session timeout hours duration expire auth login">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-session-timeout">Session Timeout (hours)</label>
+                                    <span class="setting-hint">Maximum JWT authentication validity before re-login (1 - 720 hours)</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-session-timeout" class="form-input" data-setting-key="session_timeout_hours" min="1" max="720">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Master Server URL</label>
-                                <input type="text" id="setting-master-url" class="form-input" data-setting-key="master_url" placeholder="http://192.168.1.100:3500">
+                            <div class="setting-item" data-search-terms="master server url endpoint ip address api host">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-master-url">Master Server URL</label>
+                                    <span class="setting-hint">Public or internal hub URL utilized by remote agents to establish reverse telemetry</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-master-url" class="form-input" data-setting-key="master_url" placeholder="http://192.168.1.100:3500">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">System Timezone</label>
-                                <select id="setting-timezone" class="form-input" data-setting-key="timezone">
-                                    <option value="UTC">UTC (Universal Time)</option>
-                                    <option value="America/New_York">America / New York (EST/EDT)</option>
-                                    <option value="America/Los_Angeles">America / Los Angeles (PST/PDT)</option>
-                                    <option value="Europe/London">Europe / London (GMT/BST)</option>
-                                    <option value="Europe/Paris">Europe / Paris (CET/CEST)</option>
-                                    <option value="Asia/Kolkata">Asia / Kolkata (IST)</option>
-                                    <option value="Asia/Tokyo">Asia / Tokyo (JST)</option>
-                                    <option value="Asia/Singapore">Asia / Singapore (SGT)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="system timezone clock time utc regional">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-timezone">System Timezone</label>
+                                    <span class="setting-hint">Standard regional timezone applied across audit logs, cron jobs, and charts</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-timezone" class="form-input" data-setting-key="timezone">
+                                        <option value="UTC">UTC (Universal Time)</option>
+                                        <option value="America/New_York">America / New York (EST/EDT)</option>
+                                        <option value="America/Los_Angeles">America / Los Angeles (PST/PDT)</option>
+                                        <option value="Europe/London">Europe / London (GMT/BST)</option>
+                                        <option value="Europe/Paris">Europe / Paris (CET/CEST)</option>
+                                        <option value="Asia/Kolkata">Asia / Kolkata (IST)</option>
+                                        <option value="Asia/Tokyo">Asia / Tokyo (JST)</option>
+                                        <option value="Asia/Singapore">Asia / Singapore (SGT)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Maintenance Banner</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-maintenance-mode" data-setting-key="maintenance_mode"><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="maintenance banner mode downtime warning broadcast">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-maintenance-mode">Maintenance Banner</label>
+                                    <span class="setting-hint">Broadcast an active maintenance advisory banner across the header</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-maintenance-mode" data-setting-key="maintenance_mode">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Maintenance Notice</label>
-                                <input type="text" id="setting-maintenance-message" class="form-input" data-setting-key="maintenance_message" placeholder="Scheduled maintenance in progress...">
+                            <div class="setting-item" data-search-terms="maintenance notice message alert banner text">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-maintenance-message">Maintenance Notice</label>
+                                    <span class="setting-hint">Custom text displayed when maintenance mode is toggled active</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-maintenance-message" class="form-input" data-setting-key="maintenance_message" placeholder="Scheduled infrastructure maintenance in progress...">
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-general-section">Save General</button>
+                            <button class="btn btn-primary" data-save-section="settings-general-section">Save General</button>
                         </div>
                     </div>
 
                     <!-- 2. Observability & Telemetry Display -->
-                    <div class="card" id="settings-telemetry-section">
+                    <div class="card settings-card" id="settings-telemetry-section" data-card-category="observability">
                         <div class="card-header-clean">
-                            <div class="card-title">📊 Observability &amp; Telemetry</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">📊</span>
+                                <span>Observability &amp; Telemetry</span>
+                            </div>
                             <span class="badge badge-info">Metrics</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row">
-                                <label class="setting-label">Live Poll Frequency</label>
-                                <select id="setting-metric-poll" class="form-input" data-setting-key="metric_poll_interval">
-                                    <option value="2">Real-time (2 seconds)</option>
-                                    <option value="5" selected>Standard (5 seconds)</option>
-                                    <option value="10">Relaxed (10 seconds)</option>
-                                    <option value="30">Eco Mode (30 seconds)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="poll frequency interval live real-time rate refresh seconds">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-metric-poll">Live Poll Frequency</label>
+                                    <span class="setting-hint">Interval for live CPU, memory, network, and disk hardware streaming</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-metric-poll" class="form-input" data-setting-key="metric_poll_interval">
+                                        <option value="2">Real-time (2 seconds)</option>
+                                        <option value="5" selected>Standard (5 seconds)</option>
+                                        <option value="10">Relaxed (10 seconds)</option>
+                                        <option value="30">Eco Mode (30 seconds)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Chart History Resolution</label>
-                                <select id="setting-chart-points" class="form-input" data-setting-key="chart_history_points">
-                                    <option value="30">30 Data Points</option>
-                                    <option value="60" selected>60 Data Points (Default)</option>
-                                    <option value="120">120 Data Points (Deep)</option>
-                                    <option value="300">300 Data Points (Extended)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="chart history resolution data points samples buffer depth">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-chart-points">Chart History Resolution</label>
+                                    <span class="setting-hint">Maximum data buffer samples retained in active sparklines &amp; line charts</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-chart-points" class="form-input" data-setting-key="chart_history_points">
+                                        <option value="30">30 Data Points</option>
+                                        <option value="60" selected>60 Data Points (Default)</option>
+                                        <option value="120">120 Data Points (Deep)</option>
+                                        <option value="300">300 Data Points (Extended)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Top Processes Limit</label>
-                                <select id="setting-top-proc" class="form-input" data-setting-key="top_processes_count">
-                                    <option value="10">Top 10 Processes</option>
-                                    <option value="15" selected>Top 15 Processes</option>
-                                    <option value="25">Top 25 Processes</option>
-                                    <option value="50">Top 50 Processes</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="top processes limit count table list tasks">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-top-proc">Top Processes Limit</label>
+                                    <span class="setting-hint">Number of top resource-consuming processes rendered in the process monitor</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-top-proc" class="form-input" data-setting-key="top_processes_count">
+                                        <option value="10">Top 10 Processes</option>
+                                        <option value="15" selected>Top 15 Processes</option>
+                                        <option value="25">Top 25 Processes</option>
+                                        <option value="50">Top 50 Processes</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Bandwidth Unit</label>
-                                <select id="setting-bandwidth-unit" class="form-input" data-setting-key="bandwidth_unit">
-                                    <option value="auto">Automatic (Dynamic scale)</option>
-                                    <option value="mb_s">Megabytes / sec (MB/s)</option>
-                                    <option value="mbps">Megabits / sec (Mbps)</option>
-                                    <option value="kb_s">Kilobytes / sec (KB/s)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="bandwidth unit network scale megabytes mbps megabits speed">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-bandwidth-unit">Bandwidth Unit</label>
+                                    <span class="setting-hint">Preferred throughput metric notation across network telemetry cards</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-bandwidth-unit" class="form-input" data-setting-key="bandwidth_unit">
+                                        <option value="auto">Automatic (Dynamic scale)</option>
+                                        <option value="mb_s">Megabytes / sec (MB/s)</option>
+                                        <option value="mbps">Megabits / sec (Mbps)</option>
+                                        <option value="kb_s">Kilobytes / sec (KB/s)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Temperature Unit</label>
-                                <select id="setting-temp-unit" class="form-input" data-setting-key="temperature_unit">
-                                    <option value="celsius">Celsius (°C)</option>
-                                    <option value="fahrenheit">Fahrenheit (°F)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="temperature unit celsius fahrenheit thermal cpu temp">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-temp-unit">Temperature Unit</label>
+                                    <span class="setting-hint">Thermal sensor display unit format for CPU and motherboard probes</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-temp-unit" class="form-input" data-setting-key="temperature_unit">
+                                        <option value="celsius">Celsius (°C)</option>
+                                        <option value="fahrenheit">Fahrenheit (°F)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Audible Alarm on Critical</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-sound-alerts" data-setting-key="sound_alerts_enabled"><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="sound audible alarm chime audio critical incident">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-sound-alerts">Audible Alarm on Critical</label>
+                                    <span class="setting-hint">Play an acoustic synthesized chime when an incident enters critical state</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-sound-alerts" data-setting-key="sound_alerts_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-telemetry-section">Save Observability</button>
+                            <button class="btn btn-primary" data-save-section="settings-telemetry-section">Save Observability</button>
                         </div>
                     </div>
 
                     <!-- 3. Fleet & Distributed Polling Engine -->
-                    <div class="card" id="settings-fleet-section">
+                    <div class="card settings-card" id="settings-fleet-section" data-card-category="fleet">
                         <div class="card-header-clean">
-                            <div class="card-title">🖥️ Fleet &amp; Alert Thresholds</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">🖥️</span>
+                                <span>Fleet &amp; Alert Thresholds</span>
+                            </div>
                             <span class="badge badge-info">Engine</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row">
-                                <label class="setting-label">Remote Agent Poll (sec)</label>
-                                <input type="number" id="setting-agent-poll" class="form-input" data-setting-key="agent_poll_interval" min="10" max="300">
+                            <div class="setting-item" data-search-terms="remote agent poll interval seconds heartbeat daemon">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-agent-poll">Remote Agent Poll (sec)</label>
+                                    <span class="setting-hint">Cadence for master server health check sweeps across remote agent nodes</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-agent-poll" class="form-input" data-setting-key="agent_poll_interval" min="10" max="300">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Snapshot Retention (hours)</label>
-                                <input type="number" id="setting-snapshot-retention" class="form-input" data-setting-key="snapshot_retention_hours" min="1" max="720">
+                            <div class="setting-item" data-search-terms="snapshot retention hours history database prune delete">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-snapshot-retention">Snapshot Retention (hours)</label>
+                                    <span class="setting-hint">Time window before historical hardware snapshots are automatically purged</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-snapshot-retention" class="form-input" data-setting-key="snapshot_retention_hours" min="1" max="720">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">CPU Alert Threshold (%)</label>
-                                <input type="number" id="setting-cpu-threshold" class="form-input" data-setting-key="global_cpu_alert_threshold" min="1" max="100">
+                            <div class="setting-item" data-search-terms="cpu alert threshold percentage alarm load warning high">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-cpu-threshold">Global CPU Alert Threshold (%)</label>
+                                    <span class="setting-hint">System-wide default utilization percentage that triggers a warning</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-cpu-threshold" class="form-input" data-setting-key="global_cpu_alert_threshold" min="1" max="100">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">RAM Alert Threshold (%)</label>
-                                <input type="number" id="setting-mem-threshold" class="form-input" data-setting-key="global_mem_alert_threshold" min="1" max="100">
+                            <div class="setting-item" data-search-terms="ram memory alert threshold percentage alarm out of memory">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-mem-threshold">Global RAM Alert Threshold (%)</label>
+                                    <span class="setting-hint">System-wide default memory exhaustion threshold before raising an alert</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-mem-threshold" class="form-input" data-setting-key="global_mem_alert_threshold" min="1" max="100">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Disk Alert Threshold (%)</label>
-                                <input type="number" id="setting-disk-threshold" class="form-input" data-setting-key="global_disk_alert_threshold" min="1" max="100">
+                            <div class="setting-item" data-search-terms="disk alert threshold percentage storage capacity warning">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-disk-threshold">Global Disk Alert Threshold (%)</label>
+                                    <span class="setting-hint">Root filesystem fill percentage that initiates a storage capacity alert</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-disk-threshold" class="form-input" data-setting-key="global_disk_alert_threshold" min="1" max="100">
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-fleet-section">Save Fleet Settings</button>
+                            <button class="btn btn-primary" data-save-section="settings-fleet-section">Save Fleet Settings</button>
                         </div>
                     </div>
 
                     <!-- 4. Webhook Notification Integrations -->
-                    <div class="card" id="settings-webhook-section">
+                    <div class="card settings-card" id="settings-webhook-section" data-card-category="alerts">
                         <div class="card-header-clean">
-                            <div class="card-title">🔗 Webhook Alert Channels</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">🔗</span>
+                                <span>Webhook Alert Channels</span>
+                            </div>
                             <span class="badge badge-info">Slack / Discord / Teams</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Enable Webhook Alerts</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-webhook-enabled" data-setting-key="webhook_enabled"><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="webhook enabled dispatch alert integration slack discord">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-webhook-enabled">Enable Webhook Alerts</label>
+                                    <span class="setting-hint">Forward high and critical system incidents directly to your messaging pipeline</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-webhook-enabled" data-setting-key="webhook_enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Webhook Endpoint URL</label>
-                                <input type="url" id="setting-webhook-url" class="form-input" data-setting-key="webhook_url" placeholder="https://hooks.slack.com/services/...">
+                            <div class="setting-item" data-search-terms="webhook url endpoint http post target channel">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-webhook-url">Webhook Endpoint URL</label>
+                                    <span class="setting-hint">Destination HTTPS webhook URL (e.g. Slack Incoming Webhook, Discord channel)</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="url" id="setting-webhook-url" class="form-input" data-setting-key="webhook_url" placeholder="https://hooks.slack.com/services/...">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Payload Format</label>
-                                <select id="setting-webhook-format" class="form-input" data-setting-key="webhook_format">
-                                    <option value="slack">Slack Compatible (Incoming Webhook)</option>
-                                    <option value="discord">Discord Compatible</option>
-                                    <option value="generic">Generic JSON Webhook (Custom)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="webhook format payload json slack discord custom">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-webhook-format">Payload Format</label>
+                                    <span class="setting-hint">Serialized schema conforming to your receiving platform's JSON spec</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-webhook-format" class="form-input" data-setting-key="webhook_format">
+                                        <option value="slack">Slack Compatible (Incoming Webhook)</option>
+                                        <option value="discord">Discord Compatible</option>
+                                        <option value="generic">Generic JSON Webhook (Custom)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Bearer Token / Secret</label>
-                                <input type="password" id="setting-webhook-secret" class="form-input" data-setting-key="webhook_secret" placeholder="Optional authorization secret">
+                            <div class="setting-item" data-search-terms="bearer token secret authorization password header">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-webhook-secret">Bearer Token / Secret</label>
+                                    <span class="setting-hint">Optional authorization credential passed via HTTP Authorization header</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="password" id="setting-webhook-secret" class="form-input" data-setting-key="webhook_secret" placeholder="Optional authorization secret">
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-webhook-section">Save Webhook</button>
-                            <button class="btn-secondary" id="test-webhook-btn">🚀 Test Webhook</button>
+                            <button class="btn btn-primary" data-save-section="settings-webhook-section">Save Webhook</button>
+                            <button class="btn btn-secondary" id="test-webhook-btn">🚀 Test Webhook</button>
                         </div>
-                        <div id="webhook-test-result" style="display:none; margin-top:0.75rem; padding:0.6rem 1rem; border-radius:8px; font-size:0.85rem;"></div>
+                        <div id="webhook-test-result" class="settings-test-result" style="display:none;"></div>
                     </div>
 
                     <!-- 5. SMTP / Email Notifications -->
-                    <div class="card" id="settings-smtp-section">
+                    <div class="card settings-card" id="settings-smtp-section" data-card-category="alerts">
                         <div class="card-header-clean">
-                            <div class="card-title">📧 Email / SMTP Notifications</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">📧</span>
+                                <span>Email / SMTP Notifications</span>
+                            </div>
                             <span class="badge badge-info">Alerts</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row"><label class="setting-label">SMTP Host</label><input type="text" id="setting-smtp-host" class="form-input" data-setting-key="smtp_host" placeholder="smtp.gmail.com"></div>
-                            <div class="setting-row"><label class="setting-label">SMTP Port</label><input type="number" id="setting-smtp-port" class="form-input" data-setting-key="smtp_port" value="587"></div>
-                            <div class="setting-row"><label class="setting-label">Username</label><input type="text" id="setting-smtp-username" class="form-input" data-setting-key="smtp_username" placeholder="alerts@domain.com"></div>
-                            <div class="setting-row"><label class="setting-label">Password</label><input type="password" id="setting-smtp-password" class="form-input" data-setting-key="smtp_password" placeholder="••••••••"></div>
-                            <div class="setting-row"><label class="setting-label">From Address</label><input type="text" id="setting-smtp-from" class="form-input" data-setting-key="smtp_from" placeholder="PulseOps &lt;noreply@...&gt;"></div>
+                            <div class="setting-item" data-search-terms="smtp host server mail domain address relay">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-smtp-host">SMTP Host</label>
+                                    <span class="setting-hint">Outbound mail server hostname or IP</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-smtp-host" class="form-input" data-setting-key="smtp_host" placeholder="smtp.gmail.com">
+                                </div>
+                            </div>
+                            <div class="setting-item" data-search-terms="smtp port 587 465 25 starttls ssl tls">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-smtp-port">SMTP Port</label>
+                                    <span class="setting-hint">Port 587 (STARTTLS) or 465 (SSL/TLS) recommended</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-smtp-port" class="form-input" data-setting-key="smtp_port" value="587">
+                                </div>
+                            </div>
+                            <div class="setting-item" data-search-terms="smtp username login email account user">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-smtp-username">Username</label>
+                                    <span class="setting-hint">SMTP authorization account username or email</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-smtp-username" class="form-input" data-setting-key="smtp_username" placeholder="alerts@domain.com">
+                                </div>
+                            </div>
+                            <div class="setting-item" data-search-terms="smtp password secret key app password">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-smtp-password">Password</label>
+                                    <span class="setting-hint">App password or credential (kept encrypted on server)</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="password" id="setting-smtp-password" class="form-input" data-setting-key="smtp_password" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="setting-item" data-search-terms="smtp from address sender header envelope">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-smtp-from">From Address</label>
+                                    <span class="setting-hint">Envelope sender RFC 5322 header address</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-smtp-from" class="form-input" data-setting-key="smtp_from" placeholder="PulseOps &lt;noreply@domain.com&gt;">
+                                </div>
+                            </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-smtp-section">Save SMTP</button>
-                            <button class="btn-secondary" id="test-smtp-btn">📧 Test SMTP</button>
+                            <button class="btn btn-primary" data-save-section="settings-smtp-section">Save SMTP</button>
+                            <button class="btn btn-secondary" id="test-smtp-btn">📧 Test SMTP</button>
                         </div>
-                        <div id="smtp-test-result" style="display:none; margin-top:0.75rem; padding:0.6rem 1rem; border-radius:8px; font-size:0.85rem;"></div>
+                        <div id="smtp-test-result" class="settings-test-result" style="display:none;"></div>
                     </div>
 
                     <!-- 6. SSL / TLS Watchdog Policies -->
-                    <div class="card" id="settings-ssl-section">
+                    <div class="card settings-card" id="settings-ssl-section" data-card-category="security">
                         <div class="card-header-clean">
-                            <div class="card-title">🔒 SSL / TLS Watchdog</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">🔒</span>
+                                <span>SSL / TLS Watchdog</span>
+                            </div>
                             <span class="badge badge-info">Certificates</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row">
-                                <label class="setting-label">Expiry Warning (Days)</label>
-                                <input type="number" id="setting-ssl-warn" class="form-input" data-setting-key="ssl_warn_days" min="1" max="90" value="30">
+                            <div class="setting-item" data-search-terms="ssl expiry warning days threshold certificate">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-ssl-warn">Expiry Warning (Days)</label>
+                                    <span class="setting-hint">Advance notice threshold before raising certificate renewal warnings</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-ssl-warn" class="form-input" data-setting-key="ssl_warn_days" min="1" max="90" value="30">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Critical Alarm (Days)</label>
-                                <input type="number" id="setting-ssl-crit" class="form-input" data-setting-key="ssl_crit_days" min="1" max="30" value="7">
+                            <div class="setting-item" data-search-terms="ssl critical alarm days threshold urgency">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-ssl-crit">Critical Alarm (Days)</label>
+                                    <span class="setting-hint">Emergency threshold for critical alerts on imminent certificate expiry</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-ssl-crit" class="form-input" data-setting-key="ssl_crit_days" min="1" max="30" value="7">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Auto-Check Interval</label>
-                                <select id="setting-ssl-check" class="form-input" data-setting-key="ssl_auto_check_hours">
-                                    <option value="6">Every 6 Hours</option>
-                                    <option value="12" selected>Every 12 Hours</option>
-                                    <option value="24">Daily (24 Hours)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="ssl auto-check interval hours schedule sweep">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-ssl-check">Auto-Check Interval</label>
+                                    <span class="setting-hint">Background routine frequency for re-probing domain certificate chains</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-ssl-check" class="form-input" data-setting-key="ssl_auto_check_hours">
+                                        <option value="6">Every 6 Hours</option>
+                                        <option value="12" selected>Every 12 Hours</option>
+                                        <option value="24">Daily (24 Hours)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Alert on Untrusted / Self-Signed</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-ssl-untrusted" data-setting-key="ssl_alert_untrusted" checked><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="ssl untrusted self-signed invalid chain ca alert">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-ssl-untrusted">Alert on Untrusted / Self-Signed</label>
+                                    <span class="setting-hint">Flag certificates signed by unverified CAs or missing intermediate chains</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-ssl-untrusted" data-setting-key="ssl_alert_untrusted" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-ssl-section">Save SSL Policies</button>
+                            <button class="btn btn-primary" data-save-section="settings-ssl-section">Save SSL Policies</button>
                         </div>
                     </div>
 
                     <!-- 7. Security Policies & Governance -->
-                    <div class="card" id="settings-security-section">
+                    <div class="card settings-card" id="settings-security-section" data-card-category="security">
                         <div class="card-header-clean">
-                            <div class="card-title">🛡️ Security &amp; Access Control</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">🛡️</span>
+                                <span>Security &amp; Access Control</span>
+                            </div>
                             <span class="badge badge-info">Governance</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Require 2FA for all users</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-require-2fa" data-setting-key="require_2fa"><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="2fa two-factor authentication require enforce security">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-require-2fa">Require 2FA for all users</label>
+                                    <span class="setting-hint">Enforce mandatory TOTP two-factor enrollment for every account</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-require-2fa" data-setting-key="require_2fa">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Max Failed Logins</label>
-                                <select id="setting-max-attempts" class="form-input" data-setting-key="max_login_attempts">
-                                    <option value="3">3 Attempts</option>
-                                    <option value="5" selected>5 Attempts (Default)</option>
-                                    <option value="10">10 Attempts</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="failed logins brute force lockout max attempts password">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-max-attempts">Max Failed Logins</label>
+                                    <span class="setting-hint">Allowable consecutive failed authentication attempts before temporary ban</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-max-attempts" class="form-input" data-setting-key="max_login_attempts">
+                                        <option value="3">3 Attempts</option>
+                                        <option value="5" selected>5 Attempts (Default)</option>
+                                        <option value="10">10 Attempts</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Lockout Duration (min)</label>
-                                <input type="number" id="setting-lockout-duration" class="form-input" data-setting-key="lockout_duration_minutes" min="1" max="1440" value="15">
+                            <div class="setting-item" data-search-terms="lockout duration minutes ban block cooldown">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-lockout-duration">Lockout Duration (min)</label>
+                                    <span class="setting-hint">Duration IP address or username is banned after exceeding failed logins</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-lockout-duration" class="form-input" data-setting-key="lockout_duration_minutes" min="1" max="1440" value="15">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Min Password Length</label>
-                                <input type="number" id="setting-min-password" class="form-input" data-setting-key="password_min_length" min="8" max="32" value="8">
+                            <div class="setting-item" data-search-terms="min password length complexity characters rules">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-min-password">Min Password Length</label>
+                                    <span class="setting-hint">Enforced character count minimum for all local operator passwords</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-min-password" class="form-input" data-setting-key="password_min_length" min="8" max="32" value="8">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Inactivity Timeout (min)</label>
-                                <input type="number" id="setting-idle-timeout" class="form-input" data-setting-key="idle_timeout_minutes" min="0" max="1440" value="60">
+                            <div class="setting-item" data-search-terms="inactivity timeout idle minutes auto logout security">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-idle-timeout">Inactivity Timeout (min)</label>
+                                    <span class="setting-hint">Automatic session dismissal on inactive workstation tab (0 = disabled)</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="setting-idle-timeout" class="form-input" data-setting-key="idle_timeout_minutes" min="0" max="1440" value="60">
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Admin IP / CIDR Allowlist</label>
-                                <input type="text" id="setting-ip-allowlist" class="form-input" data-setting-key="admin_ip_allowlist" placeholder="e.g. 127.0.0.1, 10.0.0.0/8 (blank = all)">
+                            <div class="setting-item" data-search-terms="admin ip cidr allowlist whitelist restriction security firewall">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-ip-allowlist">Admin IP / CIDR Allowlist</label>
+                                    <span class="setting-hint">Restrict console login access to specific IPs or subnets (blank = allow all)</span>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="setting-ip-allowlist" class="form-input" data-setting-key="admin_ip_allowlist" placeholder="e.g. 127.0.0.1, 10.0.0.0/8 (blank = all)">
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-security-section">Save Security</button>
+                            <button class="btn btn-primary" data-save-section="settings-security-section">Save Security</button>
                         </div>
 
                         <!-- User Personal 2FA Panel -->
-                        <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border-color);">
-                            <div style="font-weight:700; font-size:0.9rem; color:var(--text-main); margin-bottom:0.4rem;">Your Personal Two-Factor Authentication</div>
-                            <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-                                <span id="2fa-status-text" style="color:var(--text-dim); font-size:0.85rem;">Not configured</span>
-                                <button class="btn-secondary" id="setup-2fa-btn">🔐 Setup 2FA</button>
-                            </div>
-                            <div id="2fa-setup-panel" style="display:none; margin-top:1rem; background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; border:1px solid var(--border-color);">
-                                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">Scan this QR code with Google Authenticator or Authy:</p>
-                                <img id="2fa-qr-img" style="display:none; width:180px; height:180px; border-radius:8px; border:2px solid var(--border-color);" alt="2FA QR Code">
-                                <p style="font-size:0.75rem; color:var(--text-dim); margin:0.5rem 0;">Manual secret: <code id="2fa-secret-display" style="color:var(--accent-cyan);"></code></p>
-                                <span id="2fa-otpauth-uri" style="display:none;"></span>
-                                <div class="setting-row" style="margin-top:1rem;">
-                                    <input type="text" id="2fa-verify-code" class="form-input" placeholder="Enter 6-digit code" maxlength="6" style="letter-spacing:0.3em; width:160px;">
-                                    <button class="btn-primary" id="verify-2fa-btn">Verify &amp; Enable</button>
+                        <div class="settings-subcard" id="settings-personal-2fa-box">
+                            <div class="settings-subcard-header">
+                                <div>
+                                    <div class="settings-subcard-title">🔐 Your Personal Two-Factor Authentication</div>
+                                    <div class="settings-subcard-desc">Protect your personal administrative account with time-based OTP authenticator keys.</div>
                                 </div>
-                                <div id="backup-codes-container" style="display:none; margin-top:1rem;"></div>
+                                <div style="display:flex; align-items:center; gap:0.75rem;">
+                                    <span id="2fa-status-text" class="status-indicator-badge">Checking...</span>
+                                    <button class="btn btn-secondary" id="setup-2fa-btn">Configure 2FA</button>
+                                </div>
+                            </div>
+                            <div id="2fa-setup-panel" class="settings-2fa-modal-box" style="display:none;">
+                                <div class="settings-2fa-step">
+                                    <div class="step-badge">1</div>
+                                    <div>Scan this QR code with Google Authenticator, Authy, or 1Password:</div>
+                                </div>
+                                <div class="settings-qr-container">
+                                    <img id="2fa-qr-img" class="settings-qr-img" style="display:none;" alt="2FA QR Code">
+                                    <div class="settings-manual-key-box">
+                                        <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Manual Key</div>
+                                        <code id="2fa-secret-display" class="settings-manual-key"></code>
+                                        <button type="button" class="btn btn-small" onclick="window.copyToClipboard(document.getElementById('2fa-secret-display').textContent, 'Secret copied!')">📋 Copy Key</button>
+                                    </div>
+                                </div>
+                                <span id="2fa-otpauth-uri" style="display:none;"></span>
+                                <div class="settings-2fa-step" style="margin-top:1.25rem;">
+                                    <div class="step-badge">2</div>
+                                    <div>Enter 6-digit confirmation code generated by your app:</div>
+                                </div>
+                                <div class="setting-row" style="margin-top:0.75rem; justify-content:flex-start; gap:0.75rem;">
+                                    <input type="text" id="2fa-verify-code" class="form-input" placeholder="000000" maxlength="6" style="letter-spacing:0.35em; font-weight:700; width:170px; text-align:center; font-family:var(--font-mono);">
+                                    <button class="btn btn-primary" id="verify-2fa-btn">Verify &amp; Enforce</button>
+                                </div>
+                                <div id="backup-codes-container" style="display:none; margin-top:1.25rem;"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- 8. Web Terminal & Runbooks Preferences -->
-                    <div class="card" id="settings-terminal-section">
+                    <div class="card settings-card" id="settings-terminal-section" data-card-category="terminal">
                         <div class="card-header-clean">
-                            <div class="card-title">💻 Web Terminal &amp; Console</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">💻</span>
+                                <span>Web Terminal &amp; Console</span>
+                            </div>
                             <span class="badge badge-info">Shell</span>
                         </div>
                         <div class="settings-form">
-                            <div class="setting-row">
-                                <label class="setting-label">Terminal Font Size</label>
-                                <select id="setting-terminal-font" class="form-input" data-setting-key="terminal_font_size">
-                                    <option value="12">12px (Compact)</option>
-                                    <option value="13" selected>13px (Default)</option>
-                                    <option value="14">14px (Large)</option>
-                                    <option value="16">16px (HiDPI)</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="terminal font size compact large hidpi shell console">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-terminal-font">Terminal Font Size</label>
+                                    <span class="setting-hint">Monospace typography rendering scale within web shell instances</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-terminal-font" class="form-input" data-setting-key="terminal_font_size">
+                                        <option value="12">12px (Compact)</option>
+                                        <option value="13" selected>13px (Default)</option>
+                                        <option value="14">14px (Large)</option>
+                                        <option value="16">16px (HiDPI)</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Scrollback Buffer</label>
-                                <select id="setting-terminal-buffer" class="form-input" data-setting-key="terminal_scrollback_lines">
-                                    <option value="500">500 Lines</option>
-                                    <option value="1000" selected>1,000 Lines</option>
-                                    <option value="2500">2,500 Lines</option>
-                                    <option value="5000">5,000 Lines</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="terminal scrollback buffer lines memory history">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-terminal-buffer">Scrollback Buffer</label>
+                                    <span class="setting-hint">Maximum history lines preserved in terminal scrollback memory</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-terminal-buffer" class="form-input" data-setting-key="terminal_scrollback_lines">
+                                        <option value="500">500 Lines</option>
+                                        <option value="1000" selected>1,000 Lines</option>
+                                        <option value="2500">2,500 Lines</option>
+                                        <option value="5000">5,000 Lines</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row">
-                                <label class="setting-label">Console Color Theme</label>
-                                <select id="setting-terminal-theme" class="form-input" data-setting-key="terminal_theme">
-                                    <option value="cyberpunk" selected>Cyberpunk Deep Dark</option>
-                                    <option value="monokai">Monokai Pro</option>
-                                    <option value="dracula">Dracula Dark</option>
-                                    <option value="matrix">Matrix Green</option>
-                                </select>
+                            <div class="setting-item" data-search-terms="terminal theme colors cyberpunk monokai dracula matrix">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-terminal-theme">Console Color Theme</label>
+                                    <span class="setting-hint">ANSI color palette profile applied to interactive PTY sessions</span>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="setting-terminal-theme" class="form-input" data-setting-key="terminal_theme">
+                                        <option value="cyberpunk" selected>Cyberpunk Deep Dark</option>
+                                        <option value="monokai">Monokai Pro</option>
+                                        <option value="dracula">Dracula Dark</option>
+                                        <option value="matrix">Matrix Green</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Confirm Sudo Runbooks</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-terminal-sudo" data-setting-key="terminal_confirm_sudo" checked><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="confirm sudo runbooks danger prompt safeguards">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-terminal-sudo">Confirm Sudo Runbooks</label>
+                                    <span class="setting-hint">Require explicit operator confirmation before dispatching elevated scripts</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-terminal-sudo" data-setting-key="terminal_confirm_sudo" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-row" style="align-items:center;">
-                                <label class="setting-label">Audit Log Terminal Cmds</label>
-                                <label class="toggle-switch"><input type="checkbox" id="setting-terminal-audit" data-setting-key="terminal_audit_logging" checked><span class="toggle-slider"></span></label>
+                            <div class="setting-item setting-item-toggle" data-search-terms="audit log terminal commands recording history forensics">
+                                <div class="setting-info">
+                                    <label class="setting-label" for="setting-terminal-audit">Audit Log Terminal Cmds</label>
+                                    <span class="setting-hint">Record executed administrative commands into immutable audit log</span>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="setting-terminal-audit" data-setting-key="terminal_audit_logging" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="setting-actions">
-                            <button class="btn-primary" data-save-section="settings-terminal-section">Save Terminal</button>
+                            <button class="btn btn-primary" data-save-section="settings-terminal-section">Save Terminal</button>
                         </div>
                     </div>
 
                     <!-- 9. Navigation & Module Visibility -->
-                    <div class="card" id="settings-navigation-section">
+                    <div class="card settings-card" id="settings-navigation-section" data-card-category="navigation">
                         <div class="card-header-clean">
-                            <div class="card-title">🧭 Navigation &amp; Module Visibility</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">🧭</span>
+                                <span>Navigation &amp; Module Visibility</span>
+                            </div>
                             <span class="badge badge-info">Role &amp; UI Control</span>
                         </div>
                         <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem; line-height:1.6;">
-                            Enable or disable navigation buttons and feature modules across the dashboard. Disabled modules are immediately hidden from the navigation bar for all users.
+                            Toggle optional feature modules and navigation tabs. Disabled modules are immediately hidden from the interface for all users.
                         </div>
 
                         <div style="font-size:0.75rem; text-transform:uppercase; color:var(--accent-cyan); font-weight:700; letter-spacing:0.05em; margin-bottom:0.75rem;">
                             Server Dashboard Navigation Tabs
                         </div>
 
-                        <div class="settings-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem; margin-bottom:1.5rem;">
+                        <div class="settings-modules-grid">
                             <!-- Docker / Containers -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🐳</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Containers</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Docker containers &amp; logs</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="docker containers modules pods logs">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🐳</span>
+                                    <div>
+                                        <div class="module-tile-title">Containers</div>
+                                        <div class="module-tile-desc">Docker containers &amp; runtime logs</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_docker_enabled" data-setting-key="nav_docker_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_docker_enabled" data-setting-key="nav_docker_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Ports -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🔌</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Ports</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Listening sockets &amp; connections</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="ports sockets networking connections listening">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🔌</span>
+                                    <div>
+                                        <div class="module-tile-title">Ports</div>
+                                        <div class="module-tile-desc">Listening sockets &amp; connections</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_ports_enabled" data-setting-key="nav_ports_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_ports_enabled" data-setting-key="nav_ports_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Firewall -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🛡️</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Firewall</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Firewalld &amp; iptables rules</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="firewall iptables firewalld ufw rules security">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🛡️</span>
+                                    <div>
+                                        <div class="module-tile-title">Firewall</div>
+                                        <div class="module-tile-desc">Firewalld &amp; iptables rule manager</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_firewall_enabled" data-setting-key="nav_firewall_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_firewall_enabled" data-setting-key="nav_firewall_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Security -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🚨</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Security</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Fail2ban &amp; scanner</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="security fail2ban brute force bans scanner">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🚨</span>
+                                    <div>
+                                        <div class="module-tile-title">Security</div>
+                                        <div class="module-tile-desc">Fail2ban &amp; intrusion scanner</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_security_enabled" data-setting-key="nav_security_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_security_enabled" data-setting-key="nav_security_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- SSL / TLS -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🔒</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">SSL / TLS</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Certificate expiry watchdog</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="ssl tls certificates https watchdog">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🔒</span>
+                                    <div>
+                                        <div class="module-tile-title">SSL / TLS</div>
+                                        <div class="module-tile-desc">Certificate expiry watchdog</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_ssl_enabled" data-setting-key="nav_ssl_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_ssl_enabled" data-setting-key="nav_ssl_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Services -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">⚙️</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Services</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">systemd service manager</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="services systemd daemons units manager">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">⚙️</span>
+                                    <div>
+                                        <div class="module-tile-title">Services</div>
+                                        <div class="module-tile-desc">systemd service manager</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_services_enabled" data-setting-key="nav_services_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_services_enabled" data-setting-key="nav_services_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Processes -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">⚡</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Processes</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Process tree &amp; task killer</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="processes tasks tree task manager kill cpu mem">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">⚡</span>
+                                    <div>
+                                        <div class="module-tile-title">Processes</div>
+                                        <div class="module-tile-desc">Process tree &amp; task killer</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_processes_enabled" data-setting-key="nav_processes_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_processes_enabled" data-setting-key="nav_processes_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Live Logs -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">📜</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Live Logs</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Systemd journal streaming</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="logs streaming systemd journal real-time syslog">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">📜</span>
+                                    <div>
+                                        <div class="module-tile-title">Live Logs</div>
+                                        <div class="module-tile-desc">Systemd journal streaming</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_logs_enabled" data-setting-key="nav_logs_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_logs_enabled" data-setting-key="nav_logs_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Terminal -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">💻</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Terminal</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Interactive web shell</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="terminal pty ssh web console shell">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">💻</span>
+                                    <div>
+                                        <div class="module-tile-title">Terminal</div>
+                                        <div class="module-tile-desc">Interactive web shell</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_terminal_enabled" data-setting-key="nav_terminal_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_terminal_enabled" data-setting-key="nav_terminal_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- VNC -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🖥️</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">VNC Desktop</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Remote desktop viewer</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="vnc desktop remote display gui viewer">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🖥️</span>
+                                    <div>
+                                        <div class="module-tile-title">VNC Desktop</div>
+                                        <div class="module-tile-desc">Remote desktop viewer</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_vnc_enabled" data-setting-key="nav_vnc_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_vnc_enabled" data-setting-key="nav_vnc_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
                         </div>
 
-                        <div style="font-size:0.75rem; text-transform:uppercase; color:var(--accent-cyan); font-weight:700; letter-spacing:0.05em; margin-bottom:0.75rem;">
+                        <div style="font-size:0.75rem; text-transform:uppercase; color:var(--accent-cyan); font-weight:700; letter-spacing:0.05em; margin:1.5rem 0 0.75rem;">
                             Sidebar Navigation Modules
                         </div>
 
-                        <div class="settings-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem;">
+                        <div class="settings-modules-grid">
                             <!-- Alerts -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">🔔</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Alerts</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Sidebar alerts &amp; rules view</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="alerts rules incidents notifications sidebar">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">🔔</span>
+                                    <div>
+                                        <div class="module-tile-title">Alerts</div>
+                                        <div class="module-tile-desc">Sidebar alerts &amp; rules view</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_alerts_enabled" data-setting-key="nav_alerts_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_alerts_enabled" data-setting-key="nav_alerts_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
 
                             <!-- Audit -->
-                            <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="display:flex; align-items:center; gap:0.65rem;">
-                                        <span style="font-size:1.25rem;">📋</span>
-                                        <div>
-                                            <div style="font-weight:600; font-size:0.88rem; color:var(--text-main);">Audit Log</div>
-                                            <div style="font-size:0.74rem; color:var(--text-dim);">Sidebar audit trail viewer</div>
-                                        </div>
+                            <div class="settings-module-tile" data-search-terms="audit log trail history records sidebar">
+                                <div class="module-tile-info">
+                                    <span class="module-tile-icon">📋</span>
+                                    <div>
+                                        <div class="module-tile-title">Audit Log</div>
+                                        <div class="module-tile-desc">Sidebar audit trail viewer</div>
                                     </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="setting-nav_audit_enabled" data-setting-key="nav_audit_enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
                                 </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-nav_audit_enabled" data-setting-key="nav_audit_enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
                         </div>
 
                         <div class="setting-actions" style="margin-top:1.25rem;">
-                            <button class="btn-primary" data-save-section="settings-navigation-section">Save Navigation Settings</button>
+                            <button class="btn btn-primary" data-save-section="settings-navigation-section">Save Navigation Settings</button>
                         </div>
                     </div>
 
                     <!-- 10. Database Health, Maintenance & Storage -->
-                    <div class="card" id="settings-database-section">
+                    <div class="card settings-card" id="settings-database-section" data-card-category="database">
                         <div class="card-header-clean">
-                            <div class="card-title">💾 Database &amp; Maintenance</div>
+                            <div class="card-title">
+                                <span class="card-title-icon">💾</span>
+                                <span>Database &amp; Maintenance</span>
+                            </div>
                             <span class="badge badge-success">SQLite WAL</span>
                         </div>
                         <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem; line-height:1.6;">
                             PulseOps local transactional database engine with Write-Ahead Logging.
                         </div>
 
-                        <!-- Live DB Stats Box -->
-                        <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem; margin-bottom:1.25rem;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-                                <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-dim); letter-spacing:0.04em;">Database File Size</span>
-                                <span id="db-stat-size" style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan); font-size:0.95rem;">Calculating...</span>
+                        <!-- Live DB Telemetry Grid -->
+                        <div class="settings-db-stats-panel">
+                            <div class="db-stats-header">
+                                <span class="db-stats-label">Database File Size</span>
+                                <span id="db-stat-size" class="db-stats-val">Calculating...</span>
                             </div>
-                            <div style="font-size:0.75rem; color:var(--text-dim); word-break:break-all; font-family:var(--font-mono);" id="db-stat-path">
-                                pulseops.db
-                            </div>
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-top:0.75rem; padding-top:0.75rem; border-top:1px dashed rgba(255,255,255,0.06); font-size:0.78rem;">
-                                <div>Snapshots: <strong id="db-stat-snapshots" style="color:var(--text-main);">-</strong></div>
-                                <div>Audit Logs: <strong id="db-stat-logs" style="color:var(--text-main);">-</strong> <button type="button" class="btn-see-all" onclick="showSection('audit')" style="margin-left:4px; font-size:0.75rem; text-decoration:underline; cursor:pointer;" title="View Audit Log">View →</button></div>
-                                <div>Fleet Nodes: <strong id="db-stat-servers" style="color:var(--text-main);">-</strong></div>
-                                <div>Monitored SSL: <strong id="db-stat-ssl" style="color:var(--text-main);">-</strong></div>
+                            <div class="db-stats-path" id="db-stat-path">pulseops.db</div>
+                            <div class="db-stats-metrics-grid">
+                                <div class="db-metric-chip">
+                                    <span class="db-metric-name">Snapshots</span>
+                                    <strong id="db-stat-snapshots" class="db-metric-num">-</strong>
+                                </div>
+                                <div class="db-metric-chip">
+                                    <span class="db-metric-name">Audit Logs</span>
+                                    <div style="display:flex; align-items:center; gap:0.4rem;">
+                                        <strong id="db-stat-logs" class="db-metric-num">-</strong>
+                                        <button type="button" class="btn-see-all" onclick="showSection('audit')" title="View Audit Log">View →</button>
+                                    </div>
+                                </div>
+                                <div class="db-metric-chip">
+                                    <span class="db-metric-name">Fleet Nodes</span>
+                                    <strong id="db-stat-servers" class="db-metric-num">-</strong>
+                                </div>
+                                <div class="db-metric-chip">
+                                    <span class="db-metric-name">Monitored SSL</span>
+                                    <strong id="db-stat-ssl" class="db-metric-num">-</strong>
+                                </div>
                             </div>
                         </div>
 
-                        <div style="display:flex; flex-direction:column; gap:0.65rem;">
-                            <button class="btn-secondary" id="btn-db-vacuum" style="width:100%; justify-content:center;">🧹 Optimize &amp; VACUUM Database</button>
-                            <button class="btn-secondary" id="btn-db-purge" style="width:100%; justify-content:center;">🗑️ Purge Expired Metric History</button>
-                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:0.5rem;">
-                                <button class="btn-secondary" id="backup-db-btn" style="width:100%; justify-content:center;">💾 Download Backup</button>
-                                <button class="btn-secondary" id="restore-db-btn" style="width:100%; justify-content:center;">📥 Restore Database</button>
+                        <!-- Database Maintenance Actions -->
+                        <div class="settings-db-actions-list">
+                            <button class="btn btn-secondary" id="btn-db-vacuum" style="width:100%; justify-content:center;">
+                                <span>🧹</span> Optimize &amp; VACUUM Database
+                            </button>
+                            <button class="btn btn-secondary" id="btn-db-purge" style="width:100%; justify-content:center;">
+                                <span>🗑️</span> Purge Expired Metric History
+                            </button>
+                            <div class="settings-action-row-split">
+                                <button class="btn btn-secondary" id="backup-db-btn" style="width:100%; justify-content:center;">
+                                    <span>💾</span> Download Backup
+                                </button>
+                                <button class="btn btn-secondary" id="restore-db-btn" style="width:100%; justify-content:center;">
+                                    <span>📥</span> Restore Database
+                                </button>
                             </div>
                             <input type="file" id="db-restore-file-input" accept=".db,.sqlite,.sqlite3" style="display:none;" />
-                            <button class="btn-danger-action" id="btn-reset-defaults" style="width:100%; justify-content:center; margin-top:0.5rem;">🔄 Reset Settings to Defaults</button>
                         </div>
 
+                        <!-- Danger Zone -->
+                        <div class="settings-danger-zone">
+                            <div class="danger-zone-title">⚠️ Danger Zone</div>
+                            <div class="danger-zone-desc">Restoring factory settings resets alert thresholds and channels. Server configurations and user accounts are preserved.</div>
+                            <button class="btn-danger-action" id="btn-reset-defaults" style="width:100%; justify-content:center; margin-top:0.75rem;">
+                                <span>🔄</span> Reset Settings to Factory Defaults
+                            </button>
+                        </div>
+
+                        <!-- Theme Quick Switch -->
                         <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border-color);">
                             <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Appearance &amp; Theme</div>
-                            <button class="btn-secondary" id="settings-theme-toggle-btn" type="button" style="width:100%; justify-content:center;">☀️ Switch to Light Mode</button>
+                            <button class="btn btn-secondary" id="settings-theme-toggle-btn" type="button" style="width:100%; justify-content:center;">
+                                ☀️ Switch to Light Mode
+                            </button>
                         </div>
                     </div>
                 </div>

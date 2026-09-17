@@ -14,6 +14,7 @@
 
 const SettingsManager = (() => {
     let _settings = {};
+    let _activeCategory = 'all';
 
     // ── Load Settings ─────────────────────────────────────────────────────────
 
@@ -45,18 +46,79 @@ const SettingsManager = (() => {
             } else {
                 el.value = val;
             }
+            el.classList.remove('setting-dirty');
+            el.closest('.toggle-switch')?.classList.remove('setting-dirty');
         });
+
+        updateDirtyState();
 
         // 2FA status indicator
         const statusText = document.getElementById('2fa-status-text');
         if (statusText) {
             const user = PulseOpsAuth.getUser();
             if (user && user.two_factor_enabled) {
-                statusText.innerHTML = '<span style="color:var(--accent-green);">● Active &amp; Enforced</span>';
+                statusText.innerHTML = '<span style="color:#4ade80;">● Active &amp; Enforced</span>';
             } else {
-                statusText.innerHTML = '<span style="color:var(--text-dim);">○ Not Enabled</span>';
+                statusText.innerHTML = '<span style="color:var(--text-dim);">○ Not Configured</span>';
             }
         }
+    }
+
+    // ── Dirty State Change Tracking ───────────────────────────────────────────
+
+    function checkIsDirty(el) {
+        const key = el.dataset.settingKey;
+        if (!key) return false;
+        const origVal = _settings[key];
+        if (origVal === undefined || origVal === null) return false;
+
+        if (el.type === 'checkbox') {
+            const origBool = origVal === 'true' || origVal === true || origVal === '1';
+            return el.checked !== origBool;
+        } else {
+            const curVal = el.value.trim();
+            if (curVal === '••••••••' && key.includes('password')) return false;
+            return String(curVal) !== String(origVal);
+        }
+    }
+
+    function updateDirtyState() {
+        let dirtyCount = 0;
+        document.querySelectorAll('[data-setting-key]').forEach(el => {
+            const isDirty = checkIsDirty(el);
+            if (isDirty) {
+                dirtyCount++;
+                el.classList.add('setting-dirty');
+                el.closest('.toggle-switch')?.classList.add('setting-dirty');
+            } else {
+                el.classList.remove('setting-dirty');
+                el.closest('.toggle-switch')?.classList.remove('setting-dirty');
+            }
+        });
+
+        const saveAllBtn = document.getElementById('btn-save-all-settings');
+        const dirtyBadge = document.getElementById('dirty-count-badge');
+        if (saveAllBtn && dirtyBadge) {
+            dirtyBadge.textContent = dirtyCount;
+            saveAllBtn.style.display = dirtyCount > 0 ? 'inline-flex' : 'none';
+        }
+    }
+
+    function initDirtyTracking() {
+        const grid = document.getElementById('settings-cards-grid');
+        if (!grid) return;
+
+        grid.addEventListener('input', (e) => {
+            if (e.target.matches('[data-setting-key]')) {
+                updateDirtyState();
+            }
+        });
+
+        grid.addEventListener('change', (e) => {
+            if (e.target.matches('[data-setting-key]')) {
+                updateDirtyState();
+            }
+        });
     }
 
     // ── Save Settings Section ─────────────────────────────────────────────────
@@ -92,6 +154,11 @@ const SettingsManager = (() => {
             if (resp.ok && data.success) {
                 showToast(`Settings updated (${data.updated_count} fields saved)`, 'success');
                 Object.assign(_settings, payload);
+                section.querySelectorAll('[data-setting-key]').forEach(el => {
+                    el.classList.remove('setting-dirty');
+                    el.closest('.toggle-switch')?.classList.remove('setting-dirty');
+                });
+                updateDirtyState();
                 if (window.PulseOpsApp && typeof window.PulseOpsApp.applyNavigationVisibility === 'function') {
                     window.PulseOpsApp.applyNavigationVisibility(_settings);
                 }
@@ -104,6 +171,187 @@ const SettingsManager = (() => {
         } finally {
             if (btn) { btn.disabled = false; btn.textContent = origText; }
         }
+    }
+
+    // ── Save All Modified Settings ────────────────────────────────────────────
+
+    async function saveAll() {
+        const payload = {};
+        let changedCount = 0;
+
+        document.querySelectorAll('[data-setting-key]').forEach(el => {
+            const key = el.dataset.settingKey;
+            if (checkIsDirty(el)) {
+                changedCount++;
+                if (el.type === 'checkbox') {
+                    payload[key] = String(el.checked);
+                } else {
+                    const val = el.value.trim();
+                    if (val !== '••••••••') {
+                        payload[key] = val;
+                    }
+                }
+            }
+        });
+
+        if (changedCount === 0) {
+            showToast('No unsaved changes detected', 'info');
+            return;
+        }
+
+        const btn = document.getElementById('btn-save-all-settings');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span>⏳</span> Saving...'; }
+
+        try {
+            const resp = await PulseOpsAuth.apiFetch('/api/admin/settings', {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                showToast(`All changes saved (${data.updated_count} fields updated)`, 'success');
+                Object.assign(_settings, payload);
+                document.querySelectorAll('[data-setting-key]').forEach(el => {
+                    el.classList.remove('setting-dirty');
+                    el.closest('.toggle-switch')?.classList.remove('setting-dirty');
+                });
+                updateDirtyState();
+                if (window.PulseOpsApp && typeof window.PulseOpsApp.applyNavigationVisibility === 'function') {
+                    window.PulseOpsApp.applyNavigationVisibility(_settings);
+                }
+            } else {
+                showToast(data.detail || 'Failed to save settings', 'error');
+            }
+        } catch (err) {
+            console.error('[Settings] Save All error:', err);
+            showToast('Network error saving settings', 'error');
+        } finally {
+            if (btn) { btn.disabled = false; }
+            updateDirtyState();
+        }
+    }
+
+    // ── Category Navigation Tabs ──────────────────────────────────────────────
+
+    function initCategoryNav() {
+        const nav = document.getElementById('settings-tab-nav');
+        if (!nav) return;
+
+        nav.addEventListener('click', (e) => {
+            const btn = e.target.closest('.settings-tab-btn');
+            if (!btn) return;
+
+            nav.querySelectorAll('.settings-tab-btn').forEach(b => {
+                b.classList.toggle('active', b === btn);
+                b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+            });
+
+            _activeCategory = btn.dataset.category || 'all';
+
+            // Clear search filter when switching categories for clarity
+            const searchInput = document.getElementById('settings-search-input');
+            const clearBtn = document.getElementById('settings-search-clear');
+            if (searchInput && searchInput.value) {
+                searchInput.value = '';
+                if (clearBtn) clearBtn.style.display = 'none';
+            }
+
+            applyCategoryFilter();
+        });
+    }
+
+    function applyCategoryFilter() {
+        const cards = document.querySelectorAll('#settings-cards-grid .settings-card');
+        const emptyState = document.getElementById('settings-search-empty');
+        if (emptyState) emptyState.style.display = 'none';
+
+        cards.forEach(card => {
+            const cat = card.dataset.cardCategory;
+            const matches = _activeCategory === 'all' || cat === _activeCategory;
+            card.classList.toggle('card-hidden', !matches);
+            // Restore all items within visible cards
+            card.querySelectorAll('.setting-item, .settings-module-tile').forEach(item => {
+                item.classList.remove('item-hidden');
+            });
+        });
+    }
+
+    // ── Instant Quick Search & Filtering ─────────────────────────────────────
+
+    function initSearch() {
+        const input = document.getElementById('settings-search-input');
+        const clearBtn = document.getElementById('settings-search-clear');
+        const emptyClearBtn = document.getElementById('btn-clear-settings-search');
+
+        if (!input) return;
+
+        function handleSearch() {
+            const query = input.value.trim().toLowerCase();
+            if (clearBtn) clearBtn.style.display = query.length > 0 ? 'block' : 'none';
+
+            if (!query) {
+                applyCategoryFilter();
+                return;
+            }
+
+            const cards = document.querySelectorAll('#settings-cards-grid .settings-card');
+            let totalVisibleItems = 0;
+
+            cards.forEach(card => {
+                let visibleInCard = 0;
+
+                // Match setting-item rows
+                card.querySelectorAll('.setting-item').forEach(item => {
+                    const label = (item.querySelector('.setting-label')?.textContent || '').toLowerCase();
+                    const hint = (item.querySelector('.setting-hint')?.textContent || '').toLowerCase();
+                    const searchTerms = (item.dataset.searchTerms || '').toLowerCase();
+                    const isMatch = label.includes(query) || hint.includes(query) || searchTerms.includes(query);
+
+                    item.classList.toggle('item-hidden', !isMatch);
+                    if (isMatch) visibleInCard++;
+                });
+
+                // Match settings-module-tile rows
+                card.querySelectorAll('.settings-module-tile').forEach(tile => {
+                    const title = (tile.querySelector('.module-tile-title')?.textContent || '').toLowerCase();
+                    const desc = (tile.querySelector('.module-tile-desc')?.textContent || '').toLowerCase();
+                    const searchTerms = (tile.dataset.searchTerms || '').toLowerCase();
+                    const isMatch = title.includes(query) || desc.includes(query) || searchTerms.includes(query);
+
+                    tile.classList.toggle('item-hidden', !isMatch);
+                    if (isMatch) visibleInCard++;
+                });
+
+                // Check title of card itself
+                const cardTitle = (card.querySelector('.card-title')?.textContent || '').toLowerCase();
+                if (cardTitle.includes(query)) {
+                    card.querySelectorAll('.setting-item, .settings-module-tile').forEach(i => i.classList.remove('item-hidden'));
+                    visibleInCard = 1;
+                }
+
+                card.classList.toggle('card-hidden', visibleInCard === 0);
+                totalVisibleItems += visibleInCard;
+            });
+
+            const emptyState = document.getElementById('settings-search-empty');
+            const queryText = document.getElementById('settings-search-query-text');
+            if (emptyState) {
+                emptyState.style.display = totalVisibleItems === 0 ? 'flex' : 'none';
+                if (queryText) queryText.textContent = query;
+            }
+        }
+
+        input.addEventListener('input', handleSearch);
+
+        function clearSearch() {
+            input.value = '';
+            if (clearBtn) clearBtn.style.display = 'none';
+            applyCategoryFilter();
+            input.focus();
+        }
+
+        if (clearBtn) clearBtn.addEventListener('click', clearSearch);
+        if (emptyClearBtn) emptyClearBtn.addEventListener('click', clearSearch);
     }
 
     // ── Webhook Alert Channel Test ────────────────────────────────────────────
@@ -487,6 +735,10 @@ const SettingsManager = (() => {
             btn.addEventListener('click', () => saveSection(btn.dataset.saveSection));
         });
 
+        // Save all button
+        const saveAllBtn = document.getElementById('btn-save-all-settings');
+        if (saveAllBtn) saveAllBtn.addEventListener('click', saveAll);
+
         // Webhook test
         const webhookBtn = document.getElementById('test-webhook-btn');
         if (webhookBtn) webhookBtn.addEventListener('click', testWebhook);
@@ -527,10 +779,15 @@ const SettingsManager = (() => {
         const verify2faBtn = document.getElementById('verify-2fa-btn');
         if (verify2faBtn) verify2faBtn.addEventListener('click', verify2FA);
 
+        // Category navigation & quick search & dirty tracking
+        initCategoryNav();
+        initSearch();
+        initDirtyTracking();
+
         // Theme toggle
         initThemeToggle();
 
-        // Load settings
+        // Load initial settings
         loadSettings();
     }
 
@@ -538,6 +795,7 @@ const SettingsManager = (() => {
         init,
         loadSettings,
         saveSection,
+        saveAll,
         applyTheme,
         loadDatabaseStats,
         vacuumDatabase
