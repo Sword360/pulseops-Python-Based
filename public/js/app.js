@@ -9,6 +9,50 @@
 /* ─── Global helpers (used by other modules) ─────────────────────────────────
    These are defined before any module code executes.                          */
 
+/**
+ * Ultra-smooth number roll / ticker animation with cubic ease-out
+ */
+function animateCounter(el, target, duration = 450, suffix = '') {
+    if (!el) return;
+    const targetNum = typeof target === 'number' ? target : parseFloat(target);
+    if (isNaN(targetNum)) {
+        el.textContent = target;
+        return;
+    }
+    // Reduced motion accessibility preference check
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        el.textContent = (Number.isInteger(targetNum) ? targetNum : targetNum.toFixed(1)) + suffix;
+        return;
+    }
+    const curText = (el.textContent || '').replace(suffix, '').trim();
+    const startNum = parseFloat(curText);
+    const start = isNaN(startNum) ? 0 : startNum;
+    const end = targetNum;
+    if (start === end) {
+        el.textContent = (Number.isInteger(end) ? end : end.toFixed(1)) + suffix;
+        return;
+    }
+    if (el._counterRaf) cancelAnimationFrame(el._counterRaf);
+    const startTime = performance.now();
+    const isInt = Number.isInteger(end) && Number.isInteger(start);
+
+    function step(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const current = start + (end - start) * ease;
+        el.textContent = (isInt ? Math.round(current) : current.toFixed(1)) + suffix;
+        if (progress < 1) {
+            el._counterRaf = requestAnimationFrame(step);
+        } else {
+            el.textContent = (isInt ? end : end.toFixed(1)) + suffix;
+            el._counterRaf = null;
+        }
+    }
+    el._counterRaf = requestAnimationFrame(step);
+}
+window.animateCounter = animateCounter;
+
 const SECTION_LABELS = {
     'fleet': 'Fleet Overview',
     'server-dashboard': 'Server Dashboard',
@@ -26,6 +70,8 @@ function showSection(name) {
     document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
     const target = document.getElementById(`section-${name}`);
     if (target) {
+        target.classList.remove('active');
+        void target.offsetWidth; // Re-trigger GPU-accelerated liquid slide & fade entrance
         target.classList.add('active');
         target.style.removeProperty('display');
     }
@@ -1194,7 +1240,15 @@ class PulseOpsDashboard {
 
     _setText(id, val) {
         const el = document.getElementById(id);
-        if (el) el.textContent = val;
+        if (!el) return;
+        if ((id === 'metric-cpu-val' || id === 'metric-mem-val' || id === 'metric-disk-val') && typeof val === 'string' && val.endsWith('%')) {
+            const num = parseFloat(val);
+            if (!isNaN(num)) {
+                animateCounter(el, num, 400, '%');
+                return;
+            }
+        }
+        el.textContent = val;
     }
 
     _setWidth(id, pct) {

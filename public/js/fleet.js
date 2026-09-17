@@ -577,7 +577,12 @@ const FleetManager = (() => {
 
     function setText(id, val) {
         const el = document.getElementById(id);
-        if (el) el.textContent = val;
+        if (!el) return;
+        if (typeof window.animateCounter === 'function' && typeof val === 'number') {
+            window.animateCounter(el, val, 450);
+        } else {
+            el.textContent = val;
+        }
     }
 
     // ── Fleet Update via WebSocket ─────────────────────────────────────────────
