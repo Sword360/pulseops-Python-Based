@@ -662,6 +662,15 @@ const AlertsManager = (() => {
             const sc = getSeverityConfig(alert.severity);
             showToast(`${sc.icon} [${sc.label.toUpperCase()}] Alert: ${alert.rule_name}`, alert.severity === 'critical' ? 'error' : 'warning');
 
+            // Trigger alert bell chime animation
+            const bellBtn = document.getElementById('alert-bell-btn');
+            if (bellBtn) {
+                bellBtn.classList.remove('bell-ringing');
+                void bellBtn.offsetWidth;
+                bellBtn.classList.add('bell-ringing');
+                setTimeout(() => bellBtn.classList.remove('bell-ringing'), 2400);
+            }
+
             updateBell();
             renderAlertDropdown();
             renderActiveIncidentsTable();

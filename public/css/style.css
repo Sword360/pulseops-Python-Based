@@ -2089,9 +2089,37 @@ body {
     border-radius: 50%;
     flex-shrink: 0;
     transition: background-color 0.2s, box-shadow 0.2s;
+    position: relative;
 }
-.sidebar-server-dot.online { background-color: var(--status-online); box-shadow: 0 0 6px rgba(34,197,94,0.6); }
-.sidebar-server-dot.degraded { background-color: var(--status-degraded); box-shadow: 0 0 6px rgba(245,158,11,0.6); }
+.sidebar-server-dot.online {
+    background-color: var(--status-online);
+    box-shadow: 0 0 6px rgba(34,197,94,0.6);
+    animation: glow-breathe 2.5s ease-in-out infinite;
+}
+.sidebar-server-dot.online::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 1.5px solid #22c55e;
+    animation: radar-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.sidebar-server-dot.degraded {
+    background-color: var(--status-degraded);
+    box-shadow: 0 0 6px rgba(245,158,11,0.6);
+}
+.sidebar-server-dot.degraded::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 1.5px solid #f59e0b;
+    animation: radar-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+    box-sizing: border-box;
+}
 .sidebar-server-dot.offline { background-color: var(--status-offline); box-shadow: 0 0 6px rgba(239,68,68,0.6); }
 .sidebar-server-dot.unreachable { background-color: var(--status-unreachable); }
 
@@ -2155,7 +2183,21 @@ body {
 
 /* ── Sections ───────────────────────────────────────────────────────────── */
 .app-section { display:none; }
-.app-section.active { display:block; }
+.app-section.active {
+    display: block;
+    animation: sectionFadeSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes sectionFadeSlide {
+    0% {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
 
 /* ── Checkcle Header Additions ─────────────────────────────────────────── */
 .header-health-pill {
@@ -2497,24 +2539,53 @@ body {
     color: #ffffff;
 }
 
-/* Mini glowing pulse dots */
-.pulse-dot-mini {
-    width: 6px;
-    height: 6px;
+/* Mini glowing pulse & status dots */
+.pulse-dot-mini,
+.status-dot-mini {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     display: inline-block;
+    position: relative;
+    flex-shrink: 0;
 }
-.pulse-dot-mini.online {
+.pulse-dot-mini.online,
+.status-dot-mini.online {
     background: #22c55e;
-    box-shadow: 0 0 6px #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
+    animation: glow-breathe 2.5s ease-in-out infinite;
 }
-.pulse-dot-mini.degraded {
+.pulse-dot-mini.online::after,
+.status-dot-mini.online::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid #22c55e;
+    animation: radar-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.pulse-dot-mini.degraded,
+.status-dot-mini.degraded {
     background: #f59e0b;
-    box-shadow: 0 0 6px #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
 }
-.pulse-dot-mini.offline {
+.pulse-dot-mini.degraded::after,
+.status-dot-mini.degraded::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid #f59e0b;
+    animation: radar-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.pulse-dot-mini.offline,
+.status-dot-mini.offline {
     background: #ef4444;
-    box-shadow: 0 0 6px #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
 }
 
 /* ── Checkcle Toolbar & Status Filter Tabs ──────────────────────────────── */
@@ -3574,8 +3645,28 @@ body {
 .alert-bell-btn {
     background:transparent; border:1px solid var(--border-color); color:var(--text-muted);
     border-radius:8px; padding:0.4rem 0.65rem; cursor:pointer; font-size:1.1rem; position:relative; transition:all 0.15s;
+    transform-origin: top center;
 }
-.alert-bell-btn:hover { color:var(--text-main); border-color:var(--border-color-glow); }
+.alert-bell-btn:hover {
+    color:var(--text-main);
+    border-color:var(--border-color-glow);
+    animation: bell-ring 0.65s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+.alert-bell-btn.bell-ringing {
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.6);
+    animation: bell-ring 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) 3;
+}
+@keyframes bell-ring {
+    0% { transform: rotate(0); }
+    15% { transform: rotate(14deg); }
+    30% { transform: rotate(-12deg); }
+    45% { transform: rotate(10deg); }
+    60% { transform: rotate(-8deg); }
+    75% { transform: rotate(4deg); }
+    85% { transform: rotate(-2deg); }
+    100% { transform: rotate(0); }
+}
 .alert-bell-badge {
     position:absolute; top:-5px; right:-5px; background:#ef4444; color:white;
     font-size:0.6rem; font-weight:800; padding:0.1rem 0.3rem; border-radius:8px; min-width:16px; text-align:center;
@@ -3970,11 +4061,66 @@ input:checked + .toggle-slider::before {
 
 /* ── Connection status ──────────────────────────────────────────────────── */
 .header-conn-status { display:flex; align-items:center; gap:0.5rem; }
-.pulse-dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
-.pulse-dot.connected    { background:#22c55e; animation:pulse-glow 2s infinite; }
-.pulse-dot.disconnected { background:#ef4444; }
-.pulse-dot.error        { background:#f59e0b; }
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.pulse-dot.connected {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
+    animation: glow-breathe 2.5s ease-in-out infinite, telemetry-blip 3s ease-in-out infinite;
+}
+.pulse-dot.connected::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid #22c55e;
+    animation: radar-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.pulse-dot.disconnected { background: #ef4444; }
+.pulse-dot.error,
+.pulse-dot.degraded {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+.pulse-dot.error::after,
+.pulse-dot.degraded::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid #f59e0b;
+    animation: radar-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+    box-sizing: border-box;
+}
 @keyframes pulse-glow { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.4);}50%{box-shadow:0 0 0 4px rgba(34,197,94,0);} }
+@keyframes glow-breathe {
+    0%, 100% { box-shadow: 0 0 4px rgba(34, 197, 94, 0.4), 0 0 8px rgba(34, 197, 94, 0.2); }
+    50%      { box-shadow: 0 0 8px rgba(34, 197, 94, 0.8), 0 0 16px rgba(34, 197, 94, 0.4); }
+}
+@keyframes radar-ping {
+    0% {
+        transform: scale(0.95);
+        opacity: 0.85;
+    }
+    60%, 100% {
+        transform: scale(2.6);
+        opacity: 0;
+    }
+}
+@keyframes telemetry-blip {
+    0%, 100% { filter: drop-shadow(0 0 2px rgba(34, 197, 94, 0.5)); }
+    50%      { filter: drop-shadow(0 0 8px rgba(34, 197, 94, 1)); }
+}
 
 /* ── Empty table ────────────────────────────────────────────────────────── */
 .empty-table-cell { text-align:center; color:var(--text-dim); padding:2rem; }
@@ -4823,5 +4969,138 @@ input:checked + .toggle-slider::before {
     background: rgba(56, 189, 248, 0.22);
     border-color: #38bdf8;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ULTRA SMOOTH MICRO-ANIMATION & TELEMETRY SUITE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Glass Sheen & Shimmer Sweep ────────────────────────────────────────── */
+.fleet-stat-card,
+.metric-card,
+.server-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.fleet-stat-card::after,
+.metric-card::after,
+.server-card::after {
+    content: '';
+    position: absolute;
+    top: -60%;
+    left: -80%;
+    width: 45%;
+    height: 220%;
+    background: linear-gradient(
+        105deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.08) 50%,
+        transparent 80%
+    );
+    transform: rotate(25deg);
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+}
+
+.fleet-stat-card:hover::after,
+.metric-card:hover::after,
+.server-card:hover::after {
+    animation: shimmer-sweep 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+[data-theme="light"] .fleet-stat-card::after,
+[data-theme="light"] .metric-card::after,
+[data-theme="light"] .server-card::after {
+    background: linear-gradient(
+        105deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.45) 50%,
+        transparent 80%
+    );
+}
+
+@keyframes shimmer-sweep {
+    0% {
+        left: -80%;
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        left: 140%;
+        opacity: 0;
+    }
+}
+
+/* ── Staggered Cascades for Cards ────────────────────────────────────────── */
+.fleet-stats-row > .fleet-stat-card {
+    animation: cardCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fleet-stats-row > .fleet-stat-card:nth-child(1) { animation-delay: 0.02s; }
+.fleet-stats-row > .fleet-stat-card:nth-child(2) { animation-delay: 0.06s; }
+.fleet-stats-row > .fleet-stat-card:nth-child(3) { animation-delay: 0.10s; }
+.fleet-stats-row > .fleet-stat-card:nth-child(4) { animation-delay: 0.14s; }
+
+.metrics-grid > .metric-card {
+    animation: cardCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.metrics-grid > .metric-card:nth-child(1) { animation-delay: 0.02s; }
+.metrics-grid > .metric-card:nth-child(2) { animation-delay: 0.06s; }
+.metrics-grid > .metric-card:nth-child(3) { animation-delay: 0.10s; }
+.metrics-grid > .metric-card:nth-child(4) { animation-delay: 0.14s; }
+
+.servers-grid > .server-card {
+    animation: cardCascade 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.servers-grid > .server-card:nth-child(1) { animation-delay: 0.02s; }
+.servers-grid > .server-card:nth-child(2) { animation-delay: 0.05s; }
+.servers-grid > .server-card:nth-child(3) { animation-delay: 0.08s; }
+.servers-grid > .server-card:nth-child(4) { animation-delay: 0.11s; }
+.servers-grid > .server-card:nth-child(5) { animation-delay: 0.14s; }
+.servers-grid > .server-card:nth-child(6) { animation-delay: 0.17s; }
+
+@keyframes cardCascade {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.99);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ── Top Bar Quick Theme Indicator Rotation ──────────────────────────────── */
+.header-icon-btn#header-quick-theme-btn:hover .theme-icon-indicator {
+    transform: rotate(35deg) scale(1.18);
+}
+.header-icon-btn#header-quick-theme-btn:active .theme-icon-indicator {
+    transform: rotate(205deg) scale(0.9);
+}
+
+/* ── Smooth Progress Bar Transition ─────────────────────────────────────── */
+.metric-bar-fill,
+.progress-bar-fill,
+.disk-bar-fill {
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+}
+
+/* ── Accessibility: Reduced Motion ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 
 
