@@ -3557,7 +3557,7 @@
             </div>
             <div style="padding:1rem 0; color:var(--text-dim); font-size:0.9rem; line-height:1.5;">
                 Are you sure you want to permanently delete this firewall rule?
-                <div id="delete-firewall-target-desc" style="margin-top:0.75rem; padding:0.6rem 0.85rem; background:rgba(0,0,0,0.4); border-left:3px solid var(--accent-red); border-radius:4px; font-family:var(--font-mono); color:var(--text-primary); font-size:0.85rem;"></div>
+                <div id="delete-firewall-target-desc" style="margin-top:0.75rem; padding:0.6rem 0.85rem; background:rgba(0,0,0,0.4); border-left:3px solid var(--accent-red); border-radius:4px; font-family:var(--font-mono); color:var(--text-main); font-size:0.85rem;"></div>
             </div>
             <div style="display:flex; justify-content:flex-end; gap:0.75rem; margin-top:0.5rem;">
                 <button type="button" class="btn btn-secondary" onclick="window.firewallMgr && window.firewallMgr.closeDeleteModal()">Cancel</button>
@@ -3859,6 +3859,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile Drawer Backdrop -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>

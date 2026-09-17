@@ -702,16 +702,24 @@ const SettingsManager = (() => {
     function initThemeToggle() {
         const themeBtn = document.getElementById('settings-theme-toggle-btn');
         if (themeBtn) {
-            themeBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (window.PulseOpsApp && typeof window.PulseOpsApp.toggleTheme === 'function') {
-                    window.PulseOpsApp.toggleTheme();
-                } else {
+            // PulseOpsApp already binds a click handler to #settings-theme-toggle-btn.
+            // Only bind standalone fallback if PulseOpsApp is absent to prevent double-toggle!
+            if (!window.PulseOpsApp) {
+                themeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
                     const current = localStorage.getItem('pulseops-theme') || 'dark';
                     applyTheme(current === 'dark' ? 'light' : 'dark');
-                }
-            });
+                });
+            }
         }
+
+        // Listen for global theme changes to keep button label synced
+        document.addEventListener('pulseops:theme:changed', (e) => {
+            const theme = e.detail?.theme || 'dark';
+            const btn = document.getElementById('settings-theme-toggle-btn');
+            if (btn) btn.textContent = theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode';
+        });
+
         const current = localStorage.getItem('pulseops-theme') || 'dark';
         applyTheme(current);
     }

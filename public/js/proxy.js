@@ -56,8 +56,6 @@ class ProxyManager {
 
         // Logs Modal
         this.logsModal = document.getElementById('modal-proxy-logs');
-        this.logsAccessTab = document.getElementById('proxy-logs-access-tab');
-        this.logsErrorTab = document.getElementById('proxy-logs-error-tab');
         this.logsContainer = document.getElementById('proxy-logs-container');
         this.status2xxEl = document.getElementById('proxy-stat-2xx');
         this.status3xxEl = document.getElementById('proxy-stat-3xx');

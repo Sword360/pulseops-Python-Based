@@ -194,12 +194,13 @@
 
         function hideAlert() { alertEl.style.display = 'none'; }
 
-        function setLoading(btnId, spinnerId, loading) {
+        function setLoading(btnId, spinnerId, textId, loading) {
             const btn  = document.getElementById(btnId);
             const spin = document.getElementById(spinnerId);
-            btn.disabled = loading;
-            spin.style.display = loading ? 'inline-block' : 'none';
-            document.getElementById(btnId.replace('btn', 'text') + '-text' in document.getElementById(btnId) ? btnId.replace('-btn','') + '-text' : btnId.replace('submit', 'btn-text').replace('-btn', '-text')).style.display = loading ? 'none' : 'inline';
+            const txt  = textId ? document.getElementById(textId) : null;
+            if (btn)  btn.disabled = loading;
+            if (spin) spin.style.display = loading ? 'inline-block' : 'none';
+            if (txt)  txt.style.display = loading ? 'none' : 'inline';
         }
 
         // Password toggle

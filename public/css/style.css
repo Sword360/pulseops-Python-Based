@@ -28,6 +28,7 @@
     --accent-red-glow: rgba(248, 113, 113, 0.28);
 
     --text-main: #f8fafc;
+    --text-primary: var(--text-main);
     --text-muted: #94a3b8;
     --text-dim: #64748b;
 
@@ -64,6 +65,7 @@
     --accent-red: #dc2626;
 
     --text-main: #0f172a;
+    --text-primary: var(--text-main);
     --text-muted: #475569;
     --text-dim: #64748b;
 
@@ -645,6 +647,7 @@ body {
     border-color: rgba(255, 255, 255, 0.12);
 }
 
+.card-header,
 .card-header-flex {
     display: flex;
     justify-content: space-between;
@@ -4512,6 +4515,66 @@ input:checked + .toggle-slider::before {
 .modal-form { padding:1.25rem 1.5rem; display:flex; flex-direction:column; gap:1rem; }
 .modal-footer { display:flex; justify-content:flex-end; gap:0.75rem; padding:1rem 1.5rem; border-top:1px solid var(--border-color); }
 .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.85rem;
+}
+.form-label {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+[data-theme="light"] .form-label {
+    color: var(--text-dim);
+}
+
+.modal-body {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+[data-theme="light"] .modal-body {
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.btn-subtab {
+    transition: all var(--transition-fast, 0.15s ease);
+}
+.btn-subtab:hover {
+    opacity: 0.88;
+}
+
+.driver-pane {
+    animation: fadeIn 0.15s ease;
+}
+
+.text-online   { color: var(--accent-green) !important; }
+.text-degraded { color: var(--accent-amber) !important; }
+.text-offline  { color: var(--accent-red) !important; }
+
+.audit-filter-input {
+    flex: 1 1 160px;
+    min-width: 130px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(56, 189, 248, 0.2);
+    border-top-color: var(--accent-cyan);
+    border-radius: 50%;
+    animation: spin-pulse 0.8s linear infinite;
+    vertical-align: middle;
+}
+@keyframes spin-pulse {
+    to { transform: rotate(360deg); }
+}
 
 /* ── Agent Install Curl ─────────────────────────────────────────────────── */
 .agent-curl-cmd {
