@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <linearGradient id="iconShield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c1427" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#070a14" stop-opacity="0.98"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <linearGradient id="iconBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8">
+        <animate attributeName="stop-color" values="#38bdf8;#818cf8;#a855f7;#38bdf8" dur="6s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="50%" stop-color="#6366f1">
+        <animate attributeName="stop-color" values="#6366f1;#a855f7;#38bdf8;#6366f1" dur="6s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="100%" stop-color="#a855f7">
+        <animate attributeName="stop-color" values="#a855f7;#38bdf8;#818cf8;#a855f7" dur="6s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+
+    <linearGradient id="iconBolt" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#60a5fa"/>
+      <stop offset="80%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+
+    <linearGradient id="iconEcg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="40%" stop-color="#38bdf8" stop-opacity="0.3"/>
+      <stop offset="80%" stop-color="#a855f7" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+    </linearGradient>
+
+    <filter id="iconNeon" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="b1"/>
+      <feGaussianBlur stdDeviation="14" result="b2"/>
+      <feMerge>
+        <feMergeNode in="b2"/>
+        <feMergeNode in="b1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="iconAura" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="24" result="blur"/>
+    </filter>
+
+    <style>
+      @keyframes iconHeartbeat {
+        0%, 100% { transform: scale(1); }
+        15% { transform: scale(1.05); filter: drop-shadow(0 0 16px rgba(56,189,248,0.7)); }
+        25% { transform: scale(0.98); }
+        35% { transform: scale(1.025); }
+        50% { transform: scale(1); }
+      }
+      @keyframes iconBoltJolt {
+        0%, 100% { transform: scale(1); }
+        18% { transform: scale(1.06) rotate(-1.5deg); filter: drop-shadow(0 0 20px rgba(168,85,247,0.95)) drop-shadow(0 0 6px #fff); }
+        32% { transform: scale(0.99); }
+        42% { transform: scale(1.03); }
+        55% { transform: scale(1); }
+      }
+      @keyframes iconSpin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes iconEcgTravel {
+        0% { stroke-dashoffset: 400; opacity: 0.2; }
+        20% { opacity: 1; }
+        80% { opacity: 1; }
+        100% { stroke-dashoffset: 0; opacity: 0.2; }
+      }
+      .icon-aura {
+        transform-origin: 100px 100px;
+        animation: iconHeartbeat 2.2s ease-in-out infinite;
+      }
+      .icon-group {
+        transform-origin: 100px 100px;
+        animation: iconHeartbeat 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .icon-bolt {
+        transform-origin: 100px 96px;
+        animation: iconBoltJolt 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .icon-ring {
+        transform-origin: 100px 100px;
+        animation: iconSpin 12s linear infinite;
+      }
+      .icon-ecg {
+        stroke-dasharray: 200;
+        animation: iconEcgTravel 2.2s linear infinite;
+      }
+    </style>
+  </defs>
+
+  <circle class="icon-aura" cx="100" cy="100" r="70" fill="#38bdf8" filter="url(#iconAura)" opacity="0.6"/>
+  <circle class="icon-aura" cx="100" cy="100" r="55" fill="#a855f7" filter="url(#iconAura)" opacity="0.5"/>
+
+  <g class="icon-group">
+    <circle class="icon-ring" cx="100" cy="100" r="84" fill="none" stroke="url(#iconBorder)" stroke-width="1.8" stroke-dasharray="10 16 34 16" opacity="0.75"/>
+    <circle class="icon-ring" cx="100" cy="100" r="89" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="4 30 8 20" opacity="0.35" style="animation-duration: 20s; animation-direction: reverse;"/>
+
+    <rect x="25" y="25" width="150" height="150" rx="36" fill="url(#iconShield)" stroke="url(#iconBorder)" stroke-width="2.5"/>
+
+    <g opacity="0.12" stroke="#38bdf8" stroke-width="0.75">
+      <line x1="25" y1="70" x2="175" y2="70"/>
+      <line x1="25" y1="100" x2="175" y2="100"/>
+      <line x1="25" y1="130" x2="175" y2="130"/>
+      <line x1="70" y1="25" x2="70" y2="175"/>
+      <line x1="100" y1="25" x2="100" y2="175"/>
+      <line x1="130" y1="25" x2="130" y2="175"/>
+    </g>
+
+    <path class="icon-ecg" d="M 32 104 L 56 104 L 66 90 L 76 118 L 84 82 L 94 126 L 102 104 L 120 104 L 128 92 L 138 104 L 168 104"
+          fill="none" stroke="url(#iconEcg)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <g class="icon-bolt">
+      <polygon points="106,38 60,105 92,105 82,162 144,89 110,89"
+               fill="url(#iconBolt)" filter="url(#iconNeon)" opacity="0.7"/>
+      <polygon points="106,40 64,103 94,103 85,158 140,91 108,91"
+               fill="url(#iconBolt)"/>
+      <polygon points="105,44 74,101 95,101 88,145 132,93 107,93"
+               fill="#ffffff" opacity="0.75" style="mix-blend-mode: overlay;"/>
+    </g>
+
+    <circle cx="42" cy="42" r="2.5" fill="#38bdf8" opacity="0.8"/>
+    <circle cx="158" cy="42" r="2.5" fill="#a855f7" opacity="0.8"/>
+    <circle cx="42" cy="158" r="2.5" fill="#38bdf8" opacity="0.8"/>
+    <circle cx="158" cy="158" r="2.5" fill="#a855f7" opacity="0.8"/>
+  </g>
+</svg>

@@ -134,11 +134,17 @@ body::before {
 }
 
 .login-logo {
-    font-size: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+}
+.login-logo-img {
+    width: 68px;
+    height: 68px;
     display: block;
     filter: drop-shadow(0 0 16px rgba(56,189,248,0.6));
     animation: logo-pulse 3s ease-in-out infinite;
-    margin-bottom: 0.75rem;
 }
 
 @keyframes logo-pulse {

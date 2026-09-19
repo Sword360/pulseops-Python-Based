@@ -2,6 +2,10 @@
 
 <div align="center">
 
+<p align="center">
+  <img src="public/pulseops-logo.svg" alt="PulseOps Enterprise Animated Logo" width="620">
+</p>
+
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Architecture](https://img.shields.io/badge/Architecture-Pure%20AsyncIO%20%7C%20FastAPI-blueviolet.svg?style=for-the-badge)](https://fastapi.tiangolo.com/)
 [![Security](https://img.shields.io/badge/Security-JWT%20%7C%202FA%20%7C%20RBAC-success.svg?style=for-the-badge)](https://jwt.io/)
