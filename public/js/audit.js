@@ -1,8 +1,15 @@
 /**
- * audit.js — PulseOps Enterprise Audit Log Viewer
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      audit.js
+ * Description: Compliance audit log viewer, event filtering, user activity inspection, and CSV export.
  *
- * Paginated, filterable audit log table with CSV export,
- * action type coloring, and date range filtering.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const AuditViewer = (() => {

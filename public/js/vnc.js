@@ -1,6 +1,16 @@
-/* ==========================================================================
-   PulseOps - Redesigned x11vnc Remote Desktop Client Engine
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      vnc.js
+ * Description: HTML5 Canvas RFB 3.8 remote desktop client engine with auto-scaling and clipboard integration.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 class PulseOpsVNCManager {
     constructor() {

@@ -1,3 +1,12 @@
+# ============================================================================
+# PulseOps Enterprise — Python Runtime Dependencies
+# Author:    Najmul Islam
+# Developer: Najmul Islam
+# Contact:   f2pnajmul@gmail.com
+# License:   MIT License (see LICENSE file for details)
+# Copyright: (c) 2026 Najmul Islam. All rights reserved.
+# ============================================================================
+
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 websockets>=12.0

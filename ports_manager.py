@@ -1,10 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-ports_manager.py — PulseOps Enterprise Active Listening Ports & Network Inspector Module.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       ports_manager.py
+Description:  Active Listening Ports & Network Inspector Module.
+              Discovers listening TCP and UDP sockets, bind addresses, port numbers,
+              and owning processes (PID and executable name) using ss/netstat and /proc/net/tcp.
 
-Discovers listening TCP and UDP sockets, bind addresses, port numbers,
-and owning processes (PID and executable name) using `ss -tulpn` with fallback
-to `/proc/net/tcp` or mock data in demonstration environments.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import re

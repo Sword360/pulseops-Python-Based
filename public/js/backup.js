@@ -1,7 +1,16 @@
-/* ==========================================================================
-   PulseOps - Enterprise Backup & Disaster Recovery Client Module
-   Manages snapshot creation, archive inspection, verification, and downloads.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      backup.js
+ * Description: Backup snapshot manager, tar archive inspection, SHA-256 verification, and disaster recovery client.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authBackupFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

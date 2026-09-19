@@ -1,25 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-PulseOps - VNC / RFB Remote Desktop Subsystem
-==============================================
-Manages REAL VNC server backends and proxies raw RFB traffic to the browser
-over a WebSocket tunnel (see handle_vnc_proxy in server.py / fastapi_app.py).
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       vnc.py
+Description:  Embedded RFB 3.8 / VNC Remote Desktop Subsystem.
+              Manages production VNC server backends (x11vnc, TigerVNC, TightVNC) and tunnels
+              raw RFB framebuffer traffic over WebSocket connections to the browser.
 
-Supported backends (all are genuine RFB servers you could equally point
-TightVNC Viewer / RealVNC Viewer / any standard VNC client at):
-
-  * tigervnc  - TigerVNC's Xvnc server (own virtual X display + xterm apps)
-  * tightvnc  - TightVNC's Xvnc-based server (Debian/Ubuntu `tightvncserver`)
-  * x11vnc    - Mirrors an Xvfb virtual X display over RFB
-  * auto      - Picks whichever of the above is already installed (or the
-                first one this system's package manager can install)
-
-There is intentionally NO fake/simulated "built-in" server anymore. The
-previous "native" backend only drew a cartoon dashboard with Pillow and
-never captured a real screen, which is why nothing was visible in the
-viewer. Every backend below starts a real X server / real screen mirror
-that speaks standard RFB, so any RFB client (including the bundled
-web viewer, TightVNC Viewer, RealVNC Viewer, etc.) can connect to it.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import shutil

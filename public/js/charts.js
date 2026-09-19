@@ -1,6 +1,16 @@
-/* ==========================================================================
-   PulseOps - Dynamic Canvas Chart Engine
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      charts.js
+ * Description: Hardware-accelerated dynamic HTML5 canvas real-time telemetry line charts.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 class SmoothLineChart {
     constructor(canvasId, options = {}) {

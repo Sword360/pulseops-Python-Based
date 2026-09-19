@@ -1,10 +1,26 @@
+# -*- coding: utf-8 -*-
 """
-cron_manager.py — PulseOps Enterprise Cron & Systemd Timers Manager.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       cron_manager.py
+Description:  Cron & Systemd Timers Manager.
+              Inspects, manages, schedules, and executes system & user crontabs and systemd
+              timers, provides human-friendly schedule translation, on-demand task execution,
+              and persistent execution auditing.
 
-Inspects, manages, schedules, and executes system & user crontabs and systemd
-timers, provides human-friendly schedule translation, on-demand task execution,
-and persistent execution auditing.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import asyncio
 import hashlib

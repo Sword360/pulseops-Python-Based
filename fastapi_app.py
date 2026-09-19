@@ -1,16 +1,26 @@
+# -*- coding: utf-8 -*-
 """
-fastapi_app.py — PulseOps Enterprise FastAPI/ASGI Application.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       fastapi_app.py
+Description:  FastAPI / ASGI Production Application.
+              Extends the PulseOps platform with high-performance ASGI endpoints, interactive
+              Swagger UI / OpenAPI documentation, multi-node agent RPC routing, JWT RBAC security,
+              and background task management.
 
-Extends the original single-server dashboard with:
-- JWT authentication and role-based access control
-- Multi-server fleet management and agent proxy
-- User management CRUD APIs
-- Alert rule management and notification history
-- Audit log access
-- System settings management
-- Agent registration and heartbeat endpoints
-- One-time invite token system
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import json

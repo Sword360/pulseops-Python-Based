@@ -1,8 +1,15 @@
 /**
- * auth.js — PulseOps Enterprise Authentication Client
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      auth.js
+ * Description: Client-side JWT authentication, token auto-refresh, clipboard helpers, and global auth guard.
  *
- * Handles JWT token storage/retrieval, auto-refresh, auth guard,
- * universal clipboard helper, and exposes PulseOpsAuth as a global utility object.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 // ── Universal Clipboard Helper (works on both HTTP LAN and HTTPS) ─────────────

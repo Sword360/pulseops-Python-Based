@@ -1,9 +1,26 @@
+# -*- coding: utf-8 -*-
 """
-maintenance_manager.py — PulseOps Enterprise Maintenance Windows & Server Groups Module.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       maintenance_manager.py
+Description:  Maintenance Windows & Server Groups Module.
+              Provides planned downtime scheduling to suppress alert dispatches during
+              maintenance, environment grouping/tagging (Production, Staging), and SQLite database
+              vacuum and optimization operations.
 
-Provides planned downtime scheduling to suppress alert dispatches during
-maintenance, and environment grouping/tagging (Production, Staging, etc.).
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import logging
 from datetime import datetime, timezone

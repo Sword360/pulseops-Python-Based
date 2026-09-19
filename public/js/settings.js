@@ -1,15 +1,15 @@
 /**
- * settings.js — PulseOps Enterprise System Settings & Policies Manager
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      settings.js
+ * Description: System settings, telemetry frequency, security policies, webhook/SMTP notifications, and 2FA setup.
  *
- * Provides complete configuration management across:
- * - General & Branding
- * - Observability & Telemetry Resolution
- * - Fleet Polling & Global Alert Thresholds
- * - Webhook & SMTP Alert Channels
- * - SSL / TLS Certificate Watchdog
- * - Security Policies & Personal 2FA
- * - Web Terminal & Runbooks Preferences
- * - Database Storage, Optimization, Purging & Backup
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const SettingsManager = (() => {

@@ -1,7 +1,16 @@
-/* =============================================================================
-   login.css — PulseOps Enterprise Login Page Styles
-   Glassmorphic dark theme consistent with main dashboard aesthetic
-   ============================================================================= */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Stylesheet:  login.css
+ * Description: Glassmorphic dark-theme authentication stylesheet for login and TOTP 2FA interface.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 :root {
     --bg-deep:       #070a11;

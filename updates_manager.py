@@ -1,11 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-updates_manager.py — PulseOps Enterprise OS Patch & Update Center.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       updates_manager.py
+Description:  OS Package & Security Patch Management Center.
+              Discovers upgradable system packages across Debian/Ubuntu (apt), RHEL/CentOS/Rocky (dnf/yum),
+              and Arch (pacman), flags CVE security advisories, tracks reboot requirements, and executes live patching.
 
-Discovers upgradable system packages across Debian/Ubuntu, RHEL/CentOS/Rocky,
-and Arch, flags CVE security advisories, detects pending reboot requirements,
-simulates dry-run upgrades, and orchestrates live patch execution with persistent
-auditing.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import asyncio
 import logging

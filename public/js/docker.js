@@ -1,8 +1,16 @@
-/* ==========================================================================
-   PulseOps - Docker & Container Management Module
-   Provides container listing, lifecycle actions (start, stop, restart,
-   pause, unpause, remove), real-time logs, and inspection across master & fleet.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      docker.js
+ * Description: Docker and Podman container manager, lifecycle controls, live logs viewer, and container inspection.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authDockerFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

@@ -1,9 +1,15 @@
 /**
- * app.js — PulseOps Enterprise Core Orchestrator
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      app.js
+ * Description: Core dashboard orchestrator, section navigation, auth guard, WebSocket telemetry client, and notifications.
  *
- * Handles authentication-aware initialization, section navigation,
- * sidebar control, WebSocket telemetry with auth, breadcrumbs,
- * user header population, role-based UI visibility, and toast notifications.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 /* ─── Global helpers (used by other modules) ─────────────────────────────────

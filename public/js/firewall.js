@@ -1,8 +1,16 @@
-/* ==========================================================================
-   PulseOps - Enterprise Firewall & Network Security Rules Manager Module
-   Provides firewall rule inspection, real-time filtering, port opening,
-   blocking, and engine management (firewalld, UFW, iptables).
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      firewall.js
+ * Description: Linux firewall manager (firewalld / UFW), port opening / closing, and active rule inspector.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authFirewallFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

@@ -1,7 +1,16 @@
-/* ==========================================================================
-   PulseOps - Enterprise Security & Threat Intelligence Module
-   Provides SSH brute-force detection, attacker triage, and 1-click IP banning.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      security.js
+ * Description: Threat intelligence dashboard, SSH brute-force attack logs, attacker triage, and 1-click IP banning.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authSecurityFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

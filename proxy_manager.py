@@ -1,13 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-proxy_manager.py — PulseOps Enterprise Reverse Proxy Manager (Nginx / Caddy / Apache).
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       proxy_manager.py
+Description:  Reverse Proxy Manager (Nginx / Caddy / Apache).
+              Provides reverse proxy daemon discovery, configuration tree inspection, automated
+              syntax validation (nginx -t), zero-downtime reloads, and access/error log streaming.
 
-Provides:
-1. Proxy daemon discovery & real-time operational status (Nginx, Caddy, Apache).
-2. Virtual host / server block discovery & inspection across configuration trees.
-3. Safe proxy host provisioning with automated syntax validation (nginx -t) before applying.
-4. Graceful reloads, host toggling (active <-> disabled), and deletion.
-5. Real-time access & error log streaming with HTTP response status breakdown.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import re

@@ -1,7 +1,16 @@
-/* ==========================================================================
-   PulseOps - Enterprise Reverse Proxy Manager Client Module (Nginx / Caddy)
-   Handles virtual host provisioning, syntax validation, reloads, and logs.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      proxy.js
+ * Description: Reverse proxy manager (Nginx / Caddy), virtual hosts configuration, syntax testing, and logs.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authProxyFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

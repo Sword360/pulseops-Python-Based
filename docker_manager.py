@@ -1,11 +1,26 @@
+# -*- coding: utf-8 -*-
 """
-docker_manager.py — PulseOps Enterprise Docker & Container Management Module.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       docker_manager.py
+Description:  Docker & Container Management Module.
+              Provides real-time container inspection, lifecycle management (start, stop,
+              restart, pause, unpause, remove), live container log retrieval, and inspect
+              data extraction. Supports Docker and Podman with graceful simulation fallbacks.
 
-Provides real-time container inspection, lifecycle management (start, stop,
-restart, pause, unpause, remove), live container log retrieval, and inspect
-data extraction. Supports both Docker and Podman with graceful fallback simulation
-if the container runtime is not installed or accessible.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import re

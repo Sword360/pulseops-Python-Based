@@ -1,11 +1,27 @@
+# -*- coding: utf-8 -*-
 """
-alerts.py — PulseOps Enterprise Modern Alerting & Incident Response Engine.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       alerts.py
+Description:  Modern Alerting & Incident Response Engine.
+              Evaluates multi-metric alert rules against real-time server telemetry snapshots,
+              tracks firing, acknowledged, and resolved incident lifecycles, delivers rich
+              notifications via Discord, Slack, Telegram, Webhooks, and SMTP, and provides
+              instant bidirectional WebSocket incident updates to the dashboard.
 
-Evaluates multi-metric alert rules against real-time server telemetry snapshots,
-tracks firing, acknowledged, and resolved incident lifecycles, delivers rich
-notifications via Discord, Slack, Telegram, Webhooks, and SMTP, and provides
-instant bidirectional WebSocket incident updates to the dashboard.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import asyncio
 import json

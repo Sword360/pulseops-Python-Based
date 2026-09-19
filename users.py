@@ -1,9 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-users.py — PulseOps Enterprise User Management Module.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       users.py
+Description:  Enterprise User Management & RBAC Profile Store.
+              Provides asynchronous CRUD operations for user accounts, credential storage,
+              password policy validation, and role assignment enforcement.
 
-Provides async CRUD operations for user accounts, role validation, and
-profile management. All writes are validated before being persisted.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import logging
 import re

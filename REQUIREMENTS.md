@@ -57,3 +57,14 @@ uvicorn fastapi_app:app --host 0.0.0.0 --port 3500
    ```
 2. Open any web browser on a device connected to the same network and navigate to:
    `http://<SERVER_IP>:3500`
+
+---
+
+## 4. Maintainer & Licensing
+
+* **Author**: Najmul Islam
+* **Developer**: Najmul Islam
+* **Contact**: [f2pnajmul@gmail.com](mailto:f2pnajmul@gmail.com)
+* **License**: MIT License (see [`LICENSE`](LICENSE))
+* **Copyright**: &copy; 2026 Najmul Islam. All rights reserved.
+

@@ -1,7 +1,16 @@
-/* ==========================================================================
-   PulseOps - Active Listening Ports & Network Inspector Module
-   Provides socket discovery, protocol filtering, and process triage.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      ports.js
+ * Description: Active network listening ports explorer, protocol filtering, and process triage table.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authPortsFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

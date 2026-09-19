@@ -1,8 +1,15 @@
 /**
- * users.js — PulseOps Enterprise User Management UI
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      users.js
+ * Description: Enterprise user management, role assignments (Admin/Operator/Viewer), and password strength validation.
  *
- * Admin-only panel for creating, editing, deactivating, and viewing
- * user accounts. Includes role badge display and password strength meter.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const UsersManager = (() => {

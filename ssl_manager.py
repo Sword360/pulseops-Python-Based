@@ -1,12 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-ssl_manager.py — PulseOps Enterprise SSL/TLS Certificate & Domain Health Manager
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       ssl_manager.py
+Description:  SSL/TLS Certificate & Domain Health Manager.
+              Discovers local host SSL certificates, parses x509 metadata, executes remote TLS
+              handshake probes with cipher suite analysis, and manages Let's Encrypt certbot renewals.
 
-Provides:
-1. Local host SSL certificate discovery and x509 metadata extraction.
-2. Live TLS probe for any host/port with cipher suite, protocol, and latency analysis.
-3. Monitored domain watchlist management with automatic expiry calculation.
-4. Certbot / Let's Encrypt renewal status verification.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import re

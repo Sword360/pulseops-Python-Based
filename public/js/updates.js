@@ -1,8 +1,15 @@
 /**
- * updates.js — PulseOps Enterprise OS Patch & Update Center UI
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      updates.js
+ * Description: OS package updates center, security CVE advisories, reboot status, and live package patching.
  *
- * Inspects upgradable packages, flags security CVE advisories, tracks reboot
- * requirements, simulates dry-run upgrades, and orchestrates live patching.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const UpdatesManager = (() => {

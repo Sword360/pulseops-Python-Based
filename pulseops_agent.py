@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
-"""
-pulseops_agent.py — PulseOps Enterprise Lightweight Agent.
 
-Self-contained agent that runs on managed servers. Collects telemetry using
-Python stdlib and psutil, exposes a REST telemetry endpoint, and sends periodic
-heartbeats to the master PulseOps server. Requires only: psutil.
-
-Usage:
-    python3 pulseops_agent.py --master-url http://master:3500 --token <agent_token>
-    python3 pulseops_agent.py --config /etc/pulseops/agent.conf
+# -*- coding: utf-8 -*-
 """
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       pulseops_agent.py
+Description:  Autonomous Lightweight Node Agent Daemon.
+              Self-contained agent that runs on managed remote Linux servers. Collects kernel
+              telemetry via /proc and psutil, provides REST metrics, and reports health heartbeats
+              to the master PulseOps server.
+
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
+"""
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import argparse
 import configparser

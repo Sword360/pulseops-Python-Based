@@ -1,9 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-database.py — PulseOps Enterprise SQLite Async Database Layer.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       database.py
+Description:  SQLite Asynchronous Database Layer.
+              Manages connection pooling via aiosqlite, schema creation, and idempotent
+              migrations. All SQL uses parameterized queries exclusively to prevent injection.
 
-Manages connection pooling via aiosqlite, schema creation, and idempotent
-migrations. All SQL uses parameterized queries exclusively to prevent injection.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import asyncio
 import logging

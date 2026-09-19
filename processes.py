@@ -1,3 +1,26 @@
+# -*- coding: utf-8 -*-
+"""
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       processes.py
+Description:  Kernel Process Explorer & Signal Dispatcher.
+              Inspects active Linux processes, parses CPU/memory consumption from /proc,
+              and provides safe POSIX signal transmission (SIGTERM, SIGKILL, SIGHUP).
+
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
+"""
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
+
 import os
 import signal
 import asyncio

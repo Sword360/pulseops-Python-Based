@@ -7,6 +7,7 @@
 [![Security](https://img.shields.io/badge/Security-JWT%20%7C%202FA%20%7C%20RBAC-success.svg?style=for-the-badge)](https://jwt.io/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%28RHEL%20%7C%20Debian%20%7C%20Ubuntu%29-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)](https://kernel.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+[![Author](https://img.shields.io/badge/Author-Najmul%20Islam-orange.svg?style=for-the-badge)](mailto:f2pnajmul@gmail.com)
 
 <p align="center">
   <strong>An enterprise-grade, real-time Linux fleet monitoring dashboard, remote systemd operations center, process manager, and web terminal platform.</strong>
@@ -53,6 +54,7 @@
 - [🛡️ Security & Hardening Guidelines](#️-security--hardening-guidelines)
 - [📁 Project Structure](#-project-structure)
 - [🤝 Contributing](#-contributing)
+- [👨‍💻 Author & Maintainer](#-author--maintainer)
 - [📄 License](#-license)
 
 ---
@@ -579,9 +581,21 @@ Contributions, feedback, and bug reports are welcome!
 
 ---
 
+## 👨‍💻 Author & Maintainer
+
+**PulseOps Enterprise** is proudly designed, architected, and maintained by:
+
+* **Author**: **Najmul Islam**
+* **Developer**: **Najmul Islam**
+* **Email & Inquiries**: [f2pnajmul@gmail.com](mailto:f2pnajmul@gmail.com)
+
+---
+
 ## 📄 License
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
+This project is licensed under the terms of the **MIT License**. See the [`LICENSE`](LICENSE) file for the full license text.
+
+Copyright © 2026 **Najmul Islam**. All rights reserved.
 
 <div align="center">
   <sub>Built with ⚡ and Python Asyncio. Engineered for Linux system administrators, DevOps engineers, and SREs.</sub>

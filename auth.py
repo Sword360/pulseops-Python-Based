@@ -1,9 +1,25 @@
+# -*- coding: utf-8 -*-
 """
-auth.py — PulseOps Enterprise Authentication & Authorization Module.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       auth.py
+Description:  Authentication & Authorization Subsystem.
+              Provides cryptographic JWT token issuance/validation, bcrypt password hashing,
+              session management, brute-force protection, and role-based access control decorators.
 
-Provides JWT token issuance/validation, bcrypt password hashing, session
-management, brute-force protection, and role-based access control decorators.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import time

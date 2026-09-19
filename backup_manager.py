@@ -1,10 +1,26 @@
+# -*- coding: utf-8 -*-
 """
-backup_manager.py — PulseOps Enterprise Backup & Disaster Recovery Manager.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       backup_manager.py
+Description:  Enterprise Backup & Disaster Recovery Manager.
+              Handles full and selective system configuration snapshots, database dumps,
+              tar.gz compression, integrity verification (SHA256), manifest inspection,
+              and retention lifecycle management.
 
-Handles full and selective system configuration snapshots, database dumps,
-tar.gz compression, integrity verification (SHA256), manifest inspection,
-and retention lifecycle management.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import re

@@ -1,9 +1,15 @@
 /**
- * alerts.js — PulseOps Modern Alert & Incident Response Command Center
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      alerts.js
+ * Description: Modern alert rules management, audio chimes, desktop push notifications, and incident triage client.
  *
- * Provides real-time incident monitoring, multi-channel alerting, HTML5 Web Audio
- * chimes, desktop push notifications, incident triage (acknowledge/resolve),
- * policy management, and webhook simulator.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const AlertsManager = (() => {

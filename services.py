@@ -1,3 +1,26 @@
+# -*- coding: utf-8 -*-
+"""
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       services.py
+Description:  Systemd Service Controller & Journalctl Parser.
+              Manages systemd unit lifecycles (start, stop, restart, reload, enable, disable),
+              inspects unit health states, and streams real-time journalctl operational logs.
+
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
+"""
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
+
 import re
 import asyncio
 import subprocess

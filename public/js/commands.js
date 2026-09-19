@@ -1,7 +1,16 @@
-/* ==========================================================================
-   PulseOps - Saved Commands & Terminal Runbooks Module
-   Provides quick execution, parameter interpolation, and runbook management.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      commands.js
+ * Description: Operational runbooks, saved command executor, parameter interpolation modal, and batch runner.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authCmdFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

@@ -1,6 +1,16 @@
-/* ==========================================================================
-   PulseOps - Live Log Stream & Terminal Modules
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      logs.js
+ * Description: Live system journalctl streamer, terminal output viewer, and ANSI terminal color formatter.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 class LogStreamViewer {
     constructor() {

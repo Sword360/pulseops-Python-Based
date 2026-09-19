@@ -1,10 +1,26 @@
+# -*- coding: utf-8 -*-
 """
-security_manager.py — PulseOps Enterprise Security & Threat Intelligence Module.
+PulseOps Enterprise — Real-Time Linux Infrastructure Management
+==============================================================================
+Module:       security_manager.py
+Description:  Security & Threat Intelligence Module.
+              Parses system authentication logs (/var/log/secure, /var/log/auth.log, journalctl)
+              to detect SSH brute-force attempts, unauthorized access patterns, suspicious IPs,
+              and executes automated kernel firewall IP banning.
 
-Parses system authentication logs (/var/log/secure, /var/log/auth.log, journalctl)
-to detect SSH brute-force attempts, unauthorized access patterns, and suspicious IPs.
-Provides 1-click kernel firewall IP banning via firewall_manager.
+Author:       Najmul Islam
+Developer:    Najmul Islam
+Contact:      f2pnajmul@gmail.com
+License:      MIT License (see LICENSE file for details)
+Copyright:    (c) 2026 Najmul Islam. All rights reserved.
+==============================================================================
 """
+
+__author__ = "Najmul Islam"
+__developer__ = "Najmul Islam"
+__email__ = "f2pnajmul@gmail.com"
+__license__ = "MIT"
+__copyright__ = "(c) 2026 Najmul Islam. All rights reserved."
 
 import os
 import re

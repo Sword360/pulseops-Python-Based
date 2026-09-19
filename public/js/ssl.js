@@ -1,8 +1,16 @@
-/* ==========================================================================
-   PulseOps - Enterprise SSL / TLS Certificate Lifecycle & Domain Health
-   Provides host certificate discovery, live TLS handshake probe,
-   monitored endpoints watchlist, and x509 certificate inspection.
-   ========================================================================== */
+/**
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      ssl.js
+ * Description: SSL/TLS certificates manager, domain expiration monitoring, and Let's Encrypt certbot manager.
+ *
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
+ */
 
 function _authSslFetch(url, options = {}) {
     if (window.PulseOpsAuth && PulseOpsAuth.apiFetch) {

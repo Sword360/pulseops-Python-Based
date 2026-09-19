@@ -1,8 +1,15 @@
 /**
- * cron.js — PulseOps Enterprise Cron & Systemd Timers Manager UI
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      cron.js
+ * Description: Cron jobs and systemd timers visual schedule inspector, manual triggers, and execution auditor.
  *
- * Provides visual inspection, scheduling, real-time manual triggers,
- * and execution auditing for crontabs and systemd timers.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const CronManager = (() => {

@@ -1,9 +1,15 @@
 /**
- * fleet.js — PulseOps Enterprise Fleet Management UI
+ * PulseOps Enterprise — Real-Time Linux Infrastructure Management
+ * ============================================================================
+ * Module:      fleet.js
+ * Description: Multi-node fleet dashboard, server status grid, agent registration tokens, and remote node switcher.
  *
- * Renders the fleet overview dashboard with server cards, live status,
- * search/filter, add server modal, agent install token generation, and
- * real-time status updates via WebSocket fleet events.
+ * @author      Najmul Islam
+ * @developer   Najmul Islam
+ * @contact     f2pnajmul@gmail.com
+ * @license     MIT License (see LICENSE file for details)
+ * @copyright   (c) 2026 Najmul Islam. All rights reserved.
+ * ============================================================================
  */
 
 const FleetManager = (() => {
