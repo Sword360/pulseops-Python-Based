@@ -73,23 +73,23 @@
       }
       .icon-aura {
         transform-origin: 100px 100px;
-        animation: iconHeartbeat 2.2s ease-in-out infinite;
+        animation: iconHeartbeat 3.6s ease-in-out infinite;
       }
       .icon-group {
         transform-origin: 100px 100px;
-        animation: iconHeartbeat 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: iconHeartbeat 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
       .icon-bolt {
         transform-origin: 100px 96px;
-        animation: iconBoltJolt 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: iconBoltJolt 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
       .icon-ring {
         transform-origin: 100px 100px;
-        animation: iconSpin 12s linear infinite;
+        animation: iconSpin 16s linear infinite;
       }
       .icon-ecg {
         stroke-dasharray: 200;
-        animation: iconEcgTravel 2.2s linear infinite;
+        animation: iconEcgTravel 3.6s linear infinite;
       }
     </style>
   </defs>

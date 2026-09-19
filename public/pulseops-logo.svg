@@ -113,27 +113,27 @@
 
       .aura-circle {
         transform-origin: 100px 100px;
-        animation: auraBreath 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: auraBreath 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
 
       .emblem-group {
         transform-origin: 100px 100px;
-        animation: heartbeat 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: heartbeat 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
 
       .bolt-shape {
         transform-origin: 100px 96px;
-        animation: boltJolt 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        animation: boltJolt 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
 
       .orbit-ring {
         transform-origin: 100px 100px;
-        animation: ringSpin 14s linear infinite;
+        animation: ringSpin 18s linear infinite;
       }
 
       .ecg-path {
         stroke-dasharray: 200;
-        animation: ecgTravel 2.2s linear infinite;
+        animation: ecgTravel 3.6s linear infinite;
       }
 
       .beacon-dot {

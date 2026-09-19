@@ -144,7 +144,7 @@ body::before {
     height: 68px;
     display: block;
     filter: drop-shadow(0 0 16px rgba(56,189,248,0.6));
-    animation: logo-pulse 3s ease-in-out infinite;
+    animation: logo-pulse 3.6s ease-in-out infinite;
 }
 
 @keyframes logo-pulse {
