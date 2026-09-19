@@ -47,8 +47,12 @@
   - [9. Process Explorer & Signal Management](#9-process-explorer--signal-management)
   - [10. Multi-Host Web Terminal & Runbooks](#10-multi-host-web-terminal--runbooks)
   - [11. Embedded HTML5 VNC / RFB Desktop (x11vnc Standard)](#11-embedded-html5-vnc--rfb-desktop-x11vnc-standard)
-  - [12. Alert Rules Engine & Notifications](#12-alert-rules-engine--notifications)
-  - [13. Compliance Audit Log & System Settings](#13-compliance-audit-log--system-settings)
+  - [12. Reverse Proxy Manager (Nginx / Caddy / Apache)](#12-reverse-proxy-manager-nginx--caddy--apache)
+  - [13. Cron & Systemd Timers Manager](#13-cron--systemd-timers-manager)
+  - [14. OS Patch & Update Center](#14-os-patch--update-center)
+  - [15. Backup & Disaster Recovery Manager](#15-backup--disaster-recovery-manager)
+  - [16. Alert Rules Engine & Notifications](#16-alert-rules-engine--notifications)
+  - [17. Compliance Audit Log & System Settings](#17-compliance-audit-log--system-settings)
 - [🔌 API Reference](#-api-reference)
 - [⚙️ Configuration & Environment Variables](#️-configuration--environment-variables)
 - [🛡️ Security & Hardening Guidelines](#️-security--hardening-guidelines)
@@ -400,11 +404,36 @@ The PulseOps Agent (`pulseops_agent.py`) is engineered under a strict **Zero-Imp
 * **Dual Authentication Support**: Supports both instant 1-click unauthenticated access (`-nopw`) and standard RFB DES password authentication with an in-viewport unlock modal.
 * **Native TightVNC Viewer Compatibility**: Connect directly through the web browser or point any standard desktop VNC client (TightVNC Viewer, RealVNC, TigerVNC) directly at `<CLIENT_IP>:5900`.
 
-### 12. Alert Rules Engine & Notifications
+### 12. Reverse Proxy Manager (Nginx / Caddy / Apache)
+* **Daemon Discovery**: Auto-detects installed reverse proxy engines (Nginx, Caddy, Apache) and displays real-time daemon status.
+* **Virtual Host Management**: Inspects server configuration blocks and virtual hosts across configuration trees.
+* **Safe Provisioning**: Automated configuration syntax validation (`nginx -t`) before applying updates to prevent accidental production downtime.
+* **Zero-Downtime Reloads**: Reload proxy services gracefully and toggle virtual hosts active or disabled.
+* **Access & Error Log Streaming**: Tail reverse proxy access and error logs with real-time HTTP response code analysis.
+
+### 13. Cron & Systemd Timers Manager
+* **Schedule Explorer**: Visual overview of system and user crontabs (`/etc/cron*`, `crontab -l`) and active systemd timers.
+* **Human-Friendly Translation**: Real-time translation of 5-part cron syntax (e.g. `*/15 * * * *` → *"Every 15 minutes"*).
+* **On-Demand Execution**: Run any scheduled task immediately with live output capture without altering schedules.
+* **Execution Auditing**: Track run history, trigger sources, execution duration, and exit codes.
+
+### 14. OS Patch & Update Center
+* **Cross-Distribution Support**: Discovers upgradable packages across Debian/Ubuntu (`apt`), RHEL/Rocky/CentOS/Fedora (`dnf`/`yum`), and Arch (`pacman`).
+* **Security CVE Advisories**: Automatically flags critical security updates and vulnerability patches.
+* **Reboot Requirement Detection**: Detects pending system reboot flags (`/var/run/reboot-required`, `needs-restarting -r`).
+* **Safe Patching Workflows**: Run simulated dry-run upgrades before applying live package updates, with detailed execution auditing.
+
+### 15. Backup & Disaster Recovery Manager
+* **Automated & Manual Snapshots**: Create complete or selective system configuration and database archives.
+* **Archive Compression & Integrity**: Generates `.tar.gz` compressed archives with SHA-256 checksum verification.
+* **Manifest Inspection**: Preview archive contents, file counts, and metadata before restoring.
+* **Disaster Recovery**: 1-click restore workflows with verification checks and snapshot retention management.
+
+### 16. Alert Rules Engine & Notifications
 * Define automated rules for CPU%, Memory%, Disk%, and Agent heartbeats (`> 85% for 2 consecutive intervals`).
 * Real-time notifications pop up in the top navigation bell with event severity tags (`WARNING`, `CRITICAL`).
 
-### 13. Compliance Audit Log & System Settings
+### 17. Compliance Audit Log & System Settings
 * **Audit Trail**: Every login attempt, terminal command, service modification, process kill, and fleet mutation is logged with timestamp, user ID, IP address, and status.
 * **Central Settings**: Configure global retention limits, session timeout hours, SMTP alerts, and branding.
 * **Database Maintenance**: 1-click SQLite VACUUM optimization, metric history purge, and automated database backup/restore.
@@ -462,6 +491,39 @@ The PulseOps Agent (`pulseops_agent.py`) is engineered under a strict **Zero-Imp
 * `POST /api/ssl/probe` — Probe an external or local TLS endpoint for certificate details.
 * `GET  /api/ssl/certbot` — Check certbot Let's Encrypt status.
 
+### Reverse Proxy (Nginx / Caddy / Apache)
+* `GET  /api/proxy/hosts` — List configured reverse proxy virtual hosts.
+* `POST /api/proxy/hosts` — Provision a new proxy host (`admin`, `operator`).
+* `POST /api/proxy/hosts/toggle` — Enable or disable a proxy host (`admin`, `operator`).
+* `POST /api/proxy/hosts/delete` — Remove a proxy host configuration (`admin`, `operator`).
+* `GET  /api/proxy/syntax` — Test proxy configuration syntax (`nginx -t`).
+* `POST /api/proxy/reload` — Reload proxy service without downtime (`admin`, `operator`).
+* `GET  /api/proxy/logs` — Stream reverse proxy access and error logs.
+
+### Cron & Systemd Timers
+* `GET  /api/cron/jobs` — List system and user crontab tasks.
+* `POST /api/cron/jobs` — Create or schedule a new cron job (`admin`, `operator`).
+* `POST /api/cron/jobs/toggle` — Enable or disable a cron job (`admin`, `operator`).
+* `POST /api/cron/jobs/delete` — Delete a cron job (`admin`, `operator`).
+* `POST /api/cron/jobs/run` — Manually trigger a cron job immediately (`admin`, `operator`).
+* `GET  /api/cron/timers` — List active systemd timers.
+* `POST /api/cron/timers/control` — Start, stop, or reload a systemd timer (`admin`, `operator`).
+* `GET  /api/cron/history` — Query cron job execution history.
+
+### OS Updates & Patching
+* `GET  /api/updates/check` — Check for available package updates (`?refresh=1`).
+* `GET  /api/updates/reboot-required` — Check if a system reboot is pending.
+* `POST /api/updates/upgrade` — Execute system updates or dry-run simulation (`admin` only).
+* `GET  /api/updates/history` — Retrieve past package upgrade logs.
+
+### Backups & Disaster Recovery
+* `GET    /api/backups` — List existing system backup archives.
+* `POST   /api/backups/create` — Create a new backup snapshot (`admin` only).
+* `GET    /api/backups/{id}/contents` — Inspect files contained within a backup archive.
+* `GET    /api/backups/{id}/verify` — Verify SHA-256 archive integrity.
+* `GET    /api/backups/{id}/download` — Download backup archive (`.tar.gz`).
+* `DELETE /api/backups/{id}` — Delete a backup archive (`admin` only).
+
 ### Remote Desktop (VNC)
 * `GET  /api/vnc/status` — Query VNC availability and active service status (`?server_id=...`).
 * `POST /api/vnc/launch` — Launch / start x11vnc service on target node (`admin`, `operator`).
@@ -517,54 +579,64 @@ PulseOps can be configured via environment variables or the `.env` file:
 
 ```text
 pulseops-Python-Based/
-├── server.py             # High-performance async HTTP & WebSocket server (master runtime)
-├── fastapi_app.py        # Alternative ASGI FastAPI implementation with OpenAPI
-├── pulseops_agent.py     # Remote agent daemon (telemetry, service & process RPC)
-├── telemetry.py          # /proc filesystem metrics engine (CPU, RAM, Disk, Net)
-├── services.py           # Systemd unit manager and journalctl log parser
-├── processes.py          # Process explorer and POSIX signal dispatcher
-├── terminal.py           # Safe Web terminal subprocess runner with sudo handling
-├── vnc.py                # Real VNC backend manager (x11vnc & TigerVNC) + RFB TCP proxy target
-├── docker_manager.py     # Docker container inspection, logs, and lifecycle manager
-├── ports_manager.py      # Network listening sockets and open ports explorer
-├── firewall_manager.py   # Linux firewall manager (UFW & firewalld integration)
-├── security_manager.py   # Threat intelligence & SSH brute-force auth log analyzer
-├── ssl_manager.py        # SSL/TLS certificate scanner, endpoint probe & certbot manager
-├── commands_manager.py   # Reusable saved commands and interactive runbooks
-├── maintenance_manager.py# Database optimization, vacuum, purge, and backup/restore
-├── fleet.py              # Multi-node server coordinator and remote RPC client
-├── auth.py               # Enterprise JWT, bcrypt, TOTP 2FA, and RBAC authorization
-├── users.py              # User authentication, credential storage, and profile management
-├── database.py           # Async SQLite database layer with automated migrations
-├── alerts.py             # Metric threshold rule evaluator and notification dispatcher
-├── audit.py              # Immutable compliance audit trail logging system
-├── requirements.txt      # Python dependencies (PyJWT, passlib, aiosqlite, cryptography)
-├── README.md             # Comprehensive project documentation
-└── public/               # Zero-build Glassmorphic Web Dashboard
-    ├── index.html        # Main enterprise dashboard interface
-    ├── login.html        # Glassmorphic login page with 2FA TOTP modal
+├── server.py              # High-performance async HTTP & WebSocket server (master runtime)
+├── fastapi_app.py         # Alternative ASGI FastAPI implementation with OpenAPI
+├── pulseops_agent.py      # Remote agent daemon (telemetry, service & process RPC)
+├── telemetry.py           # /proc filesystem metrics engine (CPU, RAM, Disk, Net)
+├── services.py            # Systemd unit manager and journalctl log parser
+├── processes.py           # Process explorer and POSIX signal dispatcher
+├── terminal.py            # Safe Web terminal subprocess runner with sudo handling
+├── vnc.py                 # Real VNC backend manager (x11vnc & TigerVNC) + RFB TCP proxy target
+├── docker_manager.py      # Docker container inspection, logs, and lifecycle manager
+├── ports_manager.py       # Network listening sockets and open ports explorer
+├── firewall_manager.py    # Linux firewall manager (UFW & firewalld integration)
+├── security_manager.py    # Threat intelligence & SSH brute-force auth log analyzer
+├── ssl_manager.py         # SSL/TLS certificate scanner, endpoint probe & certbot manager
+├── proxy_manager.py       # Reverse proxy manager (Nginx / Caddy / Apache) & log streamer
+├── cron_manager.py        # Cron & systemd timers scheduler, translator & execution auditor
+├── updates_manager.py     # OS package & security patch updates manager (apt, dnf, pacman)
+├── backup_manager.py      # Enterprise backup snapshot creator, verifier (SHA256) & restore
+├── commands_manager.py    # Reusable saved commands and interactive runbooks
+├── maintenance_manager.py # Database optimization, vacuum, purge, and maintenance windows
+├── fleet.py               # Multi-node server coordinator and remote RPC client
+├── auth.py                # Enterprise JWT, bcrypt, TOTP 2FA, and RBAC authorization
+├── users.py               # User authentication, credential storage, and profile management
+├── database.py            # Async SQLite database layer with automated migrations
+├── alerts.py              # Metric threshold rule evaluator and notification dispatcher
+├── audit.py               # Immutable compliance audit trail logging system
+├── requirements.txt       # Python dependencies (PyJWT, passlib, aiosqlite, cryptography)
+├── REQUIREMENTS.md        # Technical specifications and runtime requirements
+├── LICENSE                # Official open-source MIT License
+├── README.md              # Comprehensive project documentation
+└── public/                # Zero-build Glassmorphic Web Dashboard
+    ├── index.html         # Main enterprise dashboard interface
+    ├── login.html         # Glassmorphic login page with 2FA TOTP modal
     ├── css/
-    │   ├── style.css     # Dark glassmorphism design system & RBAC visibility rules
-    │   └── login.css     # Animated login page stylesheet
+    │   ├── style.css      # Dark glassmorphism design system & RBAC visibility rules
+    │   └── login.css      # Animated login page stylesheet
     └── js/
-        ├── app.js        # Dashboard state management and real-time WebSocket client
-        ├── auth.js       # Global JWT management, token auto-refresh, and auth guard
-        ├── charts.js     # High-performance HTML5 Canvas performance charts
-        ├── fleet.js      # Multi-node fleet grid, card actions, and server modals
-        ├── docker.js     # Container manager cards, logs modal, and action dispatch
-        ├── ports.js      # Listening sockets table and protocol filters
-        ├── firewall.js   # Firewall status, rules table, and rule modal
-        ├── security.js   # Threat intelligence dashboard, IP banning, and event stream
-        ├── ssl.js        # SSL certificate cards, TLS probe, and certbot tools
-        ├── commands.js   # Runbooks, saved command executor, and create modal
-        ├── services.js   # Systemd service manager and journalctl modal
-        ├── processes.js  # Process explorer, filters, and termination controls
-        ├── logs.js       # Live system log streamer and WebTerminal console
-        ├── users.js      # User management, role badges, and password meter
-        ├── alerts.js     # Alert rules engine modal and active notifications
-        ├── audit.js      # Compliance audit activity log viewer
-        ├── settings.js   # Enterprise system settings configuration
-        └── vnc.js        # TightVNC-style HTML5 Canvas RFB 3.8 desktop workstation
+        ├── app.js         # Dashboard state management and real-time WebSocket client
+        ├── auth.js        # Global JWT management, token auto-refresh, and auth guard
+        ├── charts.js      # High-performance HTML5 Canvas performance charts
+        ├── fleet.js       # Multi-node fleet grid, card actions, and server modals
+        ├── docker.js      # Container manager cards, logs modal, and action dispatch
+        ├── ports.js       # Listening sockets table and protocol filters
+        ├── firewall.js    # Firewall status, rules table, and rule modal
+        ├── security.js    # Threat intelligence dashboard, IP banning, and event stream
+        ├── ssl.js         # SSL certificate cards, TLS probe, and certbot tools
+        ├── proxy.js       # Reverse proxy hosts manager, syntax validator, and logs
+        ├── cron.js        # Cron jobs & systemd timers visual schedule explorer
+        ├── updates.js     # OS patch center, security CVE advisories, and live upgrades
+        ├── backup.js      # Backup snapshots manager, archive inspector, and verifier
+        ├── commands.js    # Runbooks, saved command executor, and create modal
+        ├── services.js    # Systemd service manager and journalctl modal
+        ├── processes.js   # Process explorer, filters, and termination controls
+        ├── logs.js        # Live system log streamer and WebTerminal console
+        ├── users.js       # User management, role badges, and password meter
+        ├── alerts.js      # Alert rules engine modal and active notifications
+        ├── audit.js       # Compliance audit activity log viewer
+        ├── settings.js    # Enterprise system settings configuration
+        └── vnc.js         # TightVNC-style HTML5 Canvas RFB 3.8 desktop workstation
 ```
 
 ---

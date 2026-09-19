@@ -3,31 +3,81 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# SQLite databases
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# SQLite databases & logs
+pulseops.db
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
 
-# Environments & virtualenvs
+# PulseOps Backups & Archives
+backups/
+*.tar.gz
+*.tar
+*.zip
+*.bak
+
+# Environments & Virtualenvs
 .env
 .env.*
+!.env.example
+!.env.template
 .venv
 env/
 venv/
 ENV/
 
-# Secrets & Keys
+# Secrets, TLS/SSL Certs & Private Keys
 .secret_key
 .refresh_secret_key
 *.secret*
 *.key
 *.pem
+*.crt
+*.csr
+*.pfx
+
+# Runtime Temporary, PID & Socket files
+*.tmp
+*.temp
+*.pid
+*.sock
 
 # Logs
 *.log
+logs/
 
-# OS & Editor files
+# Operating System & Editor files
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.db
+*.swp
+*.swo
+*~
 .vscode/
 .idea/
+*.sublime-workspace
+*.sublime-project
+
