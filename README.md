@@ -216,7 +216,7 @@ On first run, the database is seeded with a default administrator account:
 
 * **URL**: `http://<MASTER_IP>:3500/login`
 * **Email**: `admin@pulseops.local`
-* **Password**: `Admin@PulseOps2026!`
+* **Password**: `Admin@Pulse123`
 
 > [!IMPORTANT]
 > Immediately change your password after initial login under **User Management** (`#users`) or via your profile dropdown menu.
